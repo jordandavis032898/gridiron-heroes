@@ -212,6 +212,8 @@
 </div>
 </div>
 
+<script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+
 <script>
 (function(){
 "use strict";
@@ -2001,6 +2003,11 @@ function drawGuy(p){
       ctx.beginPath(); ctx.ellipse(p.x,p.y,rr,rr*0.4,0,0,Math.PI*2); ctx.stroke();
     }
   }
+  if(NET.on && p===G.controlled2){
+    // the other human. The host has to be able to see which Rival is a person.
+    ctx.strokeStyle='rgba(224,56,78,.95)'; ctx.lineWidth=1.6;
+    ctx.beginPath(); ctx.ellipse(p.x,p.y,13,5.2,0,0,Math.PI*2); ctx.stroke();
+  }
   if(carry){
     ctx.strokeStyle='#c78a3e'; ctx.lineWidth=2;
     ctx.beginPath(); ctx.ellipse(p.x,p.y,16.5,6.6,0,0,Math.PI*2); ctx.stroke();
@@ -2264,6 +2271,10 @@ function roundRect(x,y,w,h,r){
 }
 
 // ================================================================ hud
+// Which team this browser is driving. The guest is always the Rivals.
+function mySide(){ return (NET.on && !NET.host) ? 'A' : 'H'; }
+function iHaveBall(){ return G.offense === mySide(); }
+
 function hud(){
   elH.textContent=G.scoreH; elA.textContent=G.scoreA;
   var mm=Math.floor(G.clock/60), ss=Math.floor(G.clock%60);
@@ -2275,13 +2286,20 @@ function hud(){
       '  ·  HIKE :'+(G.playClock<10?'0':'')+Math.max(0,Math.ceil(G.playClock));
     elPoss.style.color=G.clockRunning?'#e0384e':'#4fd18b';
   } else {
-    elPoss.textContent=G.offense==='H'?'Your ball':'Rivals ball — you’re on D';
-    elPoss.style.color=G.offense==='H'?'#ffd23f':'#e0384e';
+    elPoss.textContent=iHaveBall()?'Your ball':(mySide()==='H'?'Rivals ball — you’re on D':'Heroes ball — you’re on D');
+    elPoss.style.color=iHaveBall()?'#ffd23f':'#e0384e';
   }
   var dbg=document.getElementById('dbg');
-  if(dbg) dbg.textContent = G.lastThrow ? ('pass: '+G.lastThrow) : '';
+  if(dbg){
+    var net = NET.on ? ((NET.host?'ONLINE HOST':'ONLINE GUEST')+
+                        ' · room '+NET.code+
+                        ' · '+((NET.conn&&NET.conn.open)?'linked':'dropped')) : '';
+    var thr = G.lastThrow ? ('pass: '+G.lastThrow) : '';
+    dbg.textContent = net && thr ? (net+'  ·  '+thr) : (net||thr);
+    dbg.style.color = NET.on ? ((NET.conn&&NET.conn.open)?'#4fd18b':'#e0384e') : '#6d818f';
+  }
   barPw.style.width=G.power+'%'; barSt.style.width=G.stam+'%';
-  var onD=G.offense!=='H';
+  var onD=!iHaveBall();
   var rdy = onD ? (G.hitCd>0?0:Math.min(100,(G.power/45)*100))
                 : (HERO.move==='cannon'?100:(G.moveCd>0?0:Math.min(100,(G.power/Math.max(1,HERO.cost))*100)));
   barMv.style.width=rdy+'%';
@@ -2390,10 +2408,10 @@ function showHeroPick(){
       '</div></button>';
   });
   html+='</div>';
-  html += '<div style="margin-top:10px">'        + '<button class="card" id="goOnline" type="button" style="width:100%">'        + '<div class="k">2 PLAYERS</div><div class="t">PLAY ONLINE</div>'        + '<div class="d">Opens a room and gives you a link to send. You take the Heroes, they take the Rivals.</div>'        + '</button></div>';
+  html += '<div style="margin-top:10px">'        + '<button class="card" id="goOnline" type="button" style="width:100%">'        + '<div class="k">2 PLAYERS</div><div class="t">PLAY ONLINE</div>'        + '<div class="d">One of you hosts and gets a four letter code. The other types it in. Host takes the Heroes, the guest takes the Rivals.</div>'        + '</button></div>';
   elSheet.innerHTML=html; elOv.classList.add('show');
   var onlBtn=document.getElementById('goOnline');
-  if(onlBtn) onlBtn.addEventListener('click',function(){ startOnline(window.GRIDIRON_GAME_ID||''); });
+  if(onlBtn) onlBtn.addEventListener('click',showOnline);
   Array.prototype.forEach.call(elSheet.querySelectorAll('.card:not(#goOnline)'),function(b){
     b.addEventListener('click',function(){
       HERO=heroById(b.getAttribute('data-id'));
@@ -2514,57 +2532,211 @@ if(window.matchMedia&&window.matchMedia('(pointer: coarse)').matches){
 // Authoritative host. The host runs the entire simulation and publishes the
 // world twenty times a second. The guest sends only its input and renders
 // whatever it is told, so the two machines can never disagree.
-var NET={on:false,host:false,world:null,acc:0,rate:1/20,me:null};
+var NET={on:false,host:false,peer:null,conn:null,
+           remoteIn:null,world:null,acc:0,rate:1/20,code:'',msg:''};
 
-function netReady(){ return typeof window.Playroom!=='undefined'; }
+function netReady(){ return typeof window.Peer!=='undefined'; }
 
-function startOnline(gameId){
-  if(!netReady()){ say('MULTIPLAYER DID NOT LOAD',1600); return; }
-  var P=window.Playroom;
-  var opts={maxPlayersPerRoom:2};
-  if(gameId) opts.gameId=gameId;
-  P.insertCoin(opts).then(function(){
-    NET.on=true; NET.host=P.isHost(); NET.me=P.myPlayer();
-    elOv.classList.remove('show');
-    if(NET.host){ G=freshGame(); G.phase='playcall'; say('YOU ARE THE HEROES',1800); }
-    else { say('YOU ARE THE RIVALS',1800); }
-  }).catch(function(e){ say('COULD NOT OPEN A ROOM',1600); });
+// Four characters, none of them a lookalike, so a code read down the phone
+// lands on the first try.
+var CODE_CHARS='ACDEFGHJKLMNPQRTUVWXY349';
+function newCode(){
+  var s=''; for(var i=0;i<4;i++) s+=CODE_CHARS[(Math.random()*CODE_CHARS.length)|0];
+  return s;
+}
+function peerId(code){ return 'gridiron-heroes-v1-'+code; }
+function shareLink(code){
+  return location.origin+location.pathname+'?r='+code;
 }
 
-function remotePlayer(){
-  var P=window.Playroom;
-  var list=(P.getRoomPlayers&&P.getRoomPlayers())||[];
-  for(var i=0;i<list.length;i++){ if(list[i]!==NET.me) return list[i]; }
-  return null;
+function netSay(t){
+  NET.msg=t;
+  var el=document.getElementById('netMsg');
+  if(el) el.innerHTML=t;
+}
+
+function netTeardown(){
+  try{ if(NET.conn) NET.conn.close(); }catch(e){}
+  try{ if(NET.peer) NET.peer.destroy(); }catch(e){}
+  NET.on=false; NET.conn=null; NET.peer=null; NET.remoteIn=null; NET.world=null;
+}
+
+function netDropped(){
+  if(!NET.on) return;
+  netTeardown();
+  say('THE OTHER PLAYER LEFT',2000);
+  setTimeout(function(){ G=freshGame(); G.phase='intro'; showHeroPick(); },2000);
+}
+
+// ---- lobby -----------------------------------------------------------------
+function showOnline(){
+  if(!netReady()){
+    say('MULTIPLAYER LIBRARY DID NOT LOAD',2000);
+    showHeroPick(); return;
+  }
+  var html='<h2>Two players</h2>'+
+    '<p class="sub">One hosts, one joins. Same field, one ball.</p><div class="grid3">'+
+    '<button class="card" id="netHost" type="button">'+
+      '<div class="k">HOST</div><div class="t">Start a room</div>'+
+      '<div class="d">You get a four letter code to send. You play the Heroes on offense.</div></button>'+
+    '<button class="card" id="netJoinCard" type="button">'+
+      '<div class="k">JOIN</div><div class="t">Use a code</div>'+
+      '<div class="d">Type the code they sent you. You play the Rivals on defense.</div></button>'+
+    '<button class="card" id="netBack" type="button">'+
+      '<div class="k">BACK</div><div class="t">One player</div>'+
+      '<div class="d">Go back and pick a hero for a game against the computer.</div></button>'+
+    '</div>'+
+    '<div id="netForm" style="margin-top:12px;display:none;gap:8px;align-items:stretch">'+
+      '<input id="netCode" maxlength="4" autocomplete="off" spellcheck="false" placeholder="CODE" '+
+        'style="flex:1;min-width:0;background:#0c1114;border:1px solid #2b3a45;border-radius:3px;'+
+        'color:#ffd23f;font-family:\'JetBrains Mono\',monospace;font-size:26px;letter-spacing:.34em;'+
+        'text-align:center;text-transform:uppercase;padding:9px 6px">'+
+      '<button class="card" id="netGo" type="button" style="flex:0 0 120px;display:grid;place-items:center">'+
+        '<div class="t" style="margin:0">CONNECT</div></button>'+
+    '</div>'+
+    '<div id="netMsg" class="sub" style="margin:14px 0 0;min-height:20px;text-transform:none;letter-spacing:.03em"></div>';
+  elSheet.innerHTML=html; elOv.classList.add('show');
+
+  document.getElementById('netBack').addEventListener('click',function(){
+    netTeardown(); showHeroPick();
+  });
+  document.getElementById('netHost').addEventListener('click',hostOnline);
+  document.getElementById('netJoinCard').addEventListener('click',function(){
+    document.getElementById('netForm').style.display='flex';
+    var f=document.getElementById('netCode'); f.focus();
+    netSay('Ask them for the code on their screen.');
+  });
+  document.getElementById('netGo').addEventListener('click',function(){
+    joinOnline(document.getElementById('netCode').value);
+  });
+  document.getElementById('netCode').addEventListener('keydown',function(e){
+    e.stopPropagation();
+    if(e.key==='Enter') joinOnline(this.value);
+  });
+  document.getElementById('netCode').addEventListener('keyup',function(e){ e.stopPropagation(); });
+}
+
+// ---- host ------------------------------------------------------------------
+function hostOnline(tries){
+  tries=tries||0;
+  if(tries>4){ netSay('Could not open a room. Try again in a moment.'); return; }
+  netTeardown();
+  NET.host=true;
+  var code=newCode(); NET.code=code;
+  netSay('Opening a room...');
+
+  var p=new Peer(peerId(code),{debug:0});
+  NET.peer=p;
+
+  p.on('open',function(){
+    netSay('<div style="font-family:\'Anton\',sans-serif;font-size:15px;color:#e8eef2">'+
+             'Your code is <span style="font-family:\'JetBrains Mono\',monospace;font-size:30px;'+
+             'color:#ffd23f;letter-spacing:.26em">'+code+'</span></div>'+
+           '<div style="margin-top:6px">Send them this link, or just the four letters:</div>'+
+           '<div style="font-family:\'JetBrains Mono\',monospace;font-size:12px;color:#8fa3b0;'+
+             'word-break:break-all;margin-top:2px">'+shareLink(code)+'</div>'+
+           '<div style="margin-top:10px;color:#4fd18b">Waiting for them to join...</div>');
+  });
+
+  p.on('error',function(e){
+    if(e&&e.type==='unavailable-id'){ hostOnline(tries+1); return; }   // code collision
+    netSay('Connection problem: '+((e&&e.type)||'unknown')+'. Try again.');
+  });
+
+  p.on('connection',function(c){
+    if(NET.conn&&NET.conn.open){ try{ c.close(); }catch(e){} return; }  // room is full
+    NET.conn=c;
+    c.on('data',function(d){
+      if(!d||d.t!=='in') return;
+      var r=NET.remoteIn||(NET.remoteIn={x:0,y:0,sp:0,b1:0,b2:0,b3:0,sw:0});
+      r.x=d.x; r.y=d.y; r.sp=d.sp;
+      if(d.b1) r.b1=1;                 // taps latch until the sim consumes them
+      if(d.b2) r.b2=1;
+      if(d.b3) r.b3=1;
+      if(d.sw) r.sw=1;
+    });
+    c.on('open',function(){
+      NET.on=true;
+      elOv.classList.remove('show');
+      G=freshGame(); G.phase='playcall';
+      say('THEY ARE IN - YOU ARE THE HEROES',2000);
+    });
+    c.on('close',netDropped);
+    c.on('error',netDropped);
+  });
+}
+
+// ---- guest -----------------------------------------------------------------
+function joinOnline(code){
+  code=String(code||'').trim().toUpperCase();
+  if(code.length!==4){ netSay('A code is four letters. Check what they sent you.'); return; }
+  netTeardown();
+  NET.host=false; NET.code=code;
+  netSay('Looking for room '+code+'...');
+
+  var p=new Peer({debug:0});
+  NET.peer=p;
+
+  p.on('error',function(e){
+    var t=(e&&e.type)||'';
+    if(t==='peer-unavailable') netSay('No room called '+code+'. Ask them to read it out again.');
+    else netSay('Connection problem: '+(t||'unknown')+'. Try again.');
+  });
+
+  p.on('open',function(){
+    var c=p.connect(peerId(code),{serialization:'json'});
+    if(!c){ netSay('Could not reach that room.'); return; }
+    NET.conn=c;
+    c.on('open',function(){
+      NET.on=true;
+      elOv.classList.remove('show');
+      if(!G) G=freshGame();
+      say('YOU ARE THE RIVALS',2000);
+    });
+    c.on('data',function(d){ if(d&&d.t==='w') NET.world=d; });
+    c.on('close',netDropped);
+    c.on('error',netDropped);
+    setTimeout(function(){
+      if(!NET.on) netSay('Still trying. If nothing happens, check the code and have them re-host.');
+    },6000);
+  });
 }
 
 // guest: publish my stick and my taps
 function publishInput(){
-  if(!NET.on||NET.host||!NET.me) return;
+  if(!NET.on||NET.host||!NET.conn||!NET.conn.open) return;
   var a=axis();
-  NET.me.setState('in',{
-    x:+a.x.toFixed(2), y:+a.y.toFixed(2),
-    sp:wantSprint()?1:0,
-    b1:tapJuke()?1:0, b2:tapMove()?1:0, b3:tapQ()?1:0, sw:tapSwitch()?1:0
-  }, false);
+  try{
+    NET.conn.send({t:'in',
+      x:+a.x.toFixed(2), y:+a.y.toFixed(2),
+      sp:wantSprint()?1:0,
+      b1:tapJuke()?1:0, b2:tapMove()?1:0, b3:tapQ()?1:0, sw:tapSwitch()?1:0
+    });
+  }catch(e){}
 }
 
 // host: drive the Rivals man from whatever the guest sent
 function applyRemoteInput(dt){
   if(!NET.on||!NET.host) return;
-  var guest=remotePlayer(); if(!guest) return;
-  var inp=guest.getState('in'); if(!inp) return;
+  var inp=NET.remoteIn; if(!inp) return;
   if(!G.controlled2||G.controlled2.stun>0||G.controlled2.team!=='A'){
     G.controlled2=pickRemoteMan(false);
   }
   if(inp.sw) G.controlled2=pickRemoteMan(true);
-  var q=G.controlled2; if(!q) return;
-  var mult=(inp.sp?SPRINT:1)*(q.spd||1);
-  q.vx=inp.x*BASE_SPD*mult; q.vy=inp.y*BASE_SPD*mult;
-  if(inp.b1&&G.carrier&&G.carrier.team!=='A'){
-    var dd=Math.hypot(q.x-G.carrier.x,q.y-G.carrier.y);
-    if(dd<TACKLE_R+12){ G.carrier.hp-=26; burst(G.carrier.x,G.carrier.y,'#ffffff'); }
+  var q=G.controlled2;
+  if(q){
+    var mult=(inp.sp?SPRINT:1)*(q.spd||1);
+    q.vx=inp.x*BASE_SPD*mult; q.vy=inp.y*BASE_SPD*mult;
+    if((inp.b1||inp.b2)&&G.carrier&&G.carrier.team!=='A'){
+      var dd=Math.hypot(q.x-G.carrier.x,q.y-G.carrier.y);
+      if(dd<TACKLE_R+12){
+        G.carrier.hp-=inp.b2?38:26;
+        burst(G.carrier.x,G.carrier.y,'#ffffff');
+        G.shake=REDUCED?0:(inp.b2?9:5);
+      }
+    }
   }
+  inp.b1=inp.b2=inp.b3=inp.sw=0;   // taps fire once
 }
 
 function pickRemoteMan(cycle){
@@ -2588,8 +2760,9 @@ function pickRemoteMan(cycle){
 // host: push the world out
 function publishWorld(dt){
   if(!NET.on||!NET.host) return;
+  if(!NET.conn||!NET.conn.open) return;
   NET.acc+=dt; if(NET.acc<NET.rate) return; NET.acc=0;
-  var P=window.Playroom, ps=[];
+  var ps=[];
   for(var i=0;i<G.players.length;i++){
     var q=G.players[i];
     ps.push([Math.round(q.x),Math.round(q.y),q.face,+q.run.toFixed(2),
@@ -2600,19 +2773,18 @@ function publishWorld(dt){
              Math.round(q.vx),Math.round(q.vy),
              q===G.carrier?1:0, q===G.controlled?1:0, q===G.controlled2?1:0]);
   }
-  P.setState('w',{
-    p:ps,
+  try{ NET.conn.send({
+    t:'w', p:ps,
     b:G.ball?[Math.round(G.ball.x),Math.round(G.ball.y),G.ball.held?1:0]:null,
     ph:G.phase, lo:Math.round(G.los), dn:G.down, tg:Math.round(G.toGo),
     sh:G.scoreH, sa:G.scoreA, ck:Math.round(G.clock), pc:Math.round(G.playClock),
     of:G.offense, cr:G.clockRunning?1:0
-  }, false);
+  }); }catch(e){}
 }
 
 // guest: rebuild a renderable world out of what arrived
 function consumeWorld(){
-  var P=window.Playroom;
-  var w=P.getState('w'); if(!w||!w.p) return false;
+  var w=NET.world; if(!w||!w.p) return false;
   if(!G) G=freshGame();
   G.players.length=0; G.carrier=null; G.controlled=null;
   for(var i=0;i<w.p.length;i++){
@@ -2675,6 +2847,14 @@ function boot(){
   elMvName.textContent=HERO.moveName;
   showHeroPick();
   requestAnimationFrame(frame);
+  // a shared link drops you straight into their room
+  var m=/[?&]r=([A-Za-z0-9]{4})\b/.exec(location.search);
+  if(m && netReady()){
+    showOnline();
+    document.getElementById('netForm').style.display='flex';
+    document.getElementById('netCode').value=m[1].toUpperCase();
+    joinOnline(m[1]);
+  }
 }
 if(window.claude&&window.claude.hot){
   window.claude.hot.snapshot(function(){ return G?{scoreH:G.scoreH,scoreA:G.scoreA}:{}; });
