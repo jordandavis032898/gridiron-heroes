@@ -14,7 +14,14 @@ blocking local file reads for the sprites. Serve it instead:
 
 then open http://localhost:8000
 
-## Put it online (free, pick one)
+## It is already online
+
+https://jordandavis032898.github.io/gridiron-heroes/
+
+Push to `main` and GitHub Pages redeploys it in about a minute.
+Two-player instructions are in MULTIPLAYER.md.
+
+## Other places you could put it (free, pick one)
 
 **Netlify Drop** - drag this whole folder onto https://app.netlify.com/drop
 You get a public URL in about ten seconds. Easiest option.

@@ -1,41 +1,58 @@
 # Two-player online
 
-The game now has a PLAY ONLINE button on the hero-select screen.
+Live at https://jordandavis032898.github.io/gridiron-heroes/
 
-## One-time setup
-
-1. Sign up free at https://joinplayroom.com
-2. Create a game, copy the Game ID
-3. Open `index.html` and paste it into the line near the top of the script:
-
-       window.GRIDIRON_GAME_ID = "your-id-here";
-
-   Without an ID it still runs in Playroom's dev mode, which is fine for
-   testing but is not meant for a public link.
+There is nothing to set up. No account, no API key, no config line to edit.
 
 ## Playing
 
-1. Deploy the folder (Netlify Drop is the quickest) or run a local server
-2. First person opens the page and clicks PLAY ONLINE
-3. Playroom shows a room link. Send it to the other person
-4. They open it, the game starts
+1. One of you opens the page and clicks **PLAY ONLINE**, then **HOST**.
+2. You get a four letter room code and a share link.
+3. The other person either opens the link, or opens the page, clicks
+   **PLAY ONLINE**, then **JOIN**, and types the four letters.
+4. The game starts the moment they connect.
 
 Host plays the Heroes. Guest plays the Rivals.
 
+Both screens show a status line under the down and distance:
+`ONLINE HOST - room AB12 - linked`, green when the link is up and red if it
+drops. On the host's screen, whichever Rival the other person is driving has
+a red ring under him.
+
+## Guest controls
+
+    WASD / arrows   move
+    Shift           sprint
+    1               hit the ball carrier
+    2               big hit (costs more, hurts more)
+    E               switch to a different Rival
+
+The guest drives whichever Rival is nearest the ball, so when the Rivals have
+possession the guest is running the ball, not defending.
+
 ## How it works
 
-The host runs the whole simulation and publishes the world twenty times a
-second. The guest sends only its stick and buttons, and draws whatever the
-host reports. Neither machine can disagree with the other because only one
-of them is ever deciding anything.
+A direct browser-to-browser WebRTC data channel, opened through PeerJS on its
+free public broker. The broker only introduces the two browsers to each other;
+once they are talking, the traffic goes peer to peer and never touches a
+server of ours, because there isn't one.
 
-Guest controls: move, sprint, and button 1 to hit the ball carrier.
-Press E to switch to a different Rivals defender.
+The host is authoritative. It runs the entire simulation and publishes the
+world twenty times a second. The guest sends only its stick and its buttons
+and draws whatever the host reports, so the two machines can never disagree
+about what happened. Button taps latch on arrival, so a press can't fall
+between two frames and get lost.
 
 ## Known limits
 
-- Two players only
-- The guest always plays defence-side Rivals; there is no side swap yet
-- No reconnect. If the host drops, the room ends
-- Twenty updates a second, no interpolation, so remote players will look
-  slightly steppy on a poor connection
+- Two players only.
+- The guest cannot call plays. When the Rivals have the ball the computer
+  picks the play and the guest runs it.
+- The guest does not pick a hero. Only the host's signature move is in play.
+- No reconnect. If either side drops, the room ends and both go back to the
+  menu.
+- Twenty updates a second with no interpolation, so a remote player on a bad
+  connection will look slightly steppy.
+- The PeerJS public broker is free and occasionally busy. If HOST says it
+  cannot open a room, wait a moment and press it again; it retries a fresh
+  code automatically on a collision.
