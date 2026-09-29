@@ -2528,7 +2528,12 @@ function drawSprite(p){
     return {t:thigh, s:thigh+0.22+tuck*1.5};
   }
   var LF,LB,bob,AF,AB;
-  if(moving){
+  if(p.down>0){
+    // sprawled: legs out along the body, arms thrown wide
+    LF={t: 0.34, s: 0.52};
+    LB={t:-0.30, s:-0.12};
+    bob=0; AF=-0.95; AB=1.05;
+  } else if(moving){
     LF=leg(ph); LB=leg(ph+Math.PI);
     bob=-Math.abs(Math.sin(ph))*2.2;                 // rises twice per stride
     var armSwing=1.05*gait;
@@ -2654,9 +2659,10 @@ function drawGuy(p){
   // three-point stance before the snap
   if(p.stance>0){ ctx.translate(0,3.4); ctx.scale(1,0.79); ctx.rotate(0.24); }
   if(p.phase>0) ctx.globalAlpha=1-p.phase*0.62;
-  if(p.down>0){                      // flat on the turf, propping himself up
+  if(p.down>0){                      // flat on the turf
     var dn=Math.min(1,p.down*1.6);
-    ctx.rotate(dn*1.22*p.face); ctx.translate(0, dn*6);
+    ctx.translate(0,-14); ctx.rotate(dn*1.42*p.face); ctx.translate(0,14);
+    ctx.translate(0, dn*9);
   }
   if(p.stun>0){ ctx.globalAlpha=0.5; ctx.rotate(0.5); }
 
