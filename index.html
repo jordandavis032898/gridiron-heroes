@@ -1826,9 +1826,17 @@ function step(dt){
       }
     } else {
       // Still a passing play? Cover. Ball out or in a runner's hands? Rally.
-      var inPocket = G.carrier && G.carrier.role==='QB' && !G.loose && !G.thrown
-                     && (G.carrier.x-G.los)*d < 4;
-      if(p.role==='COV' && inPocket){
+      // A passer who steps up is still a passer. Coverage used to switch off
+      // the instant he crossed the line by a single pixel, so every back
+      // dropped his man and ran at the ball and the receivers were wide open.
+      // The corners and the safety stay home until he is genuinely running;
+      // the backers are the ones who come up to meet him.
+      var hasBall = G.carrier && G.carrier.role==='QB' && !G.loose && !G.thrown;
+      var past    = hasBall ? (G.carrier.x-G.los)*d : 9999;
+      var inPocket = hasBall && past < 4;
+      var stillAThreat = hasBall && past < 9*YD;
+      var deepBack = (p.pos==='CB'||p.pos==='S');
+      if(p.role==='COV' && (inPocket || (stillAThreat && deepBack))){
         if(p.spy){
           // shadow the passer, stay between him and the open field
           var qs=G.carrier;
@@ -1864,7 +1872,9 @@ function step(dt){
         } else if(p.cover && p.cover.stun<=0){
           // trail your man with a cushion toward your own end zone
           var r=p.cover;
-          aim(p, r.x + d*((p.pos==='CB'?9:6)+(G.cushion||0)), r.y, DEF_SPD*1.0);
+          var lead=0.13;
+          aim(p, r.x + r.vx*lead + d*((p.pos==='CB'?9:6)+(G.cushion||0)),
+                 r.y + r.vy*lead, DEF_SPD*1.02);
         } else {
           aim(p, G.ball.x+d*10*YD, G.ball.y, DEF_SPD*0.9);
         }
