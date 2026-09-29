@@ -1455,11 +1455,12 @@ function deadTick(dt){
     q.x+=q.vx*dt; q.y+=q.vy*dt;
     q.y=Math.max(8,Math.min(FH-8,q.y)); q.x=Math.max(6,Math.min(FW-6,q.x));
     var sp=Math.hypot(q.vx,q.vy);
-    q.run += Math.max(sp*0.075, 1.5)*dt;
+    q.run += (q.down>0||q.stun>0 ? 0 : Math.max(sp*0.075, 1.5))*dt;
     if(Math.abs(q.vx)>5) q.face=q.vx>0?1:-1;
     q.lean += ((sp>6?Math.min(0.3,sp*0.0016):0)-q.lean)*Math.min(1,dt*9);
     if(q.stun>0)   q.stun-=dt;
     if(q.down>0)   q.down-=dt;
+    if(q.down>0||q.stun>0){ var dmp=Math.pow(0.002,dt); q.vx*=dmp; q.vy*=dmp; }
     if(q.z>0)      q.z=Math.max(0,q.z-dt*1.7);
     if(q.spin>0)   q.spin=Math.max(0,q.spin-dt*2.1);
     if(q.arm>0)    q.arm=Math.max(0,q.arm-dt*1.9);
@@ -2516,7 +2517,7 @@ function drawSprite(p){
   var HIP=-16, SHO=-28.5;
   var TH=8.5, WTH=5.4, SHN=8, WSHN=3.2, CL=4.5, HCL=2.2;
   var UA=7, HUA=3.2, FA=6.5, HFA=2.2;
-  var sp=Math.hypot(p.vx,p.vy), moving=sp>8, ph=p.run;
+  var sp=Math.hypot(p.vx,p.vy), moving=sp>8 && p.down<=0 && p.stun<=0, ph=p.run;
   var gait=Math.min(1.25, 0.55+sp/150);       // stride opens up with speed
 
   // A running leg is not a pendulum: the knee tucks hard through the forward
