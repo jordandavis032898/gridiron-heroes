@@ -1,7 +1,7 @@
 # Gridiron Heroes: handoff
 
 Everything a new session needs to pick this up. Read this before touching
-`index.html`.
+`game.html`.
 
 ---
 
@@ -18,8 +18,10 @@ players online.
 
 ## Shape of the project
 
-- `index.html` — the whole game. About 181 KB, one file, no build step, no
-  framework. Canvas 2D. The only external script is PeerJS from unpkg.
+- `game.html` — the whole game source (flat view). EDIT THIS ONE.
+  `index.html` (what the live link serves, 3D) and `demo3d.html` are
+  GENERATED from it: run `python tools/build_demo3d.py` after every change.
+  About 190 KB, one file, no framework. Canvas 2D. The only external script is PeerJS from unpkg.
 - `parts/*.png` — character sprite parts
 - `parts/fx/*.png` — effect sprites
 - `MULTIPLAYER.md`, `README.md`, `parts/ASSET-PROMPTS.md`
@@ -62,7 +64,7 @@ successes, and nothing was written at all while the log looked fine.
 ```bash
 python -c "
 import io
-s=io.open('index.html',encoding='utf-8').read()
+s=io.open('game.html',encoding='utf-8').read()
 i=s.index(chr(10)+'<script>'+chr(10)); j=s.rindex('</script>')
 io.open('/tmp/gh.js','w',encoding='utf-8').write(s[i+10:j])
 " && node --check /tmp/gh.js
@@ -95,8 +97,7 @@ to bottom, horizontal parts left to right.
 - **`football-thigh.png` is not a thigh.** It is a skin-coloured blob with a
   hairline stripe. The thigh is currently drawn in code by `thighBone()`.
   Swap back to `boneV(S.thigh,...)` when there is real art.
-- **`football-lower-leg.png`** is a bare calf with a sock only at the ankle.
-  It should be a tall sock.
+- The lower leg (tall sock), upper arm and forearm were replaced in Sept 2026.
 - `parts/ASSET-PROMPTS.md` has the prompts. The five-part batch (thigh, lower
   leg, cleat, upper arm, forearm) was written but never delivered.
 
@@ -138,12 +139,12 @@ the target plays the ball: he runs to the landing spot instead of finishing
 his route. Before that, a man caught mid-cut or coming back to a scrambling
 passer left the ball ten yards short of everyone.
 
-**3D demo (`demo3d.html`).** Generated, never hand-edited: `python
-tools/build_demo3d.py` rebuilds it from `index.html` with anchored patches
+**3D view (`index.html`, also `demo3d.html`).** Generated, never hand-edited: `python
+tools/build_demo3d.py` rebuilds both from `game.html` with anchored patches
 (broadcast camera, row-by-row perspective ground, stands, dynamic camera
 that fits the play every frame, sideline out-of-bounds area, double-turn
-spin). Change gameplay in `index.html`, then rebuild. Live at
-`/gridiron-heroes/demo3d.html`; V toggles flat.
+spin). Change gameplay in `game.html`, then rebuild. The main link is 3D;
+V toggles flat. Syntax check `game.html` and `index.html` before pushing.
 
 **Rig joints.** Knees bend back (shin angle = thigh minus flex) and elbows
 bend forward (forearm = upper arm plus flex). They were both reversed
@@ -151,12 +152,26 @@ once, which made every runner look like he was running backwards.
 
 **Impact.** `drawGuy` is a wrapper: ground marks, then the body drawn
 offscreen and stamped over a dilated black silhouette (the outline), then
-the name tag. A jump in `G.shake` during a step sets `G.hitStop`, which
-freezes the sim for a tenth of a second. A fresh stun launches the man
-(`vz`), and he lands and skids. Rocket passes trail fire.
+the name tag. A fresh stun launches the man (`vz`), and he lands and skids.
+Rocket passes trail fire. There is deliberately NO hit-stop: Jordan read the
+freeze on every hit as the game lagging, so it was removed. `say()` only
+shows words matching `SAY_OK` (fumble, pick, first down, sack, touchdown,
+turnover); every other callout is swallowed on purpose.
 
-**Dropback.** `DROP_YDS` per call; the QB backpedals facing downfield
-(`backpedal`, stride runs in reverse) until the stick is touched.
+**Ball in hand.** `heldBall` draws the ball between the upper arm and the
+forearm, swaying with the stride and rattling harder as HP drops or while
+wrapped. A hit that leaves the carrier under 30 HP has a 2.5% chance to
+jar it loose. A fumble pops up (`G.loose.h`, `vz`), bounces, and cannot be
+recovered while it is above head height.
+
+**After the play.** `postPlay(txt)`: banner (only if it passes `SAY_OK`),
+then after 1.5s the hero card slides in from the right while that player
+celebrates (`cel`: hop, fists pumping), then back to the play call.
+
+**Dropback and pocket.** `DROP_YDS` per call (max 6); the QB backpedals facing
+downfield (`backpedal`, stride runs in reverse) until the stick is touched.
+Within `POCKET_YDS` (6) behind his snap spot and behind the line he stays a
+passer: faces downfield, ball at his chest (`pocket`). Past it he runs.
 
 **Knockdowns.** `knockPose` turns `down`/`stun` time into a posed timeline on
 the rig: fall back, lie flat, sit up, one knee, stand. Game logic freezes a
@@ -216,7 +231,7 @@ The pattern: when something looks wrong on screen, find the line that writes
 the value, do not tune the numbers around it.
 
 **Testing headless.** The reliable way to measure behaviour is to load a copy
-of `index.html` in Playwright with a hook exposing `freshGame`, `setupPlay`
+of `game.html` in Playwright with a hook exposing `freshGame`, `setupPlay`
 and `step`, stub `requestAnimationFrame`, and call `step(1/60*GAME_SPEED)`
 yourself. Two traps: juke, dive and sidestep windows are on
 `performance.now()`, so replace it with a clock you advance 1000/60 ms per

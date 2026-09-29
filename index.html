@@ -137,14 +137,14 @@
 
   /* ---------- play card ---------- */
   #card{
-    position:absolute; left:50%; top:46%; z-index:7; width:240px;
-    transform:translate(-50%,-50%) scale(.6); opacity:0; pointer-events:none;
+    position:absolute; right:28px; top:46%; z-index:7; width:240px;
+    transform:translate(60%,-50%) scale(.8); opacity:0; pointer-events:none;
     transition:transform .34s cubic-bezier(.2,1.3,.4,1), opacity .24s;
     background:linear-gradient(160deg,#1b262e,#101820);
     border:2px solid var(--gold); border-radius:6px; overflow:hidden;
     box-shadow:0 14px 40px rgba(0,0,0,.65);
   }
-  #card.in{transform:translate(-50%,-50%) scale(1); opacity:1;}
+  #card.in{transform:translate(0,-50%) scale(1); opacity:1;}
   #card .pcTop{
     display:flex; align-items:center; gap:6px; padding:5px 8px;
     background:var(--gold); color:#14181c;
@@ -233,6 +233,7 @@ var BASE_SPD=118, SPRINT=1.34, DEF_SPD=123;
 // nothing drifts out of step with anything else.
 var GAME_SPEED=0.70;
 var TACKLE_R=23, CATCH_R=17, BLOCK_R=21;
+var SIDE_OUT=3*14;   // how far past the sideline a man can run: the out of bounds area
 var RUSH_MOVES=['rip','swim','spin','bull'];
 var JUKE_MS=330, JUKE_COST=28, TRUCK_COST=50, GAME_SECONDS=180;
 var REDUCED = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -381,11 +382,246 @@ function tapAb3(){ if(eat('t')){return true;} if(touchAb[2]){touchAb[2]=false;re
 function tapSwitch(){ if(eat('e')||eat('tab')){return true;} if(touchSwitch){touchSwitch=false;return true;} return false; }
 function tapHike(){ if(eat(' ')||eat('enter')){return true;} return false; }
 
+// Where a spot on the field is drawn, in canvas pixels, and how big a man
+// stands there. The 3D demo swaps in its own projection.
+function worldToScreen(wx,wy){
+  if(VIEW3D && P3LAST) return proj3(P3LAST,wx,wy);
+  return {x:(wx-cam.x)*scale+VW/2, y:(wy-cam.y)*scale+VH/2, s:scale};
+}
+// The receiver under the cursor, judged by where his body is drawn rather
+// than where the click meets the turf. In 3D a click on a man's chest lands
+// yards behind his feet, which picked the wrong man or nobody at all.
+function pickOnScreen(cx,cy){
+  if(!G || !G.carrier || cx===undefined) return null;
+  var r=cv.getBoundingClientRect(), sx=cx-r.left, sy=cy-r.top, best=null, bd=1e9;
+  for(var i=0;i<G.players.length;i++){
+    var q=G.players[i];
+    if(q.team!==G.offense || q===G.carrier) continue;
+    if(q.role==='C'||q.role==='OL'||q.role==='BL') continue;
+    var p=worldToScreen(q.x,q.y), by=p.y-18*p.s;       // middle of his body
+    var d=Math.hypot(p.x-sx, by-sy), reach=Math.max(30, 24*p.s);
+    if(d<reach && d<bd){ bd=d; best=q; }
+  }
+  return best;
+}
+function aimTarget(){
+  return pickOnScreen(G.mouse.cx,G.mouse.cy) || pickTarget(G.mouse.x,G.mouse.y);
+}
+
 // ---- mouse passing
 var cam={x:FW/2,y:FH/2}, scale=1, VW=0, VH=0, dpr=1;
 function screenToWorld(cx,cy){
   var r=cv.getBoundingClientRect();
+  if(VIEW3D && P3LAST){
+    var P=P3LAST, sy2=cy-r.top, sx2=cx-r.left;
+    var zc=P.K/Math.max(1,(sy2-P.hz));
+    return { x: P.camx + (sx2-P.cx)*zc/(P.S0*P.Z0), y: P.camy + P.Z0 - zc };
+  }
   return { x: cam.x + (cx-r.left-VW/2)/scale, y: cam.y + (cy-r.top-VH/2)/scale };
+}
+
+// ================================================================ 2.5D view
+// Flat 2D players standing on a field seen from a broadcast camera up in the
+// stands. The ground is drawn in perspective row by row (far rows shrink),
+// and each player is drawn at his projected spot, scaled by his distance.
+var VIEW3D=true, P3LAST=null;
+var Z3=820, TILT3=0.60, BASE3=1.7;    // camera distance, ground foreshortening, base zoom
+window.addEventListener('keydown',function(e){
+  if(e.key==='v'||e.key==='V'){ VIEW3D=!VIEW3D; }
+});
+var W3=null, MAIN3=null;
+function makeW3(){
+  var M=300, MT=640, MB=220;
+  var c=document.createElement('canvas');
+  c.width=FW+2*M; c.height=MT+FH+MB;
+  var base=document.createElement('canvas'); base.width=c.width; base.height=c.height;
+  var g=base.getContext('2d');
+  // apron round the field
+  g.fillStyle='#16311f'; g.fillRect(0,0,base.width,base.height);
+  // the far stands: tiers of crowd climbing away from the field
+  var top=MT-120;
+  var sg=g.createLinearGradient(0,0,0,top);
+  sg.addColorStop(0,'#0b0f16'); sg.addColorStop(1,'#1c2433');
+  g.fillStyle=sg; g.fillRect(0,0,base.width,top);
+  var seed=7; function rnd(){ seed=(seed*16807)%2147483647; return seed/2147483647; }
+  var cols=['#c9d3e0','#2d477f','#8c1a24','#e8c14a','#f1f1ec','#51607a','#a8232f','#233a6e'];
+  for(var ty=18; ty<top-8; ty+=9){
+    g.fillStyle='rgba(0,0,0,.35)'; g.fillRect(0,ty+6,base.width,2);        // tier edge
+    for(var tx=4; tx<base.width; tx+=5+rnd()*3){
+      g.fillStyle=cols[(rnd()*cols.length)|0];
+      g.globalAlpha=0.45+rnd()*0.45;
+      g.fillRect(tx, ty+rnd()*2, 3, 4);
+    }
+  }
+  g.globalAlpha=1;
+  // wall and ad boards between the stands and the field
+  g.fillStyle='#0d1a2e'; g.fillRect(0,top,base.width,26);
+  g.fillStyle='#ffd23f'; g.font='700 18px "Anton", sans-serif'; g.textBaseline='middle';
+  for(var ax=40; ax<base.width; ax+=420){
+    g.fillText('GRIDIRON HEROES', ax, top+13);
+  }
+  // near side: bench area
+  g.fillStyle='#12281a'; g.fillRect(0,MT+FH+40,base.width,MB-40);
+  // the field itself
+  g.drawImage(fieldCanvas, M, MT);
+  // the white border: out of bounds starts on the paint
+  var BW=YD*0.9;
+  g.fillStyle='#eef3e8';
+  g.fillRect(M-BW, MT-BW, FW+2*BW, BW);            // far sideline
+  g.fillRect(M-BW, MT+FH, FW+2*BW, BW);            // near sideline
+  g.fillRect(M-BW, MT-BW, BW, FH+2*BW);            // end lines
+  g.fillRect(M+FW, MT-BW, BW, FH+2*BW);
+  // coaching box dashes on the near side
+  g.strokeStyle='rgba(255,210,63,.55)'; g.lineWidth=2; g.setLineDash([10,8]);
+  g.beginPath(); g.moveTo(M+EZ+25*YD, MT+FH+BW+2.2*YD); g.lineTo(M+FW-EZ-25*YD, MT+FH+BW+2.2*YD); g.stroke();
+  g.setLineDash([]);
+  return {cv:c, g:c.getContext('2d'), base:base, M:M, MT:MT};
+}
+// Everything that must stay on screen this frame.
+function camPoints(){
+  var pts=[]; if(!G) return pts;
+  if(G.ball) pts.push([G.ball.x,G.ball.y]);
+  if(G.thrown){
+    pts.push([G.thrown.tx,G.thrown.ty]);
+    if(G.thrown.target) pts.push([G.thrown.target.x,G.thrown.target.y]);
+  }
+  var c=G.carrier, bx=G.ball?G.ball.x:FW/2, by=G.ball?G.ball.y:FH/2;
+  var live=(G.phase==='live');
+  var passing=live && c && c.role==='QB' && !G.thrown && !pastTheLine(c);
+  for(var i=0;i<G.players.length;i++){
+    var q=G.players[i];
+    if(!isFinite(q.x)||!isFinite(q.y)) continue;
+    if(!live){
+      if(Math.hypot(q.x-bx,q.y-by)<24*YD) pts.push([q.x,q.y]);
+      continue;
+    }
+    if(q===c || q===G.controlled){ pts.push([q.x,q.y]); continue; }
+    // while you are passing, every man you can throw to has to be visible
+    if(passing && q.team===G.offense && q.role!=='C' && q.role!=='OL' && q.role!=='BL'){
+      if(Math.hypot(q.x-c.x,q.y-c.y)<45*YD) pts.push([q.x,q.y]);
+      continue;
+    }
+    // with a runner, the men closing on him
+    if(c && !passing && q.team!==c.team && Math.hypot(q.x-c.x,q.y-c.y)<9*YD) pts.push([q.x,q.y]);
+  }
+  return pts;
+}
+// Largest zoom that keeps every point inside the safe frame. Screen offsets
+// from centre are exactly proportional to the zoom for a fixed camera, so
+// this is one pass, no search.
+function camFit(pts,camx,camy){
+  var Z0=Z3, c=TILT3, best=9;
+  for(var i=0;i<pts.length;i++){
+    var zc=Math.max(160, Z0-(pts[i][1]-camy));
+    var ox=(pts[i][0]-camx)*Z0/zc, oy=c*Z0*(Z0/zc-1);
+    if(Math.abs(ox)>1) best=Math.min(best,(VW/2-60)/Math.abs(ox));
+    if(oy<-1) best=Math.min(best,(VH/2-100)/(-oy));
+    else if(oy>1) best=Math.min(best,(VH/2-80)/oy);
+  }
+  return best;
+}
+function setupProj(sx,sy){
+  var want=BASE3*CAM3.z, fit=camFit(camPoints(),cam.x,cam.y);
+  var tgt=Math.max(0.35,Math.min(want,fit));
+  if(!CAM3.S) CAM3.S=tgt;
+  // pull out fast so nothing leaves the frame, push in gently
+  CAM3.S += (tgt-CAM3.S)*(tgt<CAM3.S?0.3:0.06);
+  var S0=CAM3.S, Z0=Z3, c=TILT3;
+  var K=c*S0*Z0*Z0;
+  var P={S0:S0, Z0:Z0, K:K, hz:VH/2+sy - c*S0*Z0, cx:VW/2+sx, camx:cam.x, camy:cam.y};
+  P3LAST=P; return P;
+}
+function proj3(P,wx,wy){
+  var zc=Math.max(60, P.Z0-(wy-P.camy)), s=P.S0*P.Z0/zc;
+  return {x:P.cx+(wx-P.camx)*s, y:P.hz+P.K/zc, s:s};
+}
+function at3D(P,wx,wy){
+  var q=proj3(P,wx,wy);
+  ctx.setTransform(dpr*q.s,0,0,dpr*q.s, dpr*(q.x-wx*q.s), dpr*(q.y-wy*q.s));
+}
+function blit3D(P){
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+  // night sky and the upper deck, behind everything
+  var sk=ctx.createLinearGradient(0,0,0,VH*0.5);
+  sk.addColorStop(0,'#05070b'); sk.addColorStop(1,'#141b27');
+  ctx.fillStyle=sk; ctx.fillRect(0,0,VW,VH);
+  var src=W3.cv, STEP=2;
+  for(var y=0; y<VH; y+=STEP){
+    if(y-P.hz<2) continue;
+    var zc0=P.K/(y-P.hz), zc1=P.K/(y+STEP-P.hz);
+    var wy0=P.camy+P.Z0-zc0, wy1=P.camy+P.Z0-zc1;
+    var s=P.S0*P.Z0/zc0, hw=(VW/2)/s;
+    var sx0=P.camx-hw+W3.M, sy0=wy0+W3.MT, sw=2*hw, sh=Math.max(0.35,wy1-wy0);
+    var dx=P.cx-VW/2, dw=VW;
+    // clip the source to the canvas, moving the destination with it
+    if(sy0<0 || sy0+sh>src.height) continue;
+    if(sx0<0){ var cut=-sx0; dx+=cut*s; dw-=cut*s; sw-=cut; sx0=0; }
+    if(sx0+sw>src.width){ var cut2=sx0+sw-src.width; dw-=cut2*s; sw-=cut2; }
+    if(sw<=1||dw<=1) continue;
+    ctx.drawImage(src, sx0, sy0, sw, sh, dx, y, dw, STEP+0.6);
+  }
+  // haze toward the far side sells the distance
+  var hz=ctx.createLinearGradient(0,0,0,VH*0.45);
+  hz.addColorStop(0,'rgba(10,14,22,.55)'); hz.addColorStop(1,'rgba(10,14,22,0)');
+  ctx.fillStyle=hz; ctx.fillRect(0,0,VW,VH*0.45);
+  // stadium lights
+  for(var li=0; li<4; li++){
+    var lx=VW*(0.12+li*0.25), ly=VH*0.03;
+    var lg=ctx.createRadialGradient(lx,ly,0,lx,ly,VW*0.14);
+    lg.addColorStop(0,'rgba(255,250,225,.30)'); lg.addColorStop(1,'rgba(255,250,225,0)');
+    ctx.fillStyle=lg; ctx.fillRect(lx-VW*0.14,0,VW*0.28,VW*0.14);
+  }
+}
+
+// ---- dynamic camera: wide before the snap, tight on the action, a quick
+// punch-in on big hits and hero moves, and a pull-back on a breakaway so you
+// can see the end zone and whoever is chasing.
+var CAM3={z:0.86, actUntil:0, ax:0, ay:0, prevShake:0, prevSpin:0};
+function camMood(now){
+  if(CAM3.actUntil>now) return 1.55;
+  if(!G || G.phase!=='live') return 0.86;
+  if(G.thrown) return 0.92;
+  var c=G.carrier;
+  if(!c) return 1.0;
+  if(c.role==='QB' && !pastTheLine(c)) return 1.0;
+  var dfn=nearestOf(c, c.team==='H'?'A':'H');
+  var dd=dfn?Math.hypot(dfn.x-c.x,dfn.y-c.y):999;
+  var past=(c.x-G.los)*dir();
+  if(dd>8*YD && past>3*YD) return 0.8;
+  return 1.14;
+}
+function camDirect(){
+  var now=performance.now();
+  if(G && G.phase==='live'){
+    var c=G.carrier, sp=c?(c.spin||0):0;
+    if(G.shake > CAM3.prevShake+2 || (sp>0.85 && CAM3.prevSpin<=0.85)){
+      CAM3.actUntil=now+620; CAM3.ax=G.ball.x; CAM3.ay=G.ball.y;
+    }
+    CAM3.prevSpin=sp;
+  }
+  CAM3.prevShake=G?G.shake:0;
+  var zt=camMood(now), act=CAM3.actUntil>now;
+  CAM3.z += (zt-CAM3.z)*(act?0.2:0.05);
+  return act;
+}
+
+// A proper spin: two quick turns, a whirl round his waist, afterimages.
+function swirl(p,lift,front){
+  var u=p.spin, ph=u*Math.PI*6;
+  ctx.save();
+  ctx.lineCap='round';
+  for(var k=0;k<3;k++){
+    var a0=ph+k*2.09;
+    var a=((a0%(Math.PI*2))+Math.PI*2)%(Math.PI*2);
+    var isFront = a<Math.PI;
+    if(isFront!==front) continue;
+    ctx.strokeStyle='rgba(190,230,255,'+(0.75*Math.min(1,u*2)).toFixed(2)+')';
+    ctx.lineWidth=2.2;
+    ctx.beginPath();
+    ctx.ellipse(p.x, p.y-15-lift, 14, 5, 0, a, a+1.1);
+    ctx.stroke();
+  }
+  ctx.restore();
 }
 stage.addEventListener('pointermove',function(e){
   // measure the flick before anything else moves the cursor record
@@ -403,7 +639,7 @@ stage.addEventListener('pointermove',function(e){
     SWIPE.x=w0.x; SWIPE.y=w0.y; SWIPE.t=tn;
   }
   var w=screenToWorld(e.clientX,e.clientY);
-  G && (G.mouse.x=w.x, G.mouse.y=w.y, G.mouse.on=true);
+  G && (G.mouse.x=w.x, G.mouse.y=w.y, G.mouse.on=true, G.mouse.cx=e.clientX, G.mouse.cy=e.clientY);
 });
 stage.addEventListener('pointerleave',function(){ G && (G.mouse.on=false); });
 
@@ -437,6 +673,8 @@ stage.addEventListener('pointerdown',function(e){
   }
   if(G.phase==='presnap'){ say('HIT SPACE TO HIKE FIRST',800); return; }
   if(G.phase!=='live'){ G.lastThrow='not live ('+G.phase+')'; return; }
+  var hit=pickOnScreen(e.clientX,e.clientY);
+  if(hit){ G.lockMan=hit; G.lockT=5; throwAt(hit.x,hit.y,'H'); return; }
   var w=screenToWorld(e.clientX,e.clientY);
   throwAt(w.x,w.y,'H');
 });
@@ -597,12 +835,18 @@ function setupPlay(playId){
 
 // The drop, in yards, for each call. Quick game is three steps, intermediate
 // five, the deep shot seven. The run is a handoff, so no drop at all.
-var DROP_YDS = {short:3, outs:5, screen:5, draw:5, deep:7, run:0};
+var DROP_YDS = {short:3, outs:5, screen:5, draw:5, deep:6, run:0};
+var POCKET_YDS = 6;   // deeper than this behind his snap spot and he is a runner
 function snapBall(){
   if(G.phase!=='presnap') return;
   G.phase='live'; G.snapT=G.gt;
   for(var i=0;i<G.players.length;i++) G.players[i].stance=0;
-  G.dropLeft = (DROP_YDS[G.play]||0)*YD;         // yards of drop still to take
+  G.dropLeft = (DROP_YDS[G.offense==='H' ? G.play : G.aiPlay]||0)*YD;
+  G.qbSpot=null;
+  for(var qi=0;qi<G.players.length;qi++){
+    var qq=G.players[qi];
+    if(qq.team===G.offense && qq.role==='QB'){ G.qbSpot={x:qq.x,y:qq.y}; break; }
+  }         // yards of drop still to take
   burst(G.ball.x,G.ball.y,'#f1f1ec');
   say('HIKE!',480);
 }
@@ -1408,7 +1652,7 @@ function fumble(from,vx,vy){
   if(G.cur && from && from.team===G.cur.team) G.cur.fum=true;
   G.carrier=null; G.thrown=null; G.windup=null;
   G.ball.held=false;
-  G.loose={vx:vx,vy:vy,t:0};
+  G.loose={vx:vx,vy:vy,t:0,h:4,vz:150};           // pops up out of his hands
   if(from) from.stun=1.2;
 }
 
@@ -1743,7 +1987,7 @@ function deadTick(dt){
     var q=G.players[i];
     q.vx*=damp; q.vy*=damp;
     q.x+=q.vx*dt; q.y+=q.vy*dt;
-    q.y=Math.max(8,Math.min(FH-8,q.y)); q.x=Math.max(6,Math.min(FW-6,q.x));
+    q.y=Math.max(-SIDE_OUT,Math.min(FH+SIDE_OUT,q.y)); q.x=Math.max(6,Math.min(FW-6,q.x));
     var sp=Math.hypot(q.vx,q.vy);
     q.run += (q.down>0||q.stun>0 ? 0 : Math.max(sp*0.075, 1.5))*dt;
     if(Math.abs(q.vx)>5) q.face=q.vx>0?1:-1;
@@ -2100,7 +2344,7 @@ function step(dt){
   // ball goes. Snap it off the moment you see him and it sails.
   if(G.carrier && G.carrier.role==='QB' && !G.thrown && iHaveBall() &&
      G.mouse && G.mouse.on && !pastTheLine(G.carrier)){
-    var lt=pickTarget(G.mouse.x,G.mouse.y);
+    var lt=aimTarget();
     if(lt && lt===G.lockMan) G.lockT=Math.min(1.5, G.lockT+dt);
     else { G.lockMan=lt; G.lockT=0; }
   } else { G.lockMan=null; G.lockT=0; }
@@ -2352,6 +2596,15 @@ function step(dt){
     }
   }
 
+  // In the pocket (behind the line, no more than six yards behind where he
+  // took the snap) the quarterback is a passer: eyes downfield, ball at his
+  // chest, feet shuffling whichever way he slides. Leave it and he runs.
+  var qbc=G.carrier;
+  if(qbc && qbc.role==='QB' && !G.thrown && G.qbSpot){
+    var qback=(G.qbSpot.x-qbc.x)*d2, overLine=(qbc.x-G.los)*d2>0;
+    if(qback<=POCKET_YDS*YD && !overLine){ qbc.backpedal=0.12; qbc.dropFace=d2; qbc.pocket=0.12; }
+  }
+
   // rush moves in motion, and blockers who just got beaten
   for(var mv=0;mv<G.players.length;mv++){
     var mq=G.players[mv];
@@ -2376,18 +2629,19 @@ function step(dt){
   for(var j=0;j<G.players.length;j++){
     var q=G.players[j];
     q.x+=q.vx*dt; q.y+=q.vy*dt;
-    q.y=Math.max(8,Math.min(FH-8,q.y)); q.x=Math.max(6,Math.min(FW-6,q.x));
+    q.y=Math.max(-SIDE_OUT,Math.min(FH+SIDE_OUT,q.y)); q.x=Math.max(6,Math.min(FW-6,q.x));
     var sp=Math.hypot(q.vx,q.vy);
-    q.run += (q.backpedal>0?-1:1)*Math.max(sp*0.075, 2.1)*dt;    // idle still animates; backpedal runs it backwards
+    q.run += (q.backpedal>0 && q.vx*(q.dropFace||q.face)<0 ? -1:1)*Math.max(sp*0.075, 2.1)*dt;    // idle still animates; backpedal runs it backwards
     if(q.backpedal>0){
       // backpedalling: eyes downfield, weight back, never turn his back
       q.backpedal-=dt; q.face=q.dropFace||q.face;
+      if(q.pocket>0) q.pocket-=dt;
       q.lean += (-0.10 - q.lean)*Math.min(1,dt*9);
     } else {
       if(Math.abs(q.vx)>5) q.face = q.vx>0?1:-1;
       q.lean += ((sp>6? Math.min(0.34, sp*0.0016) :0) - q.lean)*Math.min(1,dt*9);
     }
-    if(q.spin>0) q.spin=Math.max(0,q.spin-dt*2.1);
+    if(q.spin>0){ q.spin=Math.max(0,q.spin-dt*2.1); if(Math.random()<dt*45) ghost(q); }
     // a fresh stun is a hit: put him in the air rather than just tipping him over
     if(q.stun > (q._pst||0)+0.5 && !(q.vz>0) && q.z<=0.01 && !REDUCED) q.vz=3.0;
     q._pst=q.stun;
@@ -2439,7 +2693,7 @@ function step(dt){
   }
   for(var i3=0;i3<G.players.length;i3++){
     var pp3=G.players[i3];
-    pp3.y=Math.max(8,Math.min(FH-8,pp3.y));
+    pp3.y=Math.max(-SIDE_OUT,Math.min(FH+SIDE_OUT,pp3.y));
     pp3.x=Math.max(6,Math.min(FW-6,pp3.x));
   }
 
@@ -2524,7 +2778,19 @@ function step(dt){
     // ---- loose ball bouncing free
     G.loose.t+=dt;
     G.ball.x+=G.loose.vx*dt; G.ball.y+=G.loose.vy*dt;
-    G.loose.vx*=0.955; G.loose.vy*=0.955;
+    if(G.loose.vz===undefined){ G.loose.vz=110; G.loose.h=2; }
+    G.loose.vz-=520*dt; G.loose.h=(G.loose.h||0)+G.loose.vz*dt;
+    if(G.loose.h<=0){
+      G.loose.h=0;
+      if(G.loose.vz<-45){                              // a bounce, off at an angle
+        G.loose.vz=-G.loose.vz*0.42;
+        var ba=(Math.random()-0.5)*1.4, bc=Math.cos(ba), bs=Math.sin(ba);
+        var nvx=G.loose.vx*bc-G.loose.vy*bs, nvy=G.loose.vx*bs+G.loose.vy*bc;
+        G.loose.vx=nvx*0.8; G.loose.vy=nvy*0.8;
+      } else G.loose.vz=0;
+    }
+    var gdrag=(G.loose.h>0)?0.99:0.955;               // it carries in the air, scrubs on the grass
+    G.loose.vx*=gdrag; G.loose.vy*=gdrag;
     G.ball.x=Math.max(4,Math.min(FW-4,G.ball.x));
     G.ball.y=Math.max(4,Math.min(FH-4,G.ball.y));
     if(Math.random()<0.5) G.fx.push({x:G.ball.x,y:G.ball.y,vx:0,vy:-14,
@@ -2533,7 +2799,7 @@ function step(dt){
       for(var lb=0;lb<G.players.length;lb++){
         var pl=G.players[lb];
         if(pl.stun>0) continue;
-        if(Math.hypot(pl.x-G.ball.x,pl.y-G.ball.y)<12){ recoverBall(pl); return; }
+        if((G.loose.h||0)<7 && Math.hypot(pl.x-G.ball.x,pl.y-G.ball.y)<12){ recoverBall(pl); return; }
       }
     }
     if(G.loose.t>6){ endPlay(G.ball.x,'DEAD BALL'); return; }
@@ -2603,6 +2869,11 @@ function step(dt){
       var cs2=Math.hypot(car.vx,car.vy);
       if(cs2>1 && (tdx*car.vx+tdy*car.vy)/(cs2*td) > 0.5) hit*=1.3;  // met him head on
       car.hp-=hit/res;
+      if(car.hp>0 && car.hp<30 && Math.random()<0.025){
+        fumble(car, (car.x-t2.x)*5+car.vx*0.4, (car.y-t2.y)*5+car.vy*0.4);
+        say('FUMBLE!',1100);
+        return;
+      }
       t2.wrapT=(0.85+Math.random()*0.7)*((t2.pwr||1)/res);
       t2.wrapA=Math.atan2(tdy,tdx);
       burst(car.x,car.y-8,'#ffffff');
@@ -2633,6 +2904,7 @@ function step(dt){
         }
         if(lastT) lastT.down=0.8;
         credit(lastT, car.role==='QB' ? 'SACK' : 'TACKLE');
+        if(car.role==='QB' && (car.x-G.los)*dir()<0) G.wasSack=true;   // the banner says so
         endPlay(car.x,'TACKLED'); return;
       }
     } else {
@@ -2640,7 +2912,7 @@ function step(dt){
       if(G.freeT>0.7) G.carrier.hp=Math.min(100, G.carrier.hp + 7*dt);
     }
     // sideline: getting out stops the clock, which is the whole point
-    if(G.carrier.y<=9 || G.carrier.y>=FH-9){
+    if(G.carrier.y<=0 || G.carrier.y>=FH){          // over the white line
       burst(G.carrier.x,G.carrier.y,'#eef3e8');
       say('OUT OF BOUNDS',950);
       endPlay(G.carrier.x,'OUT OF BOUNDS'); return;
@@ -2668,8 +2940,7 @@ function endPlay(atX,label){
     G.newSeries=false;
     G.los=Math.max(EZ+2,Math.min(FW-EZ-2,atX));
     G.down=1; G.toGo=10;
-    say('TURNOVER — '+(G.offense==='H'?'YOUR BALL':'THEIR BALL'),1300);
-    setTimeout(function(){ if(!G.over) G.phase='playcall'; },1350);
+    postPlay('TURNOVER — '+(G.offense==='H'?'YOUR BALL':'THEIR BALL'));
     return;
   }
   var gained=(atX-G.los)*dir()/YD;
@@ -2678,8 +2949,24 @@ function endPlay(atX,label){
   var txt=label;
   if(G.toGo<=0){ G.down=1; G.toGo=10; txt='FIRST DOWN'; G.stats[G.offense].fd++; }
   else { G.down+=1; if(G.down>4){ turnover(); txt='TURNOVER ON DOWNS'; } }
-  say(txt,1100);
-  setTimeout(function(){ if(!G.over) G.phase='playcall'; },1750);
+  if(G.wasSack && txt===label) txt='SACK!';
+  G.wasSack=false;
+  postPlay(txt);
+}
+function postPlay(txt, minHold){
+  var banner = !!txt && SAY_OK.test(String(txt));
+  if(banner) say(txt, 1400);
+  var q=G.cardQ; G.cardQ=null;
+  var cardAt = banner ? 1500 : 250;
+  if(q && q.p){
+    setTimeout(function(){
+      if(G.over) return;
+      showCard(q.p, q.act);
+      q.p.cel=Math.max(q.p.cel||0, 1.9);               // his celebration runs with the card
+    }, cardAt);
+  }
+  var done = cardAt + (q && q.p ? 2000 : 500);
+  setTimeout(function(){ if(!G.over) G.phase='playcall'; }, Math.max(minHold||0, done));
 }
 function turnover(){ G.offense=G.offense==='H'?'A':'H'; G.down=1; G.toGo=10; }
 function score(){
@@ -2697,12 +2984,16 @@ function score(){
   turnover();
   G.los = G.offense==='H' ? EZ+25*YD : FW-EZ-25*YD;
   G.clockRunning=false;
-  setTimeout(function(){ if(!G.over) G.phase='playcall'; },2700);
+  postPlay('TOUCHDOWN!', 2700);
 }
 function gameOver(){ G.over=true; G.phase='over'; showOver(); }
 
 var callTimer=null;
+// Only these get words on the screen. Every hit and move used to shout its
+// own name in the middle of the field, which was noise.
+var SAY_OK=/FUMBLE|INTERCEPT|PICKED OFF|FIRST DOWN|SACK|TOUCHDOWN|TURNOVER|SAFETY|IT IS GOOD|NO GOOD|HIKE FIRST|WAITING|OTHER PLAYER|YOU ARE THE|THEY ARE IN|LIBRARY|PLAY IN/;
 function say(text,ms){
+  if(!SAY_OK.test(String(text))) return;
   elCall.textContent=text; elCall.style.transition=''; elCall.style.opacity='1';
   if(callTimer) clearTimeout(callTimer);
   callTimer=setTimeout(function(){
@@ -2818,9 +3109,23 @@ function draw(){
   // centre mostly on the ball so the play stays where your eye already is
   var cx=(minX+maxX)/2, cy=(minY+maxY)/2+(padTop-padBot)/2;
   var tx=bx*0.62+cx*0.38, ty=by*0.62+cy*0.38;
+  var actCam = VIEW3D ? camDirect() : false;
+  if(actCam){ tx=CAM3.ax; ty=CAM3.ay; }
+  else if(VIEW3D){
+    var cp=camPoints();
+    if(cp.length){
+      var x0=1e9,x1=-1e9,y0=1e9,y1=-1e9;
+      for(var ci=0;ci<cp.length;ci++){
+        x0=Math.min(x0,cp[ci][0]); x1=Math.max(x1,cp[ci][0]);
+        y0=Math.min(y0,cp[ci][1]); y1=Math.max(y1,cp[ci][1]);
+      }
+      tx=(x0+x1)/2*0.6+bx*0.4; ty=(y0+y1)/2*0.6+by*0.4;
+    }
+  }
   if(!isFinite(tx)) tx=FW/2;
   if(!isFinite(ty)) ty=FH/2;
-  cam.x += (tx-cam.x)*0.11; cam.y += (ty-cam.y)*0.11;
+  var follow = actCam ? 0.2 : (VIEW3D ? 0.15 : 0.11);
+  cam.x += (tx-cam.x)*follow; cam.y += (ty-cam.y)*follow;
 
   // the viewport itself can come back wrong after a resize
   if(!isFinite(VW)||!isFinite(VH)||VW<40||VH<40){ resize(); }
@@ -2830,16 +3135,32 @@ function draw(){
   if(!isFinite(cam.y)) cam.y=FH/2;
 
   var halfW=VW/scale/2, halfH=VH/scale/2;
-  cam.x = (FW>halfW*2) ? Math.max(halfW,Math.min(FW-halfW,cam.x)) : FW/2;
-  cam.y = (FH>halfH*2) ? Math.max(halfH,Math.min(FH-halfH,cam.y)) : FH/2;
+  if(VIEW3D){
+    // The 3D camera frames the play itself (camFit). The flat view's limits
+    // pinned it near midfield, so a return toward either end zone ran off
+    // the screen while the camera zoomed out after it.
+    cam.x=Math.max(0,Math.min(FW,cam.x)); cam.y=Math.max(0,Math.min(FH,cam.y));
+  } else {
+    cam.x = (FW>halfW*2) ? Math.max(halfW,Math.min(FW-halfW,cam.x)) : FW/2;
+    cam.y = (FH>halfH*2) ? Math.max(halfH,Math.min(FH-halfH,cam.y)) : FH/2;
+  }
 
   var sx=0,sy=0;
   if(G.shake>0.3){ sx=(Math.random()-0.5)*G.shake; sy=(Math.random()-0.5)*G.shake; G.shake*=0.86; }
 
   ctx.setTransform(dpr,0,0,dpr,0,0);
   ctx.fillStyle='#0c1114'; ctx.fillRect(0,0,VW,VH);
-  ctx.save();
-  ctx.translate(VW/2+sx,VH/2+sy); ctx.scale(scale,scale); ctx.translate(-cam.x,-cam.y);
+  if(!MAIN3) MAIN3=ctx;
+  ctx=MAIN3;                         // never left pointing at the ground canvas
+  var P3 = VIEW3D ? setupProj(sx,sy) : null, realCtx3=ctx;
+  if(P3){
+    if(!W3) W3=makeW3();
+    ctx=W3.g; ctx.setTransform(1,0,0,1,0,0); ctx.drawImage(W3.base,0,0);
+    ctx.save(); ctx.translate(W3.M, W3.MT);
+  } else {
+    ctx.save();
+    ctx.translate(VW/2+sx,VH/2+sy); ctx.scale(scale,scale); ctx.translate(-cam.x,-cam.y);
+  }
 
   // The turf never changes, so it is painted once into an offscreen canvas
   // and blitted. Re-stroking 200-odd hash marks every frame was costing more
@@ -2854,7 +3175,7 @@ function draw(){
 
   // pass targeting reticle
   if((G.phase==='live'||G.phase==='presnap')&&G.mouse.on&&G.carrier&&G.carrier.role==='QB'&&iHaveBall()&&!G.thrown&&!pastTheLine(G.carrier)){
-    var tgt=pickTarget(G.mouse.x,G.mouse.y);
+    var tgt=aimTarget();
     if(tgt && Math.hypot(tgt.x-G.carrier.x,tgt.y-G.carrier.y) < 46*YD){
       var lk=(tgt===G.lockMan)?Math.min(1,G.lockT/1.05):0;
       var col=lk>0.92 ? '79,209,139' : (lk>0.45 ? '255,210,63' : '224,140,63');
@@ -2892,9 +3213,14 @@ function draw(){
     }
   }
 
+  if(P3){ ctx.restore(); ctx=realCtx3; blit3D(P3); ctx.save(); }
+
   // depth sort so players nearer the bottom overlap the ones behind them
   var order=G.players.slice().sort(function(a,b){ return a.y-b.y; });
-  for(var i=0;i<order.length;i++) drawGuy(order[i]);
+  for(var i=0;i<order.length;i++){
+    if(P3) at3D(P3,order[i].x,order[i].y);
+    drawGuy(order[i]);
+  }
 
   for(var f=0;f<G.fx.length;f++){
     var e=G.fx[f], k2=Math.max(0,e.life/e.max);
@@ -2902,6 +3228,7 @@ function draw(){
     if(!isFinite(e.x)||!isFinite(e.y)||!isFinite(k2)) continue;
     if(e.r!==undefined && !isFinite(e.r)) continue;
     if(e.x2!==undefined && (!isFinite(e.x2)||!isFinite(e.y2))) continue;
+    if(P3) at3D(P3,e.x,e.y);
     ctx.globalAlpha=k2;
     if(e.ringed){
       ctx.strokeStyle=e.c; ctx.lineWidth=2.4*k2;
@@ -2954,9 +3281,17 @@ function draw(){
   }
   ctx.globalAlpha=1;
 
+  if(P3 && G.ball) at3D(P3,G.ball.x,G.ball.y);
   if(G.kick) drawKick();
   else if(G.thrown||(G.ball&&!G.ball.held)) drawBall();
   ctx.restore();
+  if(P3){
+    ctx.setTransform(dpr,0,0,dpr,0,0);
+    ctx.fillStyle='rgba(8,12,16,.55)'; ctx.fillRect(VW/2-80,VH-28,160,18);
+    ctx.fillStyle='#ffd23f'; ctx.font='700 12px "Barlow Condensed", sans-serif';
+    ctx.textAlign='center'; ctx.textBaseline='middle';
+    ctx.fillText('PRESS V FOR FLAT VIEW', VW/2, VH-19);
+  }
 }
 
 // Flat-vector limb: solid colour with a darker plane down one side.
@@ -3108,6 +3443,16 @@ function drawSprite(p){
     AB =  0.15+Math.sin(ph*1.7+2.6)*0.22*amp;
   }
 
+  // celebrating: both fists up and pumping (the hop comes from cel in drawGuy)
+  if(!KD && p.cel>0 && p!==G.carrier){
+    var ct=performance.now()/1000;
+    AF= 2.75+Math.sin(ct*13)*0.35; EF=-0.3;
+    AB=-2.55+Math.sin(ct*13+1.7)*0.35; EB=0.3;
+  }
+  // the passer in the pocket: both hands on the ball at his chest
+  var POCKET = !KD && p===G.carrier && p.role==='QB' && p.pocket>0 && !(p.throwArm>0);
+  if(POCKET){ AF=0.25; EF=2.15; AB=0.2; EB=2.2; }
+
   ctx.translate(0,bob);
 
   // ---- back leg, then back arm
@@ -3153,20 +3498,36 @@ function drawSprite(p){
     var elS=boneH(S.uarm,3.6,SHO+1,1.38*k,UA,HUA);
     boneH(S.farmHand||S.farm,elS.x,elS.y,1.52*k,FA+1.4,HFA+0.5);
   } else {
+    // upper arm, then the ball, then the forearm over it: the ball sits in
+    // the crook of the arm instead of pasted on top of the hand
     var elF=boneH(S.uarm,3.6,SHO+1,AF,UA,HUA);
-    boneH(S.farm,elF.x,elF.y,AF+EF,FA,HFA);
+    var fa=AF+EF;
+    if(p===G.carrier){
+      heldBall(p, elF.x+Math.sin(fa)*(FA-1.4), elF.y+Math.cos(fa)*(FA-1.4), fa, POCKET);
+      var held=true;
+    }
+    boneH(S.farm,elF.x,elF.y,fa,FA,HFA);
   }
+  // mid-throw or mid-stiff-arm the ball rides at his hip
+  if(p===G.carrier && !held) heldBall(p, 4.8, HIP-9, null, false);
+}
 
-  // ---- ball tucked under the near arm
-  if(p===G.carrier){
-    ctx.save(); ctx.translate(4.8,HIP-9); ctx.rotate(-0.45);
-    ctx.fillStyle='#7a4a28'; ctx.beginPath(); ctx.ellipse(0,0,4,2.5,0,0,Math.PI*2); ctx.fill();
-    ctx.fillStyle='rgba(0,0,0,.22)';
-    ctx.beginPath(); ctx.ellipse(-1.2,0.5,2.4,1.6,0,0,Math.PI*2); ctx.fill();
-    ctx.strokeStyle='#f1f1ec'; ctx.lineWidth=0.7;
-    ctx.beginPath(); ctx.moveTo(-1.8,-0.2); ctx.lineTo(1.8,-0.2); ctx.stroke();
-    ctx.restore();
-  }
+// The ball in a man's grip. It sways with his stride so it has weight, and
+// when he is wrapped up or nearly spent it rattles in his hands: the lower
+// his footing, the harder it shakes. That is the tell that it could come out.
+function heldBall(p, x, y, fa, pocket){
+  var sway=Math.sin((p.run||0)*2), hp=(p.hp===undefined?100:p.hp);
+  var shake=Math.min(1.3, Math.max(0,(60-hp)/45) + (p.wrapped>0?0.55:0));
+  ctx.save();
+  ctx.translate(x + (Math.random()-0.5)*shake*2.4, y + sway*0.5 + (Math.random()-0.5)*shake*2.4);
+  var rot = pocket ? -1.25 : (fa===null ? -0.45 : Math.atan2(Math.cos(fa),Math.sin(fa)));
+  ctx.rotate(rot + sway*0.10 + (Math.random()-0.5)*shake*0.7);
+  ctx.fillStyle='#7a4a28'; ctx.beginPath(); ctx.ellipse(0,0,4,2.5,0,0,Math.PI*2); ctx.fill();
+  ctx.fillStyle='rgba(0,0,0,.22)';
+  ctx.beginPath(); ctx.ellipse(-1.2,0.5,2.4,1.6,0,0,Math.PI*2); ctx.fill();
+  ctx.strokeStyle='#f1f1ec'; ctx.lineWidth=0.7;
+  ctx.beginPath(); ctx.moveTo(-1.8,-0.2); ctx.lineTo(1.8,-0.2); ctx.stroke();
+  ctx.restore();
 }
 
 // ---- knockdown: fall, stay down, then climb back to his feet -------------
@@ -3293,11 +3654,12 @@ function drawGuyRaw(p){
   }
   if(GUY_PASS==='marks') return;
 
+  if(p.spin>0) swirl(p,lift,false);
   ctx.save();
   ctx.translate(p.x,p.y-lift);
   ctx.scale(p.face,1);
   if(p.spin>0){
-    var spc=Math.cos(p.spin*Math.PI*2);
+    var spc=Math.cos(p.spin*Math.PI*4);
     ctx.scale(Math.abs(spc)<0.14 ? (spc<0?-0.14:0.14) : spc, 1);
   }
   ctx.rotate(p.lean);
@@ -3310,7 +3672,7 @@ function drawGuyRaw(p){
   }
   if(p.stun>0) ctx.globalAlpha=0.62;
 
-  if(SPR.ready){ drawSprite(p); ctx.restore(); heroTag(p,lift); return; }
+  if(SPR.ready){ drawSprite(p); ctx.restore(); if(p.spin>0) swirl(p,lift,true); heroTag(p,lift); return; }
 
   // Vector fallback, used until the art finishes loading.
   // Flat-vector athlete, ~36 tall. Head a fifth, legs just under half.
@@ -3469,7 +3831,7 @@ function shade(hex,amt){
 // the long axis. A fumble tumbles end over end instead.
 function drawBall(){
   var t=G.thrown, spiral=!!t && !t.lat;
-  var ang, phase, hh=(t&&t.h)||0;
+  var ang, phase, hh=(t&&t.h)||(G.loose&&G.loose.h)||0;
   if(t){
     ang=Math.atan2(t.ty-t.y, t.tx-t.x);
     phase=(t.t/GAME_SPEED)*(t.lat?11:52);
@@ -3800,7 +4162,7 @@ function logPlay(atX, label, scored){
          : sack?'SACK' : (c.passer&&!c.comp)?'PASS DEFENDED' : 'TACKLE');
     if(!star){ star = car || c.qb; act = c.passer?'INCOMPLETE':'NO GAIN'; }
   }
-  if(star) showCard(star, act);
+  if(star) G.cardQ={p:star, act:act};                // shown after the banner, in postPlay
 
   G.stats.log.push({no:c.no, team:c.team, down:c.down, toGo:c.toGo,
                     spot:yardLineLabel(c.los), play:c.play, yds:gained,
@@ -4463,16 +4825,9 @@ function frame(ts){
     // one bad frame must never stop the loop
     try{
       if(G.phase==='kick') kickTick(dt);
-    if(G.phase==='dead'){ if(G.hitStop>0) G.hitStop-=dt; else deadTick(dt); }
+    if(G.phase==='dead') deadTick(dt);
     if(G.phase==='presnap') presnap(dt);
-      if(G.phase==='live'){
-        if(G.hitStop>0) G.hitStop-=dt;             // frozen on the impact
-        else {
-          var sh0=G.shake; step(dt);
-          // a hard hit is whatever just kicked the screen shake: hold that frame
-          if(G.shake>sh0+5 && !REDUCED) G.hitStop=Math.min(0.13, 0.05+(G.shake-sh0)*0.005);
-        }
-      }
+      if(G.phase==='live') step(dt);
       if(G.phase==='playcall'){
         if(G.showingStats){ /* reading the book */ }
         else if(G.hostPick) waitTick();

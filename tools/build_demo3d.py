@@ -2,8 +2,9 @@ import io, sys
 
 import os
 HERE = os.path.dirname(os.path.abspath(__file__))
-SRC = os.path.join(HERE, '..', 'index.html')
-OUT = os.path.join(HERE, '..', 'demo3d.html')
+SRC = os.path.join(HERE, '..', 'game.html')
+OUT = os.path.join(HERE, '..', 'index.html')
+OUT2 = os.path.join(HERE, '..', 'demo3d.html')   # the old demo link keeps working
 s = io.open(SRC, encoding='utf-8').read()
 subs = []
 
@@ -276,10 +277,10 @@ subs.append(('''  if(G.kick) drawKick();
   ctx.restore();
   if(P3){
     ctx.setTransform(dpr,0,0,dpr,0,0);
-    ctx.fillStyle='rgba(8,12,16,.7)'; ctx.fillRect(VW/2-110,VH-30,220,22);
+    ctx.fillStyle='rgba(8,12,16,.55)'; ctx.fillRect(VW/2-80,VH-28,160,18);
     ctx.fillStyle='#ffd23f'; ctx.font='700 12px "Barlow Condensed", sans-serif';
     ctx.textAlign='center'; ctx.textBaseline='middle';
-    ctx.fillText('3D VIEW DEMO  \u00b7  PRESS V FOR FLAT', VW/2, VH-19);
+    ctx.fillText('PRESS V FOR FLAT VIEW', VW/2, VH-19);
   }
 }'''))
 
@@ -337,6 +338,11 @@ subs.append(("""var TACKLE_R=23, CATCH_R=17, BLOCK_R=21;""",
 var SIDE_OUT=3*14;   // how far past the sideline a man can run: the out of bounds area"""))
 
 
+# ---------------------------------------------------------------- click picking uses the 3D projection
+subs.append(("""function worldToScreen(wx,wy){""",
+             """function worldToScreen(wx,wy){
+  if(VIEW3D && P3LAST) return proj3(P3LAST,wx,wy);"""))
+
 # ---------------------------------------------------------------- spin
 subs.append(('''  ctx.save();
   ctx.translate(p.x,p.y-lift);
@@ -352,7 +358,7 @@ subs.append(('''  if(SPR.ready){ drawSprite(p); ctx.restore(); heroTag(p,lift); 
              '''  if(SPR.ready){ drawSprite(p); ctx.restore(); if(p.spin>0) swirl(p,lift,true); heroTag(p,lift); return; }'''))
 subs.append(('''    if(q.spin>0) q.spin=Math.max(0,q.spin-dt*2.1);''',
              '''    if(q.spin>0){ q.spin=Math.max(0,q.spin-dt*2.1); if(Math.random()<dt*45) ghost(q); }'''))
-subs.append(('''<title>''', '''<title>3D demo · '''))
+
 
 ok = True
 for old, new in subs:
@@ -367,4 +373,5 @@ CL_OLD="q.y=Math.max(8,Math.min(FH-8,q.y)); q.x=Math.max(6,Math.min(FW-6,q.x));"
 assert s.count(CL_OLD)==2, 'clamp count'
 s=s.replace(CL_OLD,"q.y=Math.max(-SIDE_OUT,Math.min(FH+SIDE_OUT,q.y)); q.x=Math.max(6,Math.min(FW-6,q.x));")
 io.open(OUT, 'w', encoding='utf-8', newline='').write(s)
-print('wrote demo3d.html with %d anchors' % len(subs))
+io.open(OUT2, 'w', encoding='utf-8', newline='').write(s)
+print('wrote index.html (3D) and demo3d.html with %d anchors' % len(subs))
