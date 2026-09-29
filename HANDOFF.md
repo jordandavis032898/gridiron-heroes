@@ -126,6 +126,18 @@ carrier jukes or spins, the tackler falls off, goes down, and has to get up
 before he can try again (`breakWrap`, `tackleCd`). Nothing drains from merely
 being close.
 
+**Line play.** Blockers pass-set between the rusher and the quarterback.
+While engaged both sides hand-fight, and every so often the rusher tries a
+move from `RUSH_MOVES` (rip, swim, spin, bull). Win it (`0.34 * power ratio`)
+and he is through and the blocker is left flat-footed (`beat`); lose it and
+the block holds longer. A spin is drawn as a turn (width through zero), not a
+cartwheel.
+
+**Passing.** The throw leads the target off his velocity at release, then
+the target plays the ball: he runs to the landing spot instead of finishing
+his route. Before that, a man caught mid-cut or coming back to a scrambling
+passer left the ball ten yards short of everyone.
+
 **Knockdowns.** `knockPose` turns `down`/`stun` time into a posed timeline on
 the rig: fall back, lie flat, sit up, one knee, stand. Game logic freezes a
 man until both reach zero, so the get-up finishes exactly as he can move.

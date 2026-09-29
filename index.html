@@ -233,6 +233,7 @@ var BASE_SPD=118, SPRINT=1.34, DEF_SPD=123;
 // nothing drifts out of step with anything else.
 var GAME_SPEED=0.70;
 var TACKLE_R=23, CATCH_R=17, BLOCK_R=21;
+var RUSH_MOVES=['rip','swim','spin','bull'];
 var JUKE_MS=330, JUKE_COST=28, TRUCK_COST=50, GAME_SECONDS=180;
 var REDUCED = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
@@ -2163,6 +2164,16 @@ function step(dt){
         if(qbOut && since>1.6 && p.route!=='go'){
           tp={x:G.carrier.x+d*9*YD, y:p.y*0.7+G.carrier.y*0.3};
         }
+        // Once the ball is his, he plays the ball, not the route. The throw
+        // is led off his velocity at the release, so a man caught mid-cut,
+        // or coming back to a scrambling passer, had the ball land where he
+        // was heading and then ran off to finish his route, which is how a
+        // good throw across the field landed ten yards short of everybody.
+        if(G.thrown && G.thrown.target===p && !G.thrown.lat){
+          tp={x:G.thrown.tx, y:G.thrown.ty};
+          var tl=Math.hypot(tp.x-p.x,tp.y-p.y);
+          aim(p,tp.x,tp.y, tl<5 ? 0 : BASE_SPD*1.08*p.spd);
+        } else
         aim(p,tp.x,tp.y,BASE_SPD*1.02*p.spd);
       } else {
         // stay on the ball side of your man and wall him off
@@ -2170,6 +2181,8 @@ function step(dt){
         if(foe){
           // mirror him from the ball side; sprint to get square, then hold
           var gx=foe.x - d*9, gy=foe.y;
+          // pass set: shade to the inside, between him and the quarterback
+          if(G.carrier && G.carrier.role==='QB') gy=foe.y*0.8+G.carrier.y*0.2;
           var gd=Math.hypot(gx-p.x,gy-p.y);
           var spd = gd>34 ? 1.48 : (gd>14 ? 1.24 : 0.94);
           aim(p,gx,gy, BASE_SPD*spd);
@@ -2283,6 +2296,28 @@ function step(dt){
       if(Math.abs(ru.x-blk.x) > BLOCK_R*1.8) continue;
       ru.engaged=(ru.engaged||0)+dt;
       if(ru.engaged > (ru.shedAt||2.5)) continue;     // he has beaten the block
+      ru.eBlk=blk;
+
+      // hand fighting: both men punch and grab while they are locked up
+      if(Math.random()<dt*2.4) ru.arm=0.5;
+      if(Math.random()<dt*2.4) blk.arm=0.5;
+
+      // A rusher does not just lean on his man. A little way into the rep he
+      // tries a move: rip, swim, spin or bull rush. Win it and he is through;
+      // lose it and the blocker has him for longer.
+      if(!(ru.moveT>0) && ru.engaged > (ru.moveAt||0.45)){
+        ru.moveAt = ru.engaged + 0.8 + Math.random()*0.6;
+        var mk = RUSH_MOVES[Math.floor(Math.random()*RUSH_MOVES.length)];
+        var side = (ru.lane||0)>=0 ? 1 : -1;
+        if(Math.random()<0.35) side=-side;
+        var won = Math.random() < 0.34*(ru.pwr||1)/(blk.pwr||1);
+        ru.moveKind=mk; ru.moveT=0.42; ru.moveSide=side; ru.moveWon=won;
+        if(mk==='spin') ru.spin=1;
+        if(mk==='swim') ru.throwArm=1;
+        if(mk==='rip')  ru.arm=0.5;
+        if(won){ ru.engaged=(ru.shedAt||2.5)+0.01; blk.beat=0.5; continue; }
+        ru.shedAt=(ru.shedAt||2.5)+0.45;
+      }
 
       // hard line: he may not get to the passer's side of his blocker
       var line = blk.x - d2*4;
@@ -2297,6 +2332,26 @@ function step(dt){
         ru.vx*=0.35; ru.vy*=0.55;
       }
     }
+  }
+
+  // rush moves in motion, and blockers who just got beaten
+  for(var mv=0;mv<G.players.length;mv++){
+    var mq=G.players[mv];
+    if(mq.beat>0){ mq.beat-=dt; mq.vx*=0.3; mq.vy*=0.3; }
+    if(!(mq.moveT>0)) continue;
+    mq.moveT-=dt;
+    if(mq.stun>0 || mq.down>0 || mq.team===G.offense){ mq.moveT=0; continue; }
+    var toQB=-d2, ms=mq.moveSide||1, gain=mq.moveWon?1:0.4;
+    if(mq.moveKind==='bull'){
+      // drive him straight back into the pocket
+      mq.vx=toQB*DEF_SPD*0.75*gain; mq.vy*=0.3;
+      if(mq.eBlk && mq.moveWon){ mq.eBlk.vx=mq.vx*0.9; mq.eBlk.vy=mq.vy; }
+    } else {
+      // rip, swim and spin all get round the edge of him
+      var lat = mq.moveKind==='spin' ? 1.35 : 1.2;
+      mq.vx=toQB*DEF_SPD*0.5*gain; mq.vy=ms*DEF_SPD*lat*gain;
+    }
+    if(mq.moveKind==='rip') mq.arm=0.5;
   }
 
   // integrate + animation state
@@ -3174,7 +3229,10 @@ function drawGuy(p){
   ctx.save();
   ctx.translate(p.x,p.y-lift);
   ctx.scale(p.face,1);
-  if(p.spin>0) ctx.rotate(p.spin*Math.PI*2);
+  if(p.spin>0){
+    var spc=Math.cos(p.spin*Math.PI*2);
+    ctx.scale(Math.abs(spc)<0.14 ? (spc<0?-0.14:0.14) : spc, 1);
+  }
   ctx.rotate(p.lean);
   // three-point stance before the snap
   if(p.stance>0){ ctx.translate(0,3.4); ctx.scale(1,0.79); ctx.rotate(0.24); }
