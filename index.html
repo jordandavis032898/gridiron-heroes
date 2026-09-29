@@ -619,14 +619,28 @@ function releaseThrow(best){
   if(!qb||!best){ G.windup=null; G.lastThrow='no passer/target'; return; }
   if(G.thrown){ return; }
   var fast = (HERO.move==='rocket' && qb.hero) ? 1.4 : 1;
-  var lead=0.42;
-  var tx=best.x+best.vx*lead, ty=best.y+best.vy*lead;
-  var dist=Math.hypot(tx-G.ball.x,ty-G.ball.y);
   var rocket = !!(G.windupWasRocket);
+  var speed = (rocket?1500:530)*fast;
+
+  // Lead by the actual flight time, not a fixed 0.42 seconds. That constant
+  // was about right for a five yard out, but a deep ball hangs for a second
+  // and the receiver covers nine yards in it, so the pass landed five yards
+  // behind him every time and the catch window is under three. Solve for the
+  // meeting point: the further he is, the longer the ball is up, the further
+  // ahead he will be when it lands.
+  var tx=best.x, ty=best.y, flight=0.14;
+  for(var it=0; it<4; it++){
+    flight = Math.max(0.14, Math.hypot(tx-G.ball.x, ty-G.ball.y)/speed);
+    tx = best.x + best.vx*flight;
+    ty = best.y + best.vy*flight;
+  }
+  ty = Math.max(10, Math.min(FH-10, ty));               // not out of bounds
+  var dist=Math.hypot(tx-G.ball.x,ty-G.ball.y);
   G.thrown={x:G.ball.x,y:G.ball.y,tx:tx,ty:ty,target:best,t:0,
-            dur:Math.max(0.14,dist/((rocket?1500:530)*fast)),
+            dur:Math.max(0.14,dist/speed),
             arc: rocket ? 4 : Math.max(7, Math.min(56, (dist/YD)*1.65)),
-            sure: rocket};
+            sure: rocket,
+            deep: dist > 22*YD};
   G.windupWasRocket=false;
   G.ball.held=false; G.carrier=null;
   qb.throwArm=1;
@@ -1602,7 +1616,8 @@ function step(dt){
       var covd=cov?Math.hypot(cov.x-r.x,cov.y-r.y):999;
       var near=Math.hypot(r.x-G.ball.x,r.y-G.ball.y);
       var wasLat=t.lat;
-      var caught = wasLat ? (near<CATCH_R*3.4) : (t.sure ? (near<CATCH_R*3.2) : (near<CATCH_R*2.4 && covd>16));
+      var win = wasLat ? CATCH_R*3.4 : (t.sure ? CATCH_R*3.2 : CATCH_R*(t.deep?3.1:2.4));
+      var caught = (wasLat||t.sure) ? (near<win) : (near<win && covd>16);
       G.thrown=null;
       if(wasLat && !caught){
         // a dropped pitch is a live ball, same as real football
