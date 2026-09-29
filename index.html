@@ -294,10 +294,10 @@ var PLAYS = {
      {id:'draw',  name:'DRAW',        desc:'Sell the pass, then give it late. Beats a blitz.'},
      {id:'screen',name:'SCREEN',      desc:'Let them come, slip the back out with blockers.'}],
   A:[{id:'blitz', name:'ALL-OUT BLITZ',desc:'Everyone rushes. Kill it behind the line.'},
-     {id:'zone',  name:'ZONE COVER',   desc:'Sit back, take the pass away.'},
-     {id:'spy',   name:'CONTAIN',      desc:'Two rush. Everyone else walls off the middle.'},
-     {id:'press', name:'MAN PRESS',    desc:'Jam them at the line. No free release.'},
-     {id:'prevent',name:'PREVENT',     desc:'Everyone drops. Nothing gets behind you.'}]
+     {id:'zone',  name:'ZONE COVER',   desc:'Two rush. The rest guard grass, not men.'},
+     {id:'spy',   name:'CONTAIN',      desc:'Two rush, a backer shadows the passer. Kills scrambles.'},
+     {id:'press', name:'MAN PRESS',    desc:'Man coverage, tight. Three rush, no free release.'},
+     {id:'prevent',name:'PREVENT',     desc:'Deep zone, two rush. Nothing gets behind you.'}]
 };
 
 // ================================================================ dom
@@ -319,7 +319,8 @@ function freshGame(){
     shake:0, snapT:0, power:100, stam:100, moveCd:0, jukeUntil:0,
     diveUntil:0, hitCd:0, loose:null, windup:null, playClock:15, assistCd:0, switchFlash:0, newSeries:false, clockRunning:false, jukeCd:0, latCd:0, lastThrow:'', kick:null,
     celebrate:0, celAt:null, scoringTeam:'H',
-    playNo:0, hostPick:null, pickAt:0, handoffAt:null, cushion:0,
+    playNo:0, hostPick:null, pickAt:0, handoffAt:null,
+    cushion:0, covType:'man', zoneDeep:0,
     M2:{power:100, stam:100, moveCd:0, hitCd:0, jukeCd:0, latCd:0,
         assistCd:0, jukeUntil:0, diveUntil:0},
     fx:[], over:false, mouse:{x:0,y:0,on:false} };
@@ -403,7 +404,7 @@ function mk(team,role,x,y,info){
   var p={team:team,role:role,x:x,y:y,vx:0,vy:0,route:null,stun:0,
          num:info&&info.num||0, name:info&&info.name||'', skin:info&&info.skin||'#c98f63',
          spd:1,pwr:1,agi:1, run:0, lean:0, spin:0, z:0, arm:0, hero:false, cel:0,
-         face:(team==='H'?1:-1), burst:0, aiCd:0, iFrames:0, phase:0, throwArm:0, stance:0, assign:null, blockIdx:0, engaged:0, shedAt:1.6, shed:false, lane:0, cover:null, pos:'', hp:100, wrapped:0, down:0};
+         face:(team==='H'?1:-1), burst:0, aiCd:0, iFrames:0, phase:0, throwArm:0, stance:0, assign:null, blockIdx:0, engaged:0, shedAt:1.6, shed:false, lane:0, cover:null, spy:false, zy:0, zdepth:10, pos:'', hp:100, wrapped:0, down:0};
   G.players.push(p); return p;
 }
 
@@ -442,6 +443,12 @@ function setupPlay(playId){
   c.route='block'; o1.route='block'; o2.route='block';
   // ---- DEFENSE: DE, DE, DE, LB, LB, CB, CB, S
   var dplay = youOnO ? G.aiPlay : G.play;
+  // What the call actually changes. Until now every defence played man with
+  // a different number of rushers, so ZONE COVER was not zone and CONTAIN did
+  // not contain anything.
+  G.cushion  = (dplay==='press') ? -6 : (dplay==='prevent' ? 7 : 0);
+  G.covType  = (dplay==='zone'||dplay==='prevent') ? 'zone' : 'man';
+  G.zoneDeep = (dplay==='prevent') ? 8 : 0;
   var lbRush = (dplay==='blitz');
   var deCount = (dplay==='zone'||dplay==='prevent'||dplay==='spy') ? 2 : 3;
   var spec=[
@@ -454,10 +461,13 @@ function setupPlay(playId){
     {r:'COV', x:9,  y:13.5,   pos:'CB'},
     {r:'COV', x:17, y:0,      pos:'S'}
   ];
-  var secondary=[];
+  var secondary=[], spyMan=null;
   for(var i=0;i<spec.length;i++){
     var dp=mk(defCol, spec[i].r, G.los+spec[i].x*YD*d, mid+spec[i].y*YD, DEFENDERS[i]);
     dp.pos=spec[i].pos;
+    // where he sits if he is playing a zone rather than a man
+    dp.zy = mid + spec[i].y*YD*1.45;
+    dp.zdepth = (spec[i].pos==='S' ? 20 : spec[i].pos==='CB' ? 13 : 7) + G.zoneDeep;
     if(dp.role==='COV') secondary.push(dp);
   }
 
@@ -490,6 +500,15 @@ function setupPlay(playId){
   }
 
 
+  // CONTAIN keeps a backer home on the passer so he cannot just run out of
+  // the pocket, which is the entire point of the call.
+  if(dplay==='spy'){
+    for(var sy2=0;sy2<G.players.length;sy2++){
+      var sp3=G.players[sy2];
+      if(sp3.team===defCol && sp3.pos==='LB'){ sp3.spy=true; spyMan=sp3; break; }
+    }
+  }
+
   // ---- coverage: corners take the receivers, backers take the underneath
   //      men, the safety plays over the top of everything.
   var eligible=[];
@@ -500,7 +519,7 @@ function setupPlay(playId){
   var taken=[];
   for(var cq=0;cq<secondary.length;cq++){
     var cb=secondary[cq];
-    if(cb.pos==='S'){ cb.cover=null; continue; }        // deep zone, no man
+    if(cb.pos==='S'||cb===spyMan){ cb.cover=null; continue; }        // deep zone, no man
     var pick=null, pd=Infinity;
     for(var eq2=0;eq2<eligible.length;eq2++){
       var cand=eligible[eq2];
@@ -517,7 +536,6 @@ function setupPlay(playId){
   // the snap and gives it to him at the mesh point, and you can beat the
   // timer by handing off yourself.
   G.handoffAt = (off==='run') ? 0.30 : (off==='draw' ? 0.85 : null);
-  G.cushion = (dplay==='press') ? -6 : (dplay==='prevent' ? 7 : 0);
   G.controlled = youOnO ? G.carrier : nearestDef();
   if(NET.on && NET.host) G.controlled2 = pickRemoteMan(false);
   G.jukeUntil=0;
@@ -1578,6 +1596,27 @@ function step(dt){
       var inPocket = G.carrier && G.carrier.role==='QB' && !G.loose && !G.thrown
                      && (G.carrier.x-G.los)*d < 4;
       if(p.role==='COV' && inPocket){
+        if(p.spy){
+          // shadow the passer, stay between him and the open field
+          var qs=G.carrier;
+          if(qs){ aim(p, qs.x - d*3*YD, qs.y, DEF_SPD*1.02); continue; }
+        }
+        if(G.covType==='zone'){
+          // Sit on your landmark and squeeze whoever walks into it. This is
+          // the difference between zone and man: nobody is chasing a single
+          // receiver across the field, they are guarding grass.
+          var zx=G.los + d*(p.zdepth||10)*YD, zy=p.zy||FH/2;
+          var claim=null, cbest=1e9;
+          for(var zq=0;zq<G.players.length;zq++){
+            var zp=G.players[zq];
+            if(zp.team!==offTeam||zp.route==='block'||zp.role==='QB') continue;
+            var zd=Math.hypot(zp.x-zx, zp.y-zy);
+            if(zd<15*YD && zd<cbest){ cbest=zd; claim=zp; }
+          }
+          if(claim) aim(p, claim.x + d*3, claim.y, DEF_SPD*1.0);
+          else      aim(p, zx, zy, DEF_SPD*0.95);
+          continue;
+        }
         if(p.pos==='S'){
           // safety over the top: split the deepest threats
           var deep=null, deepest=-1e9;
