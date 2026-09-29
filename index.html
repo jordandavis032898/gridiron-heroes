@@ -320,6 +320,7 @@ function freshGame(){
     playNo:0, hostPick:null, pickAt:0, handoffAt:null,
     cushion:0, covType:'man', zoneDeep:0,
     abCd:{}, rocketArmed:false, perfectArmed:false, netAb:[0,0,0],
+    stats:freshStats(), cur:null, showingStats:false,
     M2:{power:100, stam:100, moveCd:0, hitCd:0, jukeCd:0, latCd:0,
         assistCd:0, jukeUntil:0, diveUntil:0},
     fx:[], over:false, mouse:{x:0,y:0,on:false} };
@@ -414,6 +415,7 @@ function mk(team,role,x,y,info){
 function setupPlay(playId){
   G.playNo=(G.playNo|0)+1;
   G.controlled2=null;
+  openPlay(playId);
   G.play=playId; G.players=[]; G.thrown=null; G.fx=[]; G.snapT=performance.now();
   G.loose=null; G.hitCd=0; G.diveUntil=0; G.windup=null;
   var d=dir(), mid=FH/2;
@@ -437,6 +439,8 @@ function setupPlay(playId){
   var rb=mk(offCol,'RB',G.los-11*YD*d,mid+3*YD, heroIsRB?OH:SUPPORT.RB); if(heroIsRB) applyHero(rb,OH);
 
   var off = youOnO ? G.play : G.aiPlay;
+  // the book records the play the offence ran, not your defensive call
+  if(G.cur) G.cur.play = playName(off);
   if(off==='deep'){ w1.route='go'; w2.route='go'; te.route='slant'; rb.route='block'; }
   else if(off==='outs'){ w1.route='out'; w2.route='out'; te.route='curl'; rb.route='wheel'; }
   else if(off==='run'){ w1.route='lead'; w2.route='lead'; te.route='block'; rb.route='mesh'; }
@@ -537,6 +541,7 @@ function setupPlay(playId){
 
   G.ball={x:qb.x,y:qb.y,held:true};
   G.carrier=qb;
+  if(G.cur) G.cur.qb=qb;
   // The back used to start the play already holding it. Now the passer takes
   // the snap and gives it to him at the mesh point, and you can beat the
   // timer by handing off yourself.
@@ -661,6 +666,7 @@ function throwAt(wx,wy,side){
   // (carrier changes, play ends, an exception upstream) and swallow the pass.
   // The arm animation plays out after the release instead.
   G.carrier.throwArm=1;
+  if(G.cur){ G.cur.passer=G.carrier; G.cur.target=best; }
   releaseThrow(best);
   G.lastThrow='to '+(best.name||best.role);
 }
@@ -1077,6 +1083,7 @@ function handoff(side, auto){
   if(!back) return false;
   var qb=G.carrier;
   qb.throwArm=0.4;
+  if(G.cur && !G.cur.rusher) G.cur.rusher=back;
   G.carrier=back; G.ball.held=true; G.ball.x=back.x; G.ball.y=back.y;
   back.route=null;                       // he is running now, not running a route
   back.burst=0.45;
@@ -1107,6 +1114,7 @@ function lateral(side){
 
 // ---- the ball comes loose ------------------------------------------------
 function fumble(from,vx,vy){
+  if(G.cur && from && from.team===G.cur.team) G.cur.fum=true;
   G.carrier=null; G.thrown=null; G.windup=null;
   G.ball.held=false;
   G.loose={vx:vx,vy:vy,t:0};
@@ -1525,6 +1533,7 @@ function startKick(kind){
     k.touchback = (d > 0) ? (k.x1 >= FW-EZ) : (k.x1 <= EZ);
   }
   G.playNo=(G.playNo|0)+1;
+  openPlay(kind); if(G.cur) G.cur.kick=kind;
   G.kick = k;
   G.phase = 'kick';
   G.players.length = 0;
@@ -2019,7 +2028,9 @@ function step(dt){
     var W=G.windup; W.t+=dt;
     W.qb.throwArm=Math.min(1,W.t/W.dur);
     if(!G.carrier||G.carrier!==W.qb){ W.qb.throwArm=0; G.windup=null; }
-    else if(W.t>=W.dur){ var tg=W.target; G.windupWasRocket=!!W.rocket; G.windup=null; releaseThrow(tg); }
+    else if(W.t>=W.dur){ var tg=W.target; G.windupWasRocket=!!W.rocket; G.windup=null;
+      if(G.cur){ G.cur.passer=W.qb; G.cur.target=tg; }
+      releaseThrow(tg); }
   }
 
   // ball in flight
@@ -2047,6 +2058,7 @@ function step(dt){
         say('PITCH ON THE GROUND!',1100); G.shake=REDUCED?0:10;
         return;
       }
+      if(caught && G.cur) G.cur.comp=true;
       if(caught){ G.carrier=r; G.ball.held=true; if(G.offense==='H') G.controlled=r;
         else if(NET.on) G.controlled2=r;
         if(t.homing){                        // caught in stride, not standing still
@@ -2056,6 +2068,7 @@ function step(dt){
                   say(wasLat?'GOT IT!':'CAUGHT!',500); }
       else if(cov && covd<10.5){
         // Picked off, and it is live. He can take it all the way back.
+        if(G.cur) G.cur.pick=true;
         G.offense=cov.team;
         G.newSeries=true;
         G.carrier=cov; G.ball.held=true;
@@ -2159,6 +2172,7 @@ function step(dt){
 function yardLineLabel(x){ var y=Math.round((x-EZ)/YD); return String(Math.max(1, y<=50?y:100-y)); }
 
 function endPlay(atX,label){
+  logPlay(atX,label,false);
   // an incompletion, a ball carrier out of bounds, or a score stops the clock;
   // a tackle in the field of play does not
   G.clockRunning = !(label==='OUT OF BOUNDS'||label==='INCOMPLETE'||
@@ -2177,13 +2191,14 @@ function endPlay(atX,label){
   G.los=Math.max(EZ+2,Math.min(FW-EZ-2,atX));
   G.toGo-=gained;
   var txt=label;
-  if(G.toGo<=0){ G.down=1; G.toGo=10; txt='FIRST DOWN'; }
+  if(G.toGo<=0){ G.down=1; G.toGo=10; txt='FIRST DOWN'; G.stats[G.offense].fd++; }
   else { G.down+=1; if(G.down>4){ turnover(); txt='TURNOVER ON DOWNS'; } }
   say(txt,1100);
   setTimeout(function(){ if(!G.over) G.phase='playcall'; },1750);
 }
 function turnover(){ G.offense=G.offense==='H'?'A':'H'; G.down=1; G.toGo=10; }
 function score(){
+  logPlay(G.ball?G.ball.x:G.los, 'TOUCHDOWN', true);
   if(G.offense==='H') G.scoreH+=7; else G.scoreA+=7;
   G.scoringTeam=G.offense;
   showCard(G.carrier,'TOUCHDOWN');
@@ -2967,6 +2982,139 @@ function showCard(p, action){
   cardTimer=setTimeout(function(){ cardEl.classList.remove('in'); }, 2300);
 }
 
+
+// ================================================================== the book
+// Every play gets written down: who called what, who touched it, how far it
+// went and how it ended. The box score is just the log added up.
+function freshSide(){
+  return {plays:0, yards:0, pa:0, pc:0, py:0, ptd:0, ints:0,
+          ra:0, ry:0, rtd:0, sacks:0, sy:0, fum:0, fd:0};
+}
+function freshStats(){ return {log:[], H:freshSide(), A:freshSide()}; }
+
+function playName(id){
+  var all=PLAYS.H.concat(PLAYS.A);
+  for(var i=0;i<all.length;i++) if(all[i].id===id) return all[i].name;
+  if(id==='punt') return 'PUNT';
+  if(id==='fg')   return 'FIELD GOAL';
+  return String(id||'').toUpperCase();
+}
+function surname(p){
+  if(!p||!p.name) return '';
+  var bits=p.name.split(' ');
+  return bits[bits.length-1].toUpperCase();
+}
+
+// opened at the snap, closed at the whistle
+function openPlay(playId){
+  G.cur = {no:G.playNo, team:G.offense, down:G.down, toGo:Math.max(1,Math.round(G.toGo)),
+           los:G.los, play:playName(playId), passer:null, target:null,
+           comp:false, pick:false, rusher:null, fum:false, kick:null, qb:null};
+}
+
+function logPlay(atX, label, scored){
+  var c=G.cur; if(!c) return;
+  G.cur=null;                                  // exactly one entry per play
+  var d=(c.team==='H')?1:-1;
+  var gained=Math.round((atX-c.los)*d/YD);
+  var S=G.stats[c.team];
+  var car=G.carrier;
+  var designedRun = (c.play==='POWER RUN'||c.play==='DRAW');
+  var sack = !c.comp && !c.pick && !c.passer && !c.rusher && !c.kick &&
+             !designedRun && gained<0;
+
+  S.plays++;
+  if(!c.kick){
+    S.yards+=gained;
+    if(c.passer){
+      S.pa++;
+      if(c.comp){ S.pc++; S.py+=gained; if(scored) S.ptd++; }
+      if(c.pick) S.ints++;
+    } else if(sack){
+      S.sy+=gained;                        // a sack is not a carry
+    } else {
+      S.ra++; S.ry+=gained; if(scored) S.rtd++;
+    }
+  }
+  if(sack) S.sacks++;
+  if(c.fum) S.fum++;
+
+  var who = c.comp  ? (surname(c.passer)+' to '+surname(c.target))
+          : c.pick  ? (surname(c.passer)+' picked off')
+          : c.rusher? surname(c.rusher)
+          : c.passer? (surname(c.passer)+' incomplete')
+          : sack    ? surname(c.qb)
+          : car     ? surname(car) : '';
+
+  G.stats.log.push({no:c.no, team:c.team, down:c.down, toGo:c.toGo,
+                    spot:yardLineLabel(c.los), play:c.play, yds:gained,
+                    res: scored?'TOUCHDOWN':(sack?'SACK':(label||'')), who:who});
+  if(G.stats.log.length>60) G.stats.log.shift();
+}
+
+function lastPlayLine(){
+  var L=(G.stats&&G.stats.log)||[];
+  if(!L.length) return '';
+  var e=L[L.length-1];
+  var sign=e.yds>0?'+':'';
+  return '<div style="margin:-6px 0 12px;font-size:13px;color:#8fa3b0;letter-spacing:.02em">'+
+    '<b style="color:#e8eef2">Last play:</b> '+e.play+' &middot; '+sign+e.yds+
+    ' yd'+(Math.abs(e.yds)===1?'':'s')+' &middot; '+e.res+
+    (e.who?(' &middot; '+e.who):'')+'</div>';
+}
+
+function statRow(label,h,a,hi){
+  var c=hi?'#ffd23f':'#e8eef2';
+  return '<div style="display:flex;padding:3px 0;border-bottom:1px solid #22303a">'+
+    '<div style="flex:1;color:#8fa3b0">'+label+'</div>'+
+    '<div style="width:104px;text-align:right;white-space:nowrap;color:'+c+';font-family:\'JetBrains Mono\',monospace">'+h+'</div>'+
+    '<div style="width:104px;text-align:right;white-space:nowrap;color:'+c+';font-family:\'JetBrains Mono\',monospace">'+a+'</div></div>';
+}
+
+function showStats(){
+  var H=G.stats.H, A=G.stats.A, L=G.stats.log;
+  var html='<h2>Box score</h2>'+
+    '<p class="sub">Heroes '+G.scoreH+' &middot; Rivals '+G.scoreA+'</p>'+
+    '<div style="display:flex;padding:2px 0 5px;font-size:11px;letter-spacing:.12em;font-weight:700">'+
+      '<div style="flex:1"></div>'+
+      '<div style="width:104px;text-align:right;white-space:nowrap;color:#ffd23f">HEROES</div>'+
+      '<div style="width:104px;text-align:right;white-space:nowrap;color:#e0384e">RIVALS</div></div>'+
+    statRow('Plays', H.plays, A.plays)+
+    statRow('Total yards', H.yards, A.yards, true)+
+    statRow('First downs', H.fd, A.fd)+
+    statRow('Passing', H.pc+'/'+H.pa+'  '+H.py+'yd', A.pc+'/'+A.pa+'  '+A.py+'yd')+
+    statRow('Rushing', H.ra+' for '+H.ry+'yd', A.ra+' for '+A.ry+'yd')+
+    statRow('Touchdowns', H.ptd+H.rtd, A.ptd+A.rtd)+
+    statRow('Sacks taken', H.sacks+' for '+H.sy+'yd', A.sacks+' for '+A.sy+'yd')+
+    statRow('Interceptions thrown', H.ints, A.ints)+
+    statRow('Fumbles', H.fum, A.fum);
+
+  html+='<div style="margin:14px 0 4px;font-size:11px;letter-spacing:.14em;'+
+        'font-weight:700;color:#8fa3b0">PLAY BY PLAY</div>'+
+        '<div style="max-height:190px;overflow:auto;font-size:12.5px">';
+  if(!L.length) html+='<div style="color:#8fa3b0">Nothing yet.</div>';
+  for(var i=L.length-1;i>=0;i--){
+    var e=L[i], sign=e.yds>0?'+':'';
+    var col=e.team==='H'?'#ffd23f':'#e0384e';
+    html+='<div style="display:flex;gap:8px;padding:3px 0;border-bottom:1px solid #1b262e">'+
+      '<div style="width:16px;color:'+col+'">'+(e.team==='H'?'H':'R')+'</div>'+
+      '<div style="width:74px;color:#8fa3b0">'+['','1st','2nd','3rd','4th'][Math.min(4,e.down)]+
+        ' &amp; '+e.toGo+'</div>'+
+      '<div style="flex:1;color:#e8eef2">'+e.play+(e.who?(' &middot; '+e.who):'')+'</div>'+
+      '<div style="width:46px;text-align:right;font-family:\'JetBrains Mono\',monospace">'+sign+e.yds+'</div>'+
+      '<div style="width:96px;text-align:right;color:#8fa3b0">'+e.res+'</div></div>';
+  }
+  html+='</div><div style="margin-top:10px">'+
+    '<button class="card" id="statBack" type="button" style="width:100%">'+
+    '<div class="k">BACK</div><div class="t">Back to the play</div></button></div>';
+
+  elSheet.innerHTML=html; elOv.classList.add('show');
+  document.getElementById('statBack').addEventListener('click',function(){
+    G.showingStats=false;
+    if(G.phase==='over') showOver(); else showPlaycall();
+  });
+}
+
 // ================================================================ screens
 // Where the hero pick sends you afterwards: straight into a game against the
 // computer, or into opening a room.
@@ -3051,17 +3199,23 @@ function showPlaycall(){
   var onO=iHaveBall(), list=callSheet();
   var html='<h2>'+(onO?'Call your play':'Call your defense')+'</h2>'+
     '<p class="sub">'+['','1st','2nd','3rd','4th'][Math.min(4,G.down)]+' &amp; '+
-    Math.max(1,Math.round(G.toGo))+' on the '+yardLineLabel(G.los)+'</p><div class="grid3">';
+    Math.max(1,Math.round(G.toGo))+' on the '+yardLineLabel(G.los)+'</p>'+
+    lastPlayLine()+'<div class="grid3">';
   list.forEach(function(p){
     html+='<button class="card" type="button" data-id="'+p.id+'">'+
       '<div class="k">'+p.key+'</div><div class="t">'+p.name+'</div>'+
       '<div class="d">'+p.desc+'</div></button>';
   });
   html+='</div>';
+  html+='<div style="margin-top:10px">'+
+    '<button class="card" id="seeStats" type="button" style="width:100%">'+
+    '<div class="k">STATS</div><div class="t">Box score and play by play</div></button></div>';
   elSheet.innerHTML=html; elOv.classList.add('show');
-  Array.prototype.forEach.call(elSheet.querySelectorAll('.card'),function(b){
+  Array.prototype.forEach.call(elSheet.querySelectorAll('.card[data-id]'),function(b){
     b.addEventListener('click',function(){ choose(b.getAttribute('data-id')); });
   });
+  var sb=document.getElementById('seeStats');
+  if(sb) sb.addEventListener('click',function(){ G.showingStats=true; showStats(); });
   var f=elSheet.querySelector('.card'); if(f) f.focus();
 }
 function choose(id){
@@ -3118,8 +3272,12 @@ function showOver(){
     '<button class="card" id="again" type="button"><div class="k">ENTER</div>'+
     '<div class="t">RUN IT BACK</div><div class="d">Same hero, fresh clock.</div></button>'+
     '<button class="card" id="swap" type="button"><div class="k">H</div>'+
-    '<div class="t">NEW HERO</div><div class="d">Pick somebody else.</div></button></div>';
+    '<div class="t">NEW HERO</div><div class="d">Pick somebody else.</div></button>'+
+    '<button class="card" id="overStats" type="button"><div class="k">STATS</div>'+
+    '<div class="t">BOX SCORE</div><div class="d">How the game was actually won.</div></button></div>';
   elOv.classList.add('show');
+  var os=document.getElementById('overStats');
+  if(os) os.addEventListener('click',function(){ G.showingStats=true; showStats(); });
   document.getElementById('again').addEventListener('click',start);
   document.getElementById('swap').addEventListener('click',function(){ G=freshGame(); PICK_THEN='solo'; showHeroPick(); });
   document.getElementById('again').focus();
@@ -3486,6 +3644,7 @@ function publishWorld(dt){
 function guestSheet(){
   if(!G) return;
   if(NET.choosing) return;          // the guest is picking a hero; leave it alone
+  if(G.showingStats) return;
   if(G.phase==='playcall'){
     if(!NET.sentPick && !elOv.classList.contains('show')) showPlaycall();
   } else {
@@ -3551,7 +3710,8 @@ function frame(ts){
     if(G.phase==='presnap') presnap(dt);
       if(G.phase==='live') step(dt);
       if(G.phase==='playcall'){
-        if(G.hostPick) waitTick();
+        if(G.showingStats){ /* reading the book */ }
+        else if(G.hostPick) waitTick();
         else if(!elOv.classList.contains('show')) showPlaycall();
       }
       if(G.players.length||G.kick) draw();
