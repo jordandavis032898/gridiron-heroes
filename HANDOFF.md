@@ -155,15 +155,36 @@ Useful because several took multiple attempts.
   every frame. A juke survives because it sets `jukeUntil`; a dive set
   nothing, so the lunge was erased sixteen milliseconds later.
 
+- **The soft pass rush, and backs running alongside the carrier.** Same
+  cause. Every defender pursues toward the carrier plus a sideways `lane`
+  offset (up to about three yards) so they arrive on angles, and it was held
+  all the way in, so a rusher parked beside a passer who stood still and a
+  back ran level with a runner instead of hitting him. The lane now fades to
+  nothing over the last few yards. Separately, the block's hard line only
+  checked width, so a rusher already yards past his blocker was snapped back
+  to the blocker's side of the line; a block now needs contact.
+- **Knocked-down players sliding sideways.** `down` only counted off in
+  `deadTick`, after the whistle. A man flattened mid-play stayed drawn flat
+  for the rest of it while the AI (or your stick) ran him at full speed. It
+  counts off live now, and nobody moves while down.
+
 The pattern: when something looks wrong on screen, find the line that writes
 the value, do not tune the numbers around it.
+
+**Testing headless.** The reliable way to measure behaviour is to load a copy
+of `index.html` in Playwright with a hook exposing `freshGame`, `setupPlay`
+and `step`, stub `requestAnimationFrame`, and call `step(1/60*GAME_SPEED)`
+yourself. Two traps: juke, dive and sidestep windows are on
+`performance.now()`, so replace it with a clock you advance 1000/60 ms per
+step or one juke lasts the whole run; and `G.stats.log` is capped at 60
+entries, so detect the end of a play from `G.phase`, not the log length.
+Run plays in one game rather than a fresh game each, or every ability is off
+cooldown every snap.
 
 ---
 
 ## Outstanding
 
-- **The pass rush is soft.** Rushers hover about eight yards off the passer
-  and do not close. Diagnosed, not fixed. This is the biggest gameplay gap.
 - Real thigh and lower leg art.
 - Graphics work that needs no art: turf texture, proper soft shadows,
   outlines so players pop off the grass, and a stadium instead of black

@@ -2002,6 +2002,9 @@ function driveHuman(seat, IN, dt, now){
     me = seat.man = (seat.side==='H') ? G.controlled : G.controlled2;
     if(!me) return;
   }
+  // Flat on the turf is flat on the turf. The stick used to keep driving a
+  // man who had been knocked down, so he slid along the grass on his side.
+  if(me.stun>0 || me.down>0){ me.vx*=0.8; me.vy*=0.8; return; }
   if(IN.tg>=0 && onO){
     var rl=eligibleReceivers();
     if(rl[IN.tg]) throwAt(rl[IN.tg].x, rl[IN.tg].y, seat.side);
@@ -2092,13 +2095,14 @@ function step(dt){
   // AI
   for(var i=0;i<G.players.length;i++){
     var p=G.players[i];
-    if(p===G.controlled) continue;
+    if(p===G.controlled){ if(p.stun>0) p.stun-=dt; continue; }
     if(p===G.controlled2){
       // a human is driving this one; only run down his stun for him
       if(p.stun>0){ p.stun-=dt; p.vx*=0.8; p.vy*=0.8; }
       continue;
     }
     if(p.stun>0){ p.stun-=dt; p.vx*=0.8; p.vy*=0.8; continue; }
+    if(p.down>0){ p.vx*=0.8; p.vy*=0.8; continue; }
     if(G.loose){ aim(p,G.ball.x,G.ball.y,BASE_SPD*1.06*p.spd); continue; }
     var offTeam=G.offense;
     if(p.team===offTeam){
@@ -2244,6 +2248,12 @@ function step(dt){
         var leadT = Math.min(1.2, dist/(DEF_SPD*1.15)) * Math.max(0, away);
         ax=G.carrier.x+cvx*leadT;
         ay=G.carrier.y+cvy*leadT;
+        // The lane spreads the pursuit so they do not arrive in single file,
+        // but it is an offset from the man. Held all the way in, it parked
+        // rushers two or three yards beside a passer who stood still, and had
+        // backs running alongside a carrier instead of hitting him. It shrinks
+        // to nothing over the last few yards.
+        lane *= Math.max(0, Math.min(1, (dist - 3*YD) / (6*YD)));
       }
       aim(p, ax, ay+lane, DEF_SPD*(p.role==='RUSH'?1.10:0.96)*openChase());
     }
@@ -2263,6 +2273,11 @@ function step(dt){
       if(blk.assign && ru!==blk.assign) continue;
       var dy2=Math.abs(ru.y-blk.y);
       if(dy2>BLOCK_R) continue;                       // he is around the edge
+      // and he has to be on him, not merely level with him. Only the width
+      // was ever checked, so a rusher who had already beaten his man and was
+      // yards past him got snapped straight back to the blocker's side of
+      // the line, which read as the rush bouncing off an invisible wall.
+      if(Math.abs(ru.x-blk.x) > BLOCK_R*1.8) continue;
       ru.engaged=(ru.engaged||0)+dt;
       if(ru.engaged > (ru.shedAt||2.5)) continue;     // he has beaten the block
 
@@ -2298,6 +2313,7 @@ function step(dt){
     if(q.iFrames>0) q.iFrames-=dt;
     if(q.wrapped>0) q.wrapped-=dt;
     if(q.cel>0)  q.cel-=dt;
+    if(q.down>0) q.down=Math.max(0,q.down-dt);
   }
 
   // flame trail behind anyone moving at full tilt
