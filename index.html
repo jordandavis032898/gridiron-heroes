@@ -510,7 +510,7 @@ function setupPlay(playId){
   var dn=0;
   for(var lk=0;lk<G.players.length;lk++){
     var lp=G.players[lk];
-    if(lp.team===defCol){ lp.lane=(dn-3.5)*5.5; dn++; }
+    if(lp.team===defCol){ lp.lane=(dn-3.5)*13; dn++; }
   }
 
 
@@ -1467,7 +1467,7 @@ function deadTick(dt){
     if(q.phase>0)  q.phase=Math.max(0,q.phase-dt*1.1);
   }
   // bodies still take up space in the pile
-  var SEP=18;
+  var SEP=23;
   for(var a1=0;a1<G.players.length;a1++){
     for(var a2=a1+1;a2<G.players.length;a2++){
       var A=G.players[a1], B=G.players[a2];
@@ -1930,10 +1930,15 @@ function step(dt){
       }
       var bx=G.ball.x,by=G.ball.y;
       if(G.thrown){ bx=G.thrown.tx; by=G.thrown.ty; }
-      var ld=G.carrier?0.26:0;
       var lane=p.lane||0;
-      aim(p, bx+(G.carrier?G.carrier.vx*ld:0), by+(G.carrier?G.carrier.vy*ld:0)+lane,
-          DEF_SPD*(p.role==='RUSH'?1.10:0.96)*openChase());
+      var ax=bx, ay=by;
+      if(G.carrier){
+        var rx=G.carrier.x-p.x, ry=G.carrier.y-p.y;
+        var closeT=Math.min(1.6, (Math.hypot(rx,ry)||1)/(DEF_SPD*1.15));
+        ax=G.carrier.x+G.carrier.vx*closeT;
+        ay=G.carrier.y+G.carrier.vy*closeT;
+      }
+      aim(p, ax, ay+lane, DEF_SPD*(p.role==='RUSH'?1.10:0.96)*openChase());
     }
   }
 
@@ -2004,7 +2009,7 @@ function step(dt){
 
   // Bodies occupy space. Without this every pursuer converges on the exact
   // same point and the play collapses into a single stack of sprites.
-  var SEP=18;
+  var SEP=23;
   for(var i1=0;i1<G.players.length;i1++){
     for(var i2=i1+1;i2<G.players.length;i2++){
       var A=G.players[i1], B=G.players[i2];
