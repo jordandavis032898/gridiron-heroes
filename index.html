@@ -287,12 +287,17 @@ var DEFENDERS = [
 ];
 
 var PLAYS = {
-  H:[{id:'short',name:'QUICK SLANT',desc:'Receivers cut inside fast. Safe, 6 to 10 yards.',key:'1'},
-     {id:'deep', name:'GO ROUTE',   desc:'Both streak downfield. Risky, big payoff.',key:'2'},
-     {id:'run',  name:'POWER RUN',  desc:'Keep it. Blockers lead the way.',key:'3'}],
-  A:[{id:'blitz',name:'ALL-OUT BLITZ',desc:'Everyone rushes. Kill it behind the line.',key:'1'},
-     {id:'zone', name:'ZONE COVER',   desc:'Sit back, take the pass away.',key:'2'},
-     {id:'spy',  name:'CONTAIN',      desc:'Two rush, three hold the middle.',key:'3'}]
+  H:[{id:'short', name:'QUICK SLANT', desc:'Receivers cut inside fast. Safe, 6 to 10 yards.'},
+     {id:'deep',  name:'GO ROUTE',    desc:'Both streak downfield. Risky, big payoff.'},
+     {id:'outs',  name:'OUT ROUTES',  desc:'Break for the sideline. Stops the clock if he gets out.'},
+     {id:'run',   name:'POWER RUN',   desc:'Hand it to the back. Blockers lead the way.'},
+     {id:'draw',  name:'DRAW',        desc:'Sell the pass, then give it late. Beats a blitz.'},
+     {id:'screen',name:'SCREEN',      desc:'Let them come, slip the back out behind them.'}],
+  A:[{id:'blitz', name:'ALL-OUT BLITZ',desc:'Everyone rushes. Kill it behind the line.'},
+     {id:'zone',  name:'ZONE COVER',   desc:'Sit back, take the pass away.'},
+     {id:'spy',   name:'CONTAIN',      desc:'Two rush, three hold the middle.'},
+     {id:'press', name:'MAN PRESS',    desc:'Jam them at the line. No free release.'},
+     {id:'prevent',name:'PREVENT',     desc:'Everyone drops. Nothing gets behind you.'}]
 };
 
 // ================================================================ dom
@@ -314,7 +319,7 @@ function freshGame(){
     shake:0, snapT:0, power:100, stam:100, moveCd:0, jukeUntil:0,
     diveUntil:0, hitCd:0, loose:null, windup:null, playClock:15, assistCd:0, switchFlash:0, newSeries:false, clockRunning:false, jukeCd:0, latCd:0, lastThrow:'', kick:null,
     celebrate:0, celAt:null, scoringTeam:'H',
-    playNo:0, hostPick:null, pickAt:0,
+    playNo:0, hostPick:null, pickAt:0, handoffAt:null, cushion:0,
     M2:{power:100, stam:100, moveCd:0, hitCd:0, jukeCd:0, latCd:0,
         assistCd:0, jukeUntil:0, diveUntil:0},
     fx:[], over:false, mouse:{x:0,y:0,on:false} };
@@ -429,13 +434,16 @@ function setupPlay(playId){
 
   var off = youOnO ? G.play : G.aiPlay;
   if(off==='deep'){ w1.route='go'; w2.route='go'; te.route='slant'; rb.route='block'; }
-  else if(off==='run'){ w1.route='block'; w2.route='block'; te.route='block'; rb.route='block'; }
+  else if(off==='outs'){ w1.route='out'; w2.route='out'; te.route='curl'; rb.route='wheel'; }
+  else if(off==='run'){ w1.route='block'; w2.route='block'; te.route='block'; rb.route='mesh'; }
+  else if(off==='draw'){ w1.route='go'; w2.route='curl'; te.route='block'; rb.route='mesh'; }
+  else if(off==='screen'){ w1.route='block'; w2.route='block'; te.route='block'; rb.route='screen'; }
   else { w1.route='slant'; w2.route='slant'; te.route='flat'; rb.route='flat'; }
   c.route='block'; o1.route='block'; o2.route='block';
   // ---- DEFENSE: DE, DE, DE, LB, LB, CB, CB, S
   var dplay = youOnO ? G.aiPlay : G.play;
   var lbRush = (dplay==='blitz');
-  var deCount = (dplay==='zone') ? 2 : 3;
+  var deCount = (dplay==='zone'||dplay==='prevent') ? 2 : 3;
   var spec=[
     {r:'RUSH', x:5, y:-6,   pos:'DE'},
     {r:'RUSH', x:5, y:0,    pos:'DE'},
@@ -505,8 +513,11 @@ function setupPlay(playId){
 
   G.ball={x:qb.x,y:qb.y,held:true};
   G.carrier=qb;
-  // a run play is a handoff, whoever the back is
-  if(off==='run'){ G.carrier=rb; G.ball.x=rb.x; G.ball.y=rb.y; }
+  // The back used to start the play already holding it. Now the passer takes
+  // the snap and gives it to him at the mesh point, and you can beat the
+  // timer by handing off yourself.
+  G.handoffAt = (off==='run') ? 0.30 : (off==='draw' ? 0.85 : null);
+  G.cushion = (dplay==='press') ? -6 : (dplay==='prevent' ? 7 : 0);
   G.controlled = youOnO ? G.carrier : nearestDef();
   if(NET.on && NET.host) G.controlled2 = pickRemoteMan(false);
   G.jukeUntil=0;
@@ -774,6 +785,40 @@ function switchPlayer(side){
   if(side==='H'||!NET.on||!NET.host) say((nxt.name||'').split(' ').pop().toUpperCase(),600);
 }
 
+// ---- handoff: give it to the back, no risk, no air under it --------------
+var HANDOFF_R = 30;
+function handoffTarget(){
+  if(!G.carrier || G.carrier.role!=='QB') return null;
+  var best=null, bd=Infinity;
+  for(var i=0;i<G.players.length;i++){
+    var q=G.players[i];
+    if(q.team!==G.offense||q===G.carrier||q.stun>0) continue;
+    if(q.role!=='RB'&&q.role!=='TE') continue;
+    var dd=Math.hypot(q.x-G.carrier.x,q.y-G.carrier.y);
+    if(dd<bd && dd<HANDOFF_R){ bd=dd; best=q; }
+  }
+  return best;
+}
+
+function handoff(side, auto){
+  if(!G.carrier||G.thrown||G.loose||G.windup) return false;
+  if(!auto){
+    var mine=((side||'H')==='H')?G.controlled:G.controlled2;
+    if(mine!==G.carrier) return false;
+  }
+  var back=handoffTarget();
+  if(!back) return false;
+  var qb=G.carrier;
+  qb.throwArm=0.4;
+  G.carrier=back; G.ball.held=true; G.ball.x=back.x; G.ball.y=back.y;
+  back.route=null;                       // he is running now, not running a route
+  back.burst=0.45;
+  G.handoffAt=null;
+  if(G.offense==='H') G.controlled=back; else if(NET.on) G.controlled2=back;
+  if(!auto || G.offense==='H' || !NET.on) say('HANDOFF',450);
+  return true;
+}
+
 // ---- lateral: pitch it backwards to a trailing team-mate -----------------
 function lateral(side){
   var mine=((side||'H')==='H')?G.controlled:G.controlled2;
@@ -896,6 +941,33 @@ function routePoint(p,since){
   }
   if(p.route==='slant') return {x:p.x+9*YD*d,  y:mid+(p.y<mid?5:-5)*YD};
   if(p.route==='flat')  return {x:p.x+5*YD*d,  y:p.y+(p.y<mid?-9:9)*YD};
+
+  // break for the sideline once he has the depth
+  if(p.route==='out'){
+    if(since<1.05) return {x:p.x+12*YD*d, y:p.y};
+    return {x:p.x+2*YD*d, y:(p.y<mid? 4*YD : FH-4*YD)};
+  }
+  // get depth, then come back to the ball
+  if(p.route==='curl'){
+    if(since<1.35) return {x:p.x+12*YD*d, y:p.y};
+    var cq=G.carrier;
+    return {x:p.x-4*YD*d, y:cq?(p.y*0.75+cq.y*0.25):p.y};
+  }
+  // widen, then straight up the sideline
+  if(p.route==='wheel'){
+    if(since<0.75) return {x:p.x+2*YD*d, y:(p.y<mid? p.y-8*YD : p.y+8*YD)};
+    return {x:p.x+30*YD*d, y:p.y};
+  }
+  // the mesh point: run at the passer and take the ball off him
+  if(p.route==='mesh'){
+    var mq=G.carrier;
+    return mq ? {x:mq.x+1.6*YD*d, y:mq.y} : {x:p.x, y:p.y};
+  }
+  // slip out behind the rush, then turn upfield
+  if(p.route==='screen'){
+    if(since<0.8) return {x:G.los-4*YD*d, y:(p.y<mid? p.y-7*YD : p.y+7*YD)};
+    return {x:p.x+20*YD*d, y:p.y};
+  }
   return null;
 }
 // Full pursuit speed only once the ball is at or past the line. Applying it
@@ -1013,6 +1085,7 @@ function cpuAbilities(dt,now){
 function cpuQB(now){
   if(G.offense==='H') return;
   if(NET.on) return;          // the Rivals offence is the guest, a person
+  if(G.handoffAt!=null) return;   // he is giving it to the back, not throwing
   if(!G.carrier||G.carrier.role!=='QB'||G.thrown||G.windup||G.loose) return;
   var qb=G.carrier, d=dir(), since=(now-G.snapT)/1000;
   var rush=nearestOf(qb,'H');
@@ -1052,17 +1125,19 @@ function pickAiOffense(){
   if(ytg<=5)  return r<0.74?'run':'short';
   if(ytg<=12) return r<0.60?'run':'short';
   if(ytg<=22) return r<0.46?'run':(r<0.90?'short':'deep');
-  if(G.down>=3 && togo>=7) return r<0.68?'deep':'short';
-  if(togo<=3) return r<0.62?'run':'short';
-  return r<0.44?'short':(r<0.76?'run':'deep');
+  if(G.down>=3 && togo>=7) return r<0.44?'deep':(r<0.72?'outs':'screen');
+  if(togo<=3) return r<0.52?'run':(r<0.78?'draw':'short');
+  return r<0.28?'short':(r<0.48?'run':(r<0.64?'deep':(r<0.80?'outs':
+         (r<0.92?'draw':'screen'))));
 }
 function pickAiDefense(){
   var r=Math.random(), togo=G.toGo, ytg=yardsToGoal();
   // backed up near their own goal line, crowd the box
   if(ytg<=8) return r<0.6?'blitz':'spy';
-  if(G.down>=3 && togo>=7) return r<0.58?'zone':'spy';    // they will throw
+  if(G.down>=3 && togo>=12) return r<0.5?'prevent':'zone'; // sit on the sticks
+  if(G.down>=3 && togo>=7) return r<0.42?'zone':(r<0.74?'press':'spy');
   if(togo<=3) return r<0.55?'blitz':'spy';                // they will run
-  return r<0.34?'blitz':(r<0.67?'zone':'spy');
+  return r<0.26?'blitz':(r<0.48?'zone':(r<0.70?'spy':'press'));
 }
 
 // The whistle does not freeze a football field. Everyone coasts to a stop,
@@ -1137,16 +1212,22 @@ function fgChance(dist){
 function offensePlays(){
   var list = PLAYS.H.slice();
   if(G.down >= 4){
-    list.push({id:'punt', name:'PUNT', desc:'Kick it away and pin them deep.', key:'4'});
+    list.push({id:'punt', name:'PUNT', desc:'Kick it away and pin them deep.'});
     var dist = fgDistance();
     if(dist <= 58){
       list.push({id:'fg', name:'FIELD GOAL',
-        desc: dist + ' yard try. About ' + Math.round(fgChance(dist)*100) + '% from here.',
-        key:'5'});
+        desc: dist + ' yard try. About ' + Math.round(fgChance(dist)*100) + '% from here.'});
     }
   }
+  return keyed(list);
+}
+
+// the sheet numbers itself, so the playbook can grow without renumbering
+function keyed(list){
+  for(var i=0;i<list.length;i++) list[i].key=String(i+1);
   return list;
 }
+function callSheet(){ return iHaveBall() ? offensePlays() : keyed(PLAYS.A.slice()); }
 
 function startKick(kind){
   elOv.classList.remove('show');
@@ -1373,7 +1454,10 @@ function driveHuman(seat, IN, dt, now){
       if(seat.local) say('DIVE!',320);
     }
   } else {
-    if(IN.b3 && M.latCd<=0){ M.latCd=1.4; lateral(seat.side); }
+    if(IN.b3 && M.latCd<=0){
+      if(handoff(seat.side)) M.latCd=0.9;
+      else { M.latCd=1.4; lateral(seat.side); }
+    }
     if(IN.b2) fireSpecial(seat, IN);
     if(IN.b1 && M.power>=JUKE_COST && M.jukeCd<=0){
       M.power-=JUKE_COST; M.jukeCd=0.95; M.jukeUntil=now+JUKE_MS;
@@ -1397,6 +1481,9 @@ function step(dt){
   var d=dir(), now=performance.now(), since=(now-G.snapT)/1000;
   G.clock-=dt;
   if(G.clock<=0){ G.clock=0; gameOver(); return; }
+  if(G.handoffAt!=null && since>G.handoffAt && G.carrier && G.carrier.role==='QB'){
+    if(handoff(G.offense,true)) G.handoffAt=null;
+  }
   applyRemoteInput(dt);
   driveHuman(hostSeat(), localInput(), dt, now);
   if(NET.on && NET.host) driveHuman(guestSeat(), remoteInput(), dt, now);
@@ -1489,7 +1576,7 @@ function step(dt){
         } else if(p.cover && p.cover.stun<=0){
           // trail your man with a cushion toward your own end zone
           var r=p.cover;
-          aim(p, r.x + d*(p.pos==='CB'?9:6), r.y, DEF_SPD*1.0);
+          aim(p, r.x + d*((p.pos==='CB'?9:6)+(G.cushion||0)), r.y, DEF_SPD*1.0);
         } else {
           aim(p, G.ball.x+d*10*YD, G.ball.y, DEF_SPD*0.9);
         }
@@ -2492,7 +2579,7 @@ function abilities(onD){
     } else {
       setAb(1,'Juke','1', p2>=JUKE_COST && G.M2.jukeCd<=0, live);
       setAb(2,HERO.moveName,'2', G.M2.moveCd<=0 && p2>=HERO.cost, live);
-      setAb(3,'Lateral','3', !!G.carrier && G.M2.latCd<=0, live);
+      setAb(3, handoffTarget()?'Handoff':'Lateral','3', !!G.carrier && G.M2.latCd<=0, live);
     }
     setAb(4,'Switch','E', true, live);
     setAb(5, pre?'Hike':'Pass', pre?'SPC':'CLK', true, pre||live);
@@ -2506,7 +2593,7 @@ function abilities(onD){
   } else {
     setAb(1,'Juke','1', G.power>=JUKE_COST, live);
     setAb(2,HERO.moveName,'2', G.moveCd<=0 && G.power>=HERO.cost, live);
-    setAb(3,'Lateral','3', !!G.carrier, live);
+    setAb(3, handoffTarget()?'Handoff':'Lateral','3', !!G.carrier && G.latCd<=0, live);
     setAb(4,'Switch','E', !!G.thrown, live);
   }
   setAb(5, pre?'Hike':'Pass', pre?'SPC':'CLK', true, pre||live);
@@ -2653,7 +2740,7 @@ function bar(lbl,v){
 }
 
 function showPlaycall(){
-  var onO=iHaveBall(), list=onO?offensePlays():PLAYS.A;
+  var onO=iHaveBall(), list=callSheet();
   var html='<h2>'+(onO?'Call your play':'Call your defense')+'</h2>'+
     '<p class="sub">'+['','1st','2nd','3rd','4th'][Math.min(4,G.down)]+' &amp; '+
     Math.max(1,Math.round(G.toGo))+' on the '+yardLineLabel(G.los)+'</p><div class="grid3">';
@@ -2737,8 +2824,8 @@ function start(){
 window.addEventListener('keydown',function(e){
   if(!G) return;
   if(G.phase==='playcall'&&elOv.classList.contains('show')){
-    var list=iHaveBall()?offensePlays():PLAYS.A;
-    var i=['1','2','3','4','5'].indexOf(e.key);
+    var list=callSheet();
+    var i=['1','2','3','4','5','6','7','8','9'].indexOf(e.key);
     if(i>=0&&list[i]) choose(list[i].id);
   }
   if(G.phase==='over'){
