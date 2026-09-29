@@ -200,8 +200,6 @@
     <button class="ab" id="ab1" type="button"><span class="ring"><svg viewBox="0 0 24 24"><path d="M5 19l5-6-3-2 5-6"/><path d="M12 5h3v3"/></svg><span class="key">SP</span></span><span class="cap">Juke</span></button>
     <button class="ab" id="ab2" type="button"><span class="ring"><svg viewBox="0 0 24 24"><path d="M13 3l-5 9h4l-2 9 8-11h-4z"/></svg><span class="key">SH</span></span><span class="cap">Sprint</span></button>
     <button class="ab" id="ab3" type="button"><span class="ring"><svg viewBox="0 0 24 24"><path d="M12 3l2.4 5.6L20 10l-4.3 3.9 1.2 5.9L12 17l-4.9 2.8 1.2-5.9L4 10l5.6-1.4z"/></svg><span class="key">E</span></span><span class="cap">Special</span></button>
-    <button class="ab" id="ab4" type="button"><span class="ring"><svg viewBox="0 0 24 24"><path d="M20 8a8 8 0 1 0-2.3 9"/><path d="M20 3v5h-5"/></svg><span class="key">Q</span></span><span class="cap">Lateral</span></button>
-    <button class="ab" id="ab5" type="button"><span class="ring"><svg viewBox="0 0 24 24"><ellipse cx="12" cy="12" rx="9" ry="5.6"/><path d="M8.5 12h7M10.5 10.2v3.6M13.5 10.2v3.6"/></svg><span class="key">SP</span></span><span class="cap">Hike</span></button>
   </div>
   <div id="card">
     <div class="pcTop"><span id="pcPos">DE</span><span class="pcNum" id="pcNum">00</span></div>
@@ -1255,76 +1253,73 @@ function runLane(p,d){
 function aim(p,tx,ty,spd){ var dx=tx-p.x,dy=ty-p.y,m=Math.hypot(dx,dy)||1; p.vx=dx/m*spd; p.vy=dy/m*spd; }
 
 // ---- CPU signature moves, so the AI is not just running in a straight line
+// How often each move gets considered, per frame, once the situation fits.
+// The cheap ones fire freely; the ones that decide a play are rationed hard
+// so the computer cannot open with a teleport on every snap.
+var AI_ODDS = {
+  stiffarm:0.045, spin:0.040, clothesline:0.032, superblock:0.030,
+  dash:0.030, superspeed:0.028, slam:0.024, rocket:0.020,
+  forcefield:0.018, fumblegen:0.018, teleport:0.014, perfect:0.014,
+  aagun:0.011
+};
+
+// The computer now plays out of the same kits the player does, rather than a
+// separate hard-coded set of specials.
 function cpuAbilities(dt,now){
   if(!G.carrier||G.phase!=='live') return;
-  var car=G.carrier;
-  var defTeam = G.offense==='H' ? 'A' : 'H';
-  var d=dir();
+  var car=G.carrier, d=dir();
 
   for(var i=0;i<G.players.length;i++){
     var q=G.players[i];
     if(q===G.controlled||q===G.controlled2||q.stun>0) continue;
     if(q.aiCd>0){ q.aiCd-=dt; continue; }
+    var kit=kitFor(q);
+    if(!kit.length) continue;
 
-    // ---------- defenders: big hits and the occasional slam --------------
-    if(q.team===defTeam){
-      var dd=Math.hypot(q.x-car.x,q.y-car.y);
-      if(dd>34 || Math.random()>0.022) continue;
-      q.aiCd=2.4;
-      if(Math.random()<0.25){
-        // ground pound
-        q.z=0.8; G.shake=REDUCED?0:20;
-        ring(q.x,q.y,'#ff8c2b'); burst(q.x,q.y,'#ffd23f');
-        say('GROUND POUND!',820); showCard(q,'GROUND POUND');
-        for(var k=0;k<G.players.length;k++){
-          var v=G.players[k];
-          if(v.team===q.team) continue;
-          var vd=Math.hypot(v.x-q.x,v.y-q.y);
-          if(vd>36) continue;
-          v.stun=1.4; v.vx=(v.x-q.x)/(vd||1)*180; v.vy=(v.y-q.y)/(vd||1)*180;
+    var foe=(q.team==='H')?'A':'H';
+    var near=nearestOf(q,foe);
+    var nd=near?Math.hypot(near.x-q.x,near.y-q.y):9999;
+    var toCar=Math.hypot(car.x-q.x,car.y-q.y);
+    var want=null;
+
+    if(q.team===G.offense){
+      if(q===car){
+        if(q.role==='QB'){
+          if(nd<28 && kit.indexOf('forcefield')>=0) want='forcefield';
+        } else {
+          if(nd<34 && kit.indexOf('stiffarm')>=0)        want='stiffarm';
+          else if(nd<30 && kit.indexOf('spin')>=0)       want='spin';
+          else if(nd<46 && kit.indexOf('teleport')>=0)   want='teleport';
+          else if(nd>62 && kit.indexOf('dash')>=0)       want='dash';
+          else if(nd>54 && kit.indexOf('superspeed')>=0) want='superspeed';
         }
-        if(Math.hypot(car.x-q.x,car.y-q.y)<36){
-          if(Math.random()<0.09){ fumble(car,(car.x-q.x)*3.2,(car.y-q.y)*3.2); say('JARRED LOOSE!',1200); return; }
-          car.hp-=88; if(car.hp<=0) endPlay(car.x,'POUNDED'); return;
+      } else if(q.route==='block'||q.route==='lead'){
+        if(nd<36){
+          if(kit.indexOf('superblock')>=0 && Math.random()<0.5) want='superblock';
+          else if(kit.indexOf('clothesline')>=0)               want='clothesline';
+          else if(kit.indexOf('slam')>=0)                      want='slam';
         }
-      } else {
-        // big hit
-        q.arm=0.5; G.shake=REDUCED?0:16;
-        burst(car.x,car.y,'#ffd23f'); burst(car.x,car.y,'#ffffff');
-        if(Math.random() < 0.05/Math.max(0.8,car.pwr||1)){
-          fumble(car,(car.x-q.x)*3.2,(car.y-q.y)*3.2);
-          say('STRIPPED!',1200); showCard(q,'FORCED FUMBLE'); return;
-        }
-        car.hp-=72; car.vx*=0.2; car.vy*=0.2;
-        say('BIG HIT!',760); showCard(q,'BIG HIT');
-        if(car.hp<=0){ car.down=1.6; endPlay(car.x,'BIG HIT'); }
-        return;
+      } else if(q.route){
+        if(nd<26 && kit.indexOf('superspeed')>=0) want='superspeed';
+        else if(nd<22 && kit.indexOf('spin')>=0)  want='spin';
       }
+    } else {
+      if(G.thrown && kit.indexOf('aagun')>=0 &&
+         Math.hypot(G.thrown.tx-q.x,G.thrown.ty-q.y) < 24*YD){
+        want='aagun';
+      }
+      else if(toCar<46 && kit.indexOf('fumblegen')>=0)  want='fumblegen';
+      else if(toCar<38 && kit.indexOf('clothesline')>=0) want='clothesline';
+      else if(toCar<40 && kit.indexOf('slam')>=0)        want='slam';
+      else if(toCar>74 && toCar<190 && kit.indexOf('dash')>=0) want='dash';
     }
 
-    // ---------- the AI ball carrier breaks out something of his own ------
-    if(q===car && q!==G.controlled && q!==G.controlled2){
-      var th=nearestOf(q,defTeam);
-      var td=th?Math.hypot(th.x-q.x,th.y-q.y):999;
-      if(td>32 || Math.random()>0.03) continue;
-      q.aiCd=1.8;
-      var roll=Math.random();
-      if(roll<0.3){
-        q.spin=1.2; q.iFrames=0.34; q.phase=0.5;
-        q.vx=d*BASE_SPD*2.4; q.vy=(q.y-th.y>=0?1:-1)*BASE_SPD*1.6;
-        burst(q.x,q.y,'#7fd8ff'); say('SPIN MOVE!',620);
-      } else if(roll<0.58){
-        q.arm=0.5; th.stun=1.1;
-        th.vx=(th.x-q.x)*7; th.vy=(th.y-q.y)*7;
-        burst(th.x,th.y,'#ffd23f'); G.shake=REDUCED?0:11;
-        say('STIFF ARM!',620);
-      } else if(roll<0.8){
-        q.z=1.2; q.iFrames=0.5;
-        q.vx=d*BASE_SPD*2.2; say('HURDLE!',620);
-      } else {
-        q.burst=1.1; ring(q.x,q.y,'#ff8c2b'); say('BURST!',620);
-      }
-    }
+    if(!want) continue;
+    if(!abReady(q,want)) continue;
+    if(Math.random() > (AI_ODDS[want]||0.02)) continue;
+
+    fireAbility({man:q, local:false}, null, kit.indexOf(want));
+    q.aiCd = 1.4 + Math.random()*1.3;
   }
 }
 
@@ -1353,6 +1348,13 @@ function cpuQB(now){
   }
   var desperate=(pressure<26||since>1.9);
   if(best && (bestScore>22 || desperate)){
+    // arm a special throw before letting it go, same as a player would
+    var qk=kitFor(qb);
+    if(desperate && abReady(qb,'rocket') && Math.random()<0.45){
+      fireAbility({man:qb,local:false}, null, qk.indexOf('rocket'));
+    } else if(bestScore>46 && abReady(qb,'perfect') && Math.random()<0.30){
+      fireAbility({man:qb,local:false}, null, qk.indexOf('perfect'));
+    }
     G.windup={target:best,t:0,dur:0.17,qb:qb};
   }
 }
@@ -2865,8 +2867,6 @@ function abilities(onD){
     setAb(i+1, left>0 ? (left+(left===1?' PLAY':' PLAYS')) : ABIL[id].name,
           KEYS[i], left===0, live);
   }
-  setAb(4,'Switch','E', true, live);
-  setAb(5, pre?'Hike':'Pass', pre?'SPC':'CLK', true, pre||live);
 }
 
 // ---- the play card: who just made something happen ----------------------
@@ -3145,9 +3145,7 @@ if(window.matchMedia&&window.matchMedia('(pointer: coarse)').matches){
 // ---- the icons double as buttons ----------------------------------------
 [[1,function(){ if(G.phase==='presnap'){snapBall();return;} touchAb[0]=true; }],
  [2,function(){ touchAb[1]=true; }],
- [3,function(){ touchAb[2]=true; }],
- [4,function(){ touchSwitch=true; }],
- [5,function(){ if(G.phase==='presnap') snapBall(); }]
+ [3,function(){ touchAb[2]=true; }]
 ].forEach(function(pair){
   var e=document.getElementById('ab'+pair[0]);
   if(e) e.addEventListener('click',function(ev){ ev.preventDefault(); pair[1](); });
