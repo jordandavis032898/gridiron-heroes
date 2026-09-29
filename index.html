@@ -741,6 +741,26 @@ var ABIL = {
   aagun:      {name:'Anti-Air',    cd:4, desc:'Shoot the ball out of the sky.'}
 };
 
+
+// Each ability draws its own icon. The bar used to show a fixed squiggle, a
+// bolt and a star whatever was in the slot, so a quarterback's forcefield
+// was a star and his rocket was a squiggle.
+var AB_ICON = {
+  rocket:     '<ellipse cx="15" cy="12" rx="6" ry="3.6"/><path d="M12 12h6M2 8h5M2 12h6M2 16h5"/>',
+  perfect:    '<circle cx="12" cy="12" r="7"/><circle cx="12" cy="12" r="2.2"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/>',
+  forcefield: '<path d="M12 3l8 3v6c0 5-3.6 8-8 9-4.4-1-8-4-8-9V6z"/><path d="M8.6 12l2.4 2.4 4.4-4.6"/>',
+  dash:       '<path d="M4 6l6 6-6 6M12 6l6 6-6 6"/>',
+  stiffarm:   '<path d="M8 13V6.2a1.5 1.5 0 0 1 3 0V11M11 11V4.6a1.5 1.5 0 0 1 3 0V11M14 11.4V6.6a1.5 1.5 0 0 1 3 0V14a6 6 0 0 1-6 6H9.4L4.6 15.2 6 13.8 8 15.6"/>',
+  teleport:   '<circle cx="12" cy="12" r="3.2"/><path d="M12 2.5v3.2M12 18.3v3.2M5 7.2l2.7 1.6M16.3 15.2l2.7 1.6M5 16.8l2.7-1.6M16.3 8.8l2.7-1.6"/>',
+  superblock: '<rect x="3" y="9" width="18" height="7.5" rx="1.2"/><path d="M7 9V5.4M12 9V4M17 9V5.4"/>',
+  clothesline:'<path d="M3 9h13a3.2 3.2 0 0 1 0 6.4H7"/><path d="M10 15.4l-3.2-3.2M10 15.4l-3.2 3.2"/>',
+  superspeed: '<path d="M14 3.2l-4.6 8.4h4l-2 9.2 8-10.6h-4z"/><path d="M2 8h4M2 12.5h3M2 17h4"/>',
+  spin:       '<path d="M20 12a8 8 0 1 1-3.2-6.4"/><path d="M20.4 4v5.2h-5.2"/>',
+  slam:       '<path d="M12 2.6v9.6M8 8.2l4 4 4-4"/><path d="M3.4 16.6c3.4 2.2 13.8 2.2 17.2 0"/><path d="M6 20c3 1.7 9 1.7 12 0"/>',
+  fumblegen:  '<ellipse cx="12" cy="12" rx="6.6" ry="4"/><path d="M9.4 12h5.2"/><path d="M4.4 4.6l2.8 2.8M19.6 4.6l-2.8 2.8M4.4 19.4l2.8-2.8M19.6 19.4l-2.8-2.8"/>',
+  aagun:      '<circle cx="15.4" cy="8.6" r="4"/><path d="M15.4 2.6v2.2M15.4 12.4v2.2M9.4 8.6h2.2M19.2 8.6h2.2"/><path d="M3 21l6.4-6.4"/>'
+};
+
 var KITS_AB = {
   QB:['rocket','perfect','forcefield'],
   RB:['dash','stiffarm','teleport'],
@@ -818,19 +838,36 @@ function fireAbility(seat, IN, slot){
   if(id==='rocket'){
     if(me!==G.carrier){ return; }
     G.rocketArmed=true; me.arm=0.5;
-    ring(me.x,me.y,'#ffd23f'); tell('ROCKET ARMED',700);
+    var rhx=me.x+(me.face||1)*9, rhy=me.y-25;
+    flash(rhx,rhy,'rgba(255,210,63,.95)',26);
+    shock(rhx,rhy,'rgba(255,210,63,.85)',3,26,0.30);
+    for(var rk2=0;rk2<5;rk2++){
+      streak(rhx,rhy-4+rk2*2, rhx+(me.face||1)*(18+rk2*5), rhy-4+rk2*2,
+             'rgba(255,210,63,.6)',1.3,0.22);
+    }
+    tell('ROCKET ARMED',700);
   }
   else if(id==='perfect'){
     if(me!==G.carrier){ return; }
     G.perfectArmed=true; me.arm=0.5;
-    ring(me.x,me.y,'#7fd8ff'); burst(me.x,me.y,'#7fd8ff');
+    flash(me.x,me.y-24,'rgba(127,216,255,.9)',22);
+    shock(me.x,me.y,'rgba(127,216,255,.9)',4,30,0.38);
+    var lock=pickTarget(G.mouse&&G.mouse.on?G.mouse.x:me.x+dir()*200,
+                        G.mouse&&G.mouse.on?G.mouse.y:me.y);
+    if(lock){
+      shock(lock.x,lock.y,'rgba(127,216,255,.95)',26,9,0.5);
+      streak(me.x,me.y-22,lock.x,lock.y-14,'rgba(127,216,255,.45)',1.2,0.5);
+    }
     tell('PERFECT PASS ARMED',800);
   }
   else if(id==='forcefield'){
     var hit=flatten(52,1.3,210);
     me.iFrames=Math.max(me.iFrames,1.4);
-    ring(me.x,me.y,'#7fd8ff'); ring(me.x,me.y,'#ffffff');
-    burst(me.x,me.y,'#7fd8ff'); G.shake=REDUCED?0:18;
+    flash(me.x,me.y-16,'rgba(127,216,255,.95)',46);
+    shock(me.x,me.y,'rgba(255,255,255,.95)',6,58,0.34);
+    shock(me.x,me.y,'rgba(127,216,255,.85)',6,52,0.48);
+    shock(me.x,me.y,'rgba(127,216,255,.55)',6,44,0.62);
+    dust(me.x,me.y,14,1.3); G.shake=REDUCED?0:18;
     tell(hit?'FORCEFIELD!':'FORCEFIELD',800);
   }
 
@@ -838,7 +875,13 @@ function fireAbility(seat, IN, slot){
   else if(id==='dash'){
     me.burst=1.7;
     me.vx=fwd.x*BASE_SPD*2.9*(me.spd||1); me.vy=fwd.y*BASE_SPD*2.9*(me.spd||1);
-    burst(me.x,me.y,'#ff8c2b'); ring(me.x,me.y,'#ff8c2b');
+    shock(me.x,me.y,'rgba(255,140,43,.9)',4,34,0.32);
+    dust(me.x,me.y,12,1.1);
+    for(var dk=0;dk<4;dk++){
+      streak(me.x-fwd.x*(8+dk*7), me.y-fwd.y*(8+dk*7)-12-dk*4,
+             me.x-fwd.x*(26+dk*8), me.y-fwd.y*(26+dk*8)-12-dk*4,
+             'rgba(255,140,43,.65)',1.7,0.26);
+    }
     tell('SUPER DASH!',600);
   }
   else if(id==='stiffarm'){
@@ -846,7 +889,10 @@ function fireAbility(seat, IN, slot){
     if(!v) return;                              // nothing to put down, no charge
     v.stun=1.3; v.down=Math.max(v.down,1.0); v.wrapped=0;
     v.vx=(v.x-me.x)*5.5; v.vy=(v.y-me.y)*5.5;
-    me.arm=0.6; burst(v.x,v.y,'#ffd23f'); G.shake=REDUCED?0:10;
+    me.arm=0.6; G.shake=REDUCED?0:10;
+    flash(v.x,v.y-14,'rgba(255,255,255,.95)',24);
+    shock(v.x,v.y,'rgba(255,210,63,.9)',3,26,0.26);
+    dust(v.x,v.y,7,0.9);
     tell('STIFF ARM!',600); credit(me,'STIFF ARM');
   }
   else if(id==='teleport'){
@@ -858,14 +904,23 @@ function fireAbility(seat, IN, slot){
     me.x=Math.max(6,Math.min(FW-6,me.x+fwd.x*hop));
     me.y=Math.max(8,Math.min(FH-8,me.y+fwd.y*hop));
     me.iFrames=Math.max(me.iFrames,0.5); me.phase=0.6; me.wrapped=0;
-    burst(me.x,me.y,'#7fd8ff');
+    flash(me.x,me.y-16,'rgba(127,216,255,.95)',30);
+    shock(me.x,me.y,'rgba(127,216,255,.9)',2,30,0.30);
+    for(var tg=0;tg<4;tg++){
+      G.fx.push({gh:true,x:me.x-fwd.x*hop*(tg/4),y:me.y-fwd.y*hop*(tg/4),
+                 face:me.face,c:'#7fd8ff',life:0.26,max:0.26});
+    }
     tell('TELEPORT!',700);
   }
 
   // ---- the line --------------------------------------------------------
   else if(id==='superblock'){
     var n2=flatten(46,1.5,195);
-    me.z=0.5; ring(me.x,me.y,'#ffd23f'); G.shake=REDUCED?0:16;
+    me.z=0.5; G.shake=REDUCED?0:16;
+    flash(me.x,me.y-10,'rgba(255,210,63,.85)',40);
+    shock(me.x,me.y,'rgba(255,255,255,.9)',5,50,0.30);
+    shock(me.x,me.y,'rgba(255,210,63,.8)',5,42,0.46);
+    dust(me.x,me.y,18,1.5);
     tell(n2?'PANCAKED!':'SUPER BLOCK',700);
     if(n2) credit(me,'SUPER BLOCK');
   }
@@ -874,20 +929,34 @@ function fireAbility(seat, IN, slot){
     if(!v2) return;
     v2.stun=1.7; v2.down=Math.max(v2.down,1.3); v2.wrapped=0;
     v2.vx=(v2.x-me.x)*6.5; v2.vy=(v2.y-me.y)*6.5;
-    me.arm=0.7; burst(v2.x,v2.y,'#ffffff'); G.shake=REDUCED?0:14;
+    me.arm=0.7; G.shake=REDUCED?0:14;
+    var swy=me.y-20;
+    streak(me.x-(me.face||1)*6,swy, v2.x+(me.face||1)*16,swy-2,'rgba(255,255,255,.85)',2.6,0.20);
+    streak(me.x-(me.face||1)*4,swy+4, v2.x+(me.face||1)*14,swy+2,'rgba(255,255,255,.45)',1.6,0.24);
+    flash(v2.x,v2.y-18,'rgba(255,255,255,.95)',26);
+    dust(v2.x,v2.y,8,1.0);
     tell('CLOTHESLINE!',700); credit(me,'CLOTHESLINE');
   }
 
   // ---- receivers -------------------------------------------------------
   else if(id==='superspeed'){
     me.burst=2.6;
-    ring(me.x,me.y,'#4fd18b');
+    shock(me.x,me.y,'rgba(79,209,139,.9)',4,32,0.34);
+    flash(me.x,me.y-16,'rgba(79,209,139,.8)',26);
+    dust(me.x,me.y,8,0.9);
     tell('SUPER SPEED!',700);
   }
   else if(id==='spin'){
     me.spin=1.5; me.iFrames=Math.max(me.iFrames,0.55); me.wrapped=0;
     me.vx=fwd.x*BASE_SPD*2.5*(me.agi||1); me.vy=fwd.y*BASE_SPD*2.5*(me.agi||1);
-    burst(me.x,me.y,'#7fd8ff');
+    for(var sp2=0;sp2<12;sp2++){
+      var aa=(sp2/12)*Math.PI*2;
+      G.fx.push({x:me.x+Math.cos(aa)*8, y:me.y-14+Math.sin(aa)*5,
+                 vx:Math.cos(aa+1.4)*110, vy:Math.sin(aa+1.4)*48,
+                 r:1.8, life:0.34, max:0.34, c:'#7fd8ff'});
+    }
+    shock(me.x,me.y,'rgba(127,216,255,.85)',4,26,0.28);
+    dust(me.x,me.y,6,0.8);
     tell('SPIN MOVE!',600);
   }
 
@@ -895,7 +964,11 @@ function fireAbility(seat, IN, slot){
   else if(id==='slam'){
     me.z=0.9;
     var n3=flatten(44,1.6,205);
-    ring(me.x,me.y,'#ff8c2b'); burst(me.x,me.y,'#ffd23f');
+    flash(me.x,me.y-8,'rgba(255,210,63,.9)',44);
+    shock(me.x,me.y,'rgba(255,255,255,.95)',5,56,0.28);
+    shock(me.x,me.y,'rgba(255,140,43,.85)',5,46,0.44);
+    shock(me.x,me.y,'rgba(255,140,43,.5)',5,36,0.60);
+    dust(me.x,me.y,22,1.7);
     G.shake=REDUCED?0:22;
     tell(n3?'SLAM!':'SLAM',700);
     if(n3) credit(me,'SLAM');
@@ -906,7 +979,16 @@ function fireAbility(seat, IN, slot){
     if(fd>48) return;                            // nothing to strip, no charge
     var vic=G.carrier;
     fumble(vic,(vic.x-me.x)*3.6,(vic.y-me.y)*3.6);
-    burst(vic.x,vic.y,'#ffd23f'); G.shake=REDUCED?0:20;
+    G.shake=REDUCED?0:20;
+    flash(vic.x,vic.y-16,'rgba(255,210,63,1)',34);
+    shock(vic.x,vic.y,'rgba(255,210,63,.95)',3,38,0.34);
+    for(var fk=0;fk<6;fk++){
+      var fa=(fk/6)*Math.PI*2;
+      streak(vic.x+Math.cos(fa)*6, vic.y-14+Math.sin(fa)*4,
+             vic.x+Math.cos(fa)*22, vic.y-14+Math.sin(fa)*13,
+             'rgba(255,210,63,.8)',1.8,0.24);
+    }
+    dust(vic.x,vic.y,10,1.1);
     tell('STRIPPED!',1100); credit(me,'FORCED FUMBLE');
   }
 
@@ -914,11 +996,13 @@ function fireAbility(seat, IN, slot){
   else if(id==='aagun'){
     if(!G.thrown) return;                        // nothing in the air, no charge
     var tgt=G.thrown.target;
-    for(var g=0;g<10;g++){
-      G.fx.push({x:me.x,y:me.y-10,vx:(G.ball.x-me.x)*1.6,vy:(G.ball.y-me.y)*1.6,
-                 life:0.3,max:0.3,r:2.4,c:'#ffd23f'});
-    }
-    burst(G.ball.x,G.ball.y,'#ffffff'); G.shake=REDUCED?0:12;
+    streak(me.x,me.y-24,G.ball.x,G.ball.y,'rgba(255,210,63,.95)',2.4,0.18);
+    streak(me.x,me.y-24,G.ball.x,G.ball.y,'rgba(255,255,255,.7)',1.0,0.26);
+    flash(me.x+(G.ball.x-me.x)*0.08, me.y-24+(G.ball.y-(me.y-24))*0.08,
+          'rgba(255,210,63,.95)',18);
+    flash(G.ball.x,G.ball.y,'rgba(255,255,255,1)',30);
+    shock(G.ball.x,G.ball.y,'rgba(255,255,255,.9)',3,30,0.28);
+    G.shake=REDUCED?0:12;
     var roll=Math.random();
     if(roll<0.24){
       G.thrown=null;
@@ -1063,6 +1147,55 @@ function switchPlayer(side){
   if(side==='H'){ G.controlled=nxt; G.switchFlash=0.5; }
   else { G.controlled2=nxt; }
   if(side==='H'||!NET.on||!NET.host) say((nxt.name||'').split(' ').pop().toUpperCase(),600);
+}
+
+
+// ============================================================ effects toolbox
+// Every ability used to look the same: an expanding flat ellipse and ten
+// circles. These are the pieces that let each one read differently.
+
+// an expanding shockwave with real thickness
+function shock(x,y,c,r0,r1,ms){
+  G.fx.push({shock:true,x:x,y:y,c:c,r0:r0,r1:r1,life:ms||0.42,max:ms||0.42});
+}
+// a bright radial bloom, for the instant of contact
+function flash(x,y,c,r){
+  if(REDUCED) return;
+  G.fx.push({flash:true,x:x,y:y,c:c||'rgba(255,255,255,0.9)',r:r||22,life:0.24,max:0.24});
+}
+// turf torn up: brown, heavy, falls back down
+function dust(x,y,n,spread){
+  n=n||10; spread=spread||1;
+  var cols=['#6d5836','#7d6a45','#5a4a2e','#8a7550'];
+  for(var i=0;i<n;i++){
+    var a=Math.random()*Math.PI*2, sp=(24+Math.random()*70)*spread;
+    G.fx.push({x:x+(Math.random()-0.5)*8, y:y+(Math.random()-0.5)*4,
+               vx:Math.cos(a)*sp, vy:Math.sin(a)*sp*0.45-18,
+               grav:120, r:1.4+Math.random()*2.0,
+               life:0.5+Math.random()*0.35, max:0.85,
+               c:cols[(Math.random()*cols.length)|0]});
+  }
+}
+// a drawn line: speed lines, swipes, tracers
+function streak(x0,y0,x1,y1,c,w,ms){
+  G.fx.push({streak:true,x:x0,y:y0,x2:x1,y2:y1,c:c,w:w||1.6,
+             life:ms||0.22,max:ms||0.22});
+}
+// a faded copy of a body left behind, for anything moving fast
+function ghost(p){
+  if(REDUCED) return;
+  G.fx.push({gh:true,x:p.x,y:p.y,face:p.face,
+             c:(p.team==='H'?'#7fa0ff':'#ff8a94'),life:0.30,max:0.30});
+}
+// speed lines trailing a sprinting man
+function speedLines(p,c){
+  var a=Math.atan2(p.vy,p.vx), n=2+((Math.random()*2)|0);
+  for(var i=0;i<n;i++){
+    var o=(Math.random()-0.5)*16, len=10+Math.random()*16;
+    var px=p.x-Math.cos(a)*10 - Math.sin(a)*o;
+    var py=p.y-Math.sin(a)*10 + Math.cos(a)*o - 14;
+    streak(px,py,px-Math.cos(a)*len,py-Math.sin(a)*len,c||'rgba(255,255,255,.55)',1.3,0.20);
+  }
 }
 
 // ---- handoff: give it to the back, no risk, no air under it --------------
@@ -1461,6 +1594,10 @@ function deadTick(dt){
     if(q.stun>0)   q.stun-=dt;
     if(q.down>0)   q.down-=dt;
     if(q.down>0||q.stun>0){ var dmp=Math.pow(0.002,dt); q.vx*=dmp; q.vy*=dmp; }
+    if(q.burst>0 && sp>60){
+      if(Math.random()<dt*26) ghost(q);
+      if(Math.random()<dt*20) speedLines(q, q.team==='H'?'rgba(255,210,63,.5)':'rgba(255,138,148,.5)');
+    }
     if(q.z>0)      q.z=Math.max(0,q.z-dt*1.7);
     if(q.spin>0)   q.spin=Math.max(0,q.spin-dt*2.1);
     if(q.arm>0)    q.arm=Math.max(0,q.arm-dt*1.9);
@@ -2042,7 +2179,10 @@ function step(dt){
   // particles
   for(var f=G.fx.length-1;f>=0;f--){
     var e=G.fx[f]; e.life-=dt;
-    if(e.ringed){ e.r+=dt*130; } else { e.x+=e.vx*dt; e.y+=e.vy*dt; e.vx*=0.93; e.vy*=0.93; }
+    if(e.ringed){ e.r+=dt*130; }
+    else if(e.shock||e.flash||e.streak||e.gh){ /* these live on their timer */ }
+    else { e.x+=e.vx*dt; e.y+=e.vy*dt; e.vx*=0.93; e.vy*=0.93;
+           if(e.grav){ e.vy+=e.grav*dt; } }
     if(e.life<=0) G.fx.splice(f,1);
   }
 
@@ -2407,6 +2547,22 @@ function draw(){
     if(e.ringed){
       ctx.strokeStyle=e.c; ctx.lineWidth=2.4*k2;
       ctx.beginPath(); ctx.ellipse(e.x,e.y,e.r,e.r*0.42,0,0,Math.PI*2); ctx.stroke();
+    } else if(e.shock){
+      var ggg=1-k2, rr2=e.r0+(e.r1-e.r0)*ggg;
+      ctx.strokeStyle=e.c; ctx.lineWidth=0.8+3.6*k2;
+      ctx.beginPath(); ctx.ellipse(e.x,e.y,rr2,rr2*0.40,0,0,Math.PI*2); ctx.stroke();
+    } else if(e.flash){
+      var fr=e.r*(0.35+(1-k2)*1.4);
+      var gr=ctx.createRadialGradient(e.x,e.y,0,e.x,e.y,fr);
+      gr.addColorStop(0,e.c); gr.addColorStop(1,'rgba(255,255,255,0)');
+      ctx.fillStyle=gr; ctx.beginPath(); ctx.arc(e.x,e.y,fr,0,Math.PI*2); ctx.fill();
+    } else if(e.streak){
+      ctx.strokeStyle=e.c; ctx.lineWidth=e.w; ctx.lineCap='round';
+      ctx.beginPath(); ctx.moveTo(e.x,e.y); ctx.lineTo(e.x2,e.y2); ctx.stroke();
+    } else if(e.gh){
+      ctx.globalAlpha=k2*0.40; ctx.fillStyle=e.c;
+      ctx.beginPath(); ctx.ellipse(e.x,e.y-15,5.2,11,0,0,Math.PI*2); ctx.fill();
+      ctx.beginPath(); ctx.arc(e.x+e.face*0.8,e.y-28,4.3,0,Math.PI*2); ctx.fill();
     } else {
       ctx.fillStyle=e.c;
       ctx.beginPath(); ctx.arc(e.x,e.y,(e.r||2.6)*(0.4+k2*0.8),0,Math.PI*2); ctx.fill();
@@ -2962,8 +3118,12 @@ function hud(){
 // ---- ability icons: label, key and whether they are ready right now -----
 var AB=[null,null,null,null,null,null];
 function ab(i){ return AB[i] || (AB[i]=document.getElementById('ab'+i)); }
-function setAb(i,cap,key,ready,live,cd){
+function setAb(i,cap,key,ready,live,cd,icon){
   var e=ab(i); if(!e) return;
+  if(icon && e.dataset.icon!==icon){
+    var sv=e.querySelector('svg');
+    if(sv){ sv.innerHTML=icon; e.dataset.icon=icon; }
+  }
   e.querySelector('.cap').textContent = (cd&&cd>0.05) ? (cd.toFixed(1)+'s') : cap;
   e.querySelector('.key').textContent=key;
   var ok = !!ready && !!live && !(cd>0.05);
@@ -2981,7 +3141,7 @@ function abilities(onD){
     if(!id){ setAb(i+1,'\u2014',KEYS[i],false,false); continue; }
     var left = Math.min(net ? net[i] : abLeft(me,id), ABIL[id].cd);
     setAb(i+1, left>0 ? (left+(left===1?' PLAY':' PLAYS')) : ABIL[id].name,
-          KEYS[i], left===0, live);
+          KEYS[i], left===0, live, 0, AB_ICON[id]);
   }
 }
 
