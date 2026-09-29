@@ -411,19 +411,21 @@ function setupPlay(playId){
   var offCol=G.offense, defCol=G.offense==='H'?'A':'H';
   var youOnO = G.offense==='H';
 
-  var heroIsQB = youOnO && HERO.pos==='Quarterback';
-  var heroIsWR = youOnO && HERO.pos==='Wide Receiver';
-  var heroIsRB = youOnO && HERO.pos==='Running Back';
+  // the hero belongs to whoever has the ball, not always to the Heroes
+  var OH = sideHero(G.offense);
+  var heroIsQB = !!OH && OH.pos==='Quarterback';
+  var heroIsWR = !!OH && OH.pos==='Wide Receiver';
+  var heroIsRB = !!OH && OH.pos==='Running Back';
 
   // ---- OFFENSE: C, OL, OL, TE, QB, WR, WR, RB
-  var qb=mk(offCol,'QB',G.los-5.5*YD*d,mid, heroIsQB?HERO:SUPPORT.QB); if(heroIsQB) applyHero(qb);
+  var qb=mk(offCol,'QB',G.los-5.5*YD*d,mid, heroIsQB?OH:SUPPORT.QB); if(heroIsQB) applyHero(qb,OH);
   var c =mk(offCol,'C', G.los-1.5*YD*d,mid, SUPPORT.C);
   var o1=mk(offCol,'OL',G.los-1*YD*d,mid-4.5*YD, SUPPORT.OL1);
   var o2=mk(offCol,'OL',G.los-1*YD*d,mid+4.5*YD, SUPPORT.OL2);
   var te=mk(offCol,'TE',G.los,mid+7.5*YD, SUPPORT.TE);
-  var w1=mk(offCol,'WR',G.los,mid-14*YD, heroIsWR?HERO:SUPPORT.WR1); if(heroIsWR) applyHero(w1);
+  var w1=mk(offCol,'WR',G.los,mid-14*YD, heroIsWR?OH:SUPPORT.WR1); if(heroIsWR) applyHero(w1,OH);
   var w2=mk(offCol,'WR',G.los,mid+14*YD, SUPPORT.WR2);
-  var rb=mk(offCol,'RB',G.los-11*YD*d,mid+3*YD, heroIsRB?HERO:SUPPORT.RB); if(heroIsRB) applyHero(rb);
+  var rb=mk(offCol,'RB',G.los-11*YD*d,mid+3*YD, heroIsRB?OH:SUPPORT.RB); if(heroIsRB) applyHero(rb,OH);
 
   var off = youOnO ? G.play : G.aiPlay;
   if(off==='deep'){ w1.route='go'; w2.route='go'; te.route='slant'; rb.route='block'; }
@@ -506,6 +508,7 @@ function setupPlay(playId){
   // a run play is a handoff, whoever the back is
   if(off==='run'){ G.carrier=rb; G.ball.x=rb.x; G.ball.y=rb.y; }
   G.controlled = youOnO ? G.carrier : nearestDef();
+  if(NET.on && NET.host) G.controlled2 = pickRemoteMan(false);
   G.jukeUntil=0;
   G.phase='presnap'; G.playClock=15;
   // when the CPU has the ball it snaps on its own after a beat
@@ -520,9 +523,20 @@ function snapBall(){
   burst(G.ball.x,G.ball.y,'#f1f1ec');
   say('HIKE!',480);
 }
-function applyHero(p){
-  p.hero=true; p.spd=HERO.spd; p.pwr=HERO.pwr; p.agi=HERO.agi;
-  p.name=HERO.name; p.num=HERO.num; p.skin=HERO.skin;
+// Both sides get one. Without this the guest drove a stock Rival at spd 1.00
+// against a hero at up to 1.30 with a signature move, and simply could not
+// keep up.
+function applyHero(p, h){
+  h = h || HERO;
+  p.hero=true; p.spd=h.spd; p.pwr=h.pwr; p.agi=h.agi;
+  p.name=h.name; p.num=h.num; p.skin=h.skin;
+}
+
+// whichever hero the guest picked, defaulted so a game works before they choose
+var GUEST_HERO = null;
+function sideHero(side){
+  if(side==='H') return HERO;
+  return NET.on ? (GUEST_HERO || HEROES[1]) : null;
 }
 function nearestDef(){
   var best=null,bd=Infinity,me=G.offense==='H'?'A':'H';
@@ -1232,6 +1246,10 @@ function presnap(dt){
     p.lean += (tgt-p.lean)*Math.min(1,dt*5);
   }
   if(G.autoSnapAt!==null && (15-G.playClock) >= G.autoSnapAt){ snapBall(); return; }
+  if(NET.on && NET.host &&
+     (!G.controlled2 || G.controlled2.team!=='A' || G.players.indexOf(G.controlled2)<0)){
+    G.controlled2 = pickRemoteMan(false);
+  }
   if(tapSwitch()) switchPlayer('H');
   // the guest can shuffle his man pre-snap too
   if(NET.on && NET.host && NET.remoteIn && NET.remoteIn.sw){
@@ -1258,7 +1276,7 @@ function guestSeat(){
      G.players.indexOf(G.controlled2)<0){
     G.controlled2=pickRemoteMan(false);
   }
-  return {side:'A', man:G.controlled2, M:G.M2, hero:null, local:false};
+  return {side:'A', man:G.controlled2, M:G.M2, hero:sideHero('A'), local:false};
 }
 
 // keyboard, touch stick and the on-screen buttons, in the shape driveHuman wants
@@ -1352,8 +1370,11 @@ function driveHuman(seat, IN, dt, now){
   M.power=Math.min(100,M.power+13*dt);
 
   var jk=now<M.jukeUntil;
+  // on defence the AI runs at DEF_SPD, so a human on that side has to as well
+  // or he is permanently behind his own team-mates
+  var base = onO ? BASE_SPD : DEF_SPD;
   var mult=(sprinting?SPRINT:1)*(me.burst>0?1.7:1)*me.spd;
-  if(!jk||me.z>0){ me.vx=a.x*BASE_SPD*mult; me.vy=a.y*BASE_SPD*mult; }
+  if(!jk||me.z>0){ me.vx=a.x*base*mult; me.vy=a.y*base*mult; }
   else { me.vx*=0.90; me.vy*=0.90; }
 }
 
@@ -1827,9 +1848,15 @@ function draw(){
   // and weighted toward the ball.
   var minX=1e9,maxX=-1e9,minY=1e9,maxY=-1e9,n=0;
   var bx=G.ball?G.ball.x:FW/2, by=G.ball?G.ball.y:FH/2;
+  var passing = (G.phase==='live' && G.carrier && G.carrier.role==='QB' && !G.thrown);
   for(var q=0;q<G.players.length;q++){
     var pl=G.players[q];
-    if(Math.hypot(pl.x-bx,pl.y-by) > 30*YD) continue;   // ignore far-flung men
+    // While the passer has the ball, the men he can throw to must be on
+    // screen or he cannot pick them, which is why long passes felt impossible.
+    var reach = 30*YD;
+    if(passing && pl.team===G.offense && pl!==G.carrier &&
+       pl.role!=='C' && pl.role!=='OL' && pl.role!=='BL') reach = 58*YD;
+    if(Math.hypot(pl.x-bx,pl.y-by) > reach) continue;
     if(pl.x<minX)minX=pl.x; if(pl.x>maxX)maxX=pl.x;
     if(pl.y<minY)minY=pl.y; if(pl.y>maxY)maxY=pl.y; n++;
   }
@@ -1838,10 +1865,10 @@ function draw(){
   if(by<minY)minY=by; if(by>maxY)maxY=by;
 
   var padX=64, padTop=76, padBot=34;
-  var needW=Math.min((maxX-minX)+padX*2, 62*YD);
-  var needH=Math.min((maxY-minY)+padTop+padBot, 40*YD);
+  var needW=Math.min((maxX-minX)+padX*2, (passing?86:62)*YD);
+  var needH=Math.min((maxY-minY)+padTop+padBot, (passing?46:40)*YD);
   var want=Math.min(VW/needW, VH/needH);
-  want=Math.max(0.82, Math.min(1.5, want));          // never let them get tiny
+  want=Math.max(passing?0.62:0.82, Math.min(1.5, want));
   scale += (want-scale)*0.06;
 
   // centre mostly on the ball so the play stays where your eye already is
@@ -2441,7 +2468,7 @@ function abilities(onD){
       setAb(3,'Pound','3', p2>=58 && G.M2.hitCd<=0, live);
     } else {
       setAb(1,'Juke','1', p2>=JUKE_COST && G.M2.jukeCd<=0, live);
-      setAb(2,'Truck','2', G.M2.moveCd<=0 && p2>=TRUCK_COST, live);
+      setAb(2,HERO.moveName,'2', G.M2.moveCd<=0 && p2>=HERO.cost, live);
       setAb(3,'Lateral','3', !!G.carrier && G.M2.latCd<=0, live);
     }
     setAb(4,'Switch','E', true, live);
@@ -2553,6 +2580,7 @@ function showStart(){
 function showHeroPick(){
   var html='<h2>Pick your hero</h2><p class="sub">'+
     (PICK_THEN==='host'?'You are the Heroes. This is your signature move'
+     :PICK_THEN==='guest'?'You are the Rivals. This is your signature move'
                        :'Every one has a different signature move')+
     '</p><div class="grid3">';
   HEROES.forEach(function(h){
@@ -2573,14 +2601,25 @@ function showHeroPick(){
     '</button></div>';
   elSheet.innerHTML=html; elOv.classList.add('show');
   document.getElementById('pickBack').addEventListener('click',function(){
+    NET.choosing=false; PICK_THEN='solo';
     netTeardown(); showStart();
   });
   Array.prototype.forEach.call(elSheet.querySelectorAll('.card:not(#pickBack)'),function(b){
     b.addEventListener('click',function(){
       HERO=heroById(b.getAttribute('data-id'));
-      elNmH.textContent=HERO.name.split(' ')[1].toUpperCase();
+      // the guest's hero plays for the Rivals, so it belongs on that side of
+      // the scoreboard, not in the Heroes slot
+      var nmEl=(PICK_THEN==='guest')?document.querySelector('.team.away .nm'):elNmH;
+      if(nmEl) nmEl.textContent=HERO.name.split(' ')[1].toUpperCase();
       elMvName.textContent=HERO.moveName;
-      if(PICK_THEN==='host') hostOnline(); else start();
+      if(PICK_THEN==='host'){ hostOnline(); }
+      else if(PICK_THEN==='guest'){
+        netSend({t:'hero', id:HERO.id});
+        NET.choosing=false; PICK_THEN='solo';
+        elOv.classList.remove('show');
+        say('YOU ARE THE RIVALS \u2014 '+HERO.name.split(' ')[1].toUpperCase(),1600);
+      }
+      else start();
     });
   });
   var f=elSheet.querySelector('.card'); if(f) f.focus();
@@ -2737,7 +2776,7 @@ if(window.matchMedia&&window.matchMedia('(pointer: coarse)').matches){
 // whatever it is told, so the two machines can never disagree.
 var NET={on:false,host:false,peer:null,conn:null,
            remoteIn:null,world:null,acc:0,rate:1/20,code:'',msg:'',
-           guestPick:null,sentPick:false,remoteHike:false,
+           guestPick:null,sentPick:false,remoteHike:false,choosing:false,
            remoteThrow:null,remoteTarget:-1};
 
 function netReady(){ return typeof window.Peer!=='undefined'; }
@@ -2865,6 +2904,7 @@ function hostOnline(tries){
         if(G && d.pn===G.playNo){ NET.guestPick=d.id; tryStartPlay(); }
         return;
       }
+      if(d.t==='hero'){ GUEST_HERO=heroById(d.id)||GUEST_HERO; return; }
       if(d.t==='hike'){ NET.remoteHike=true; return; }
       if(d.t==='thr'){ NET.remoteThrow={x:d.x,y:d.y}; return; }
       if(d.t==='tgt'){ NET.remoteTarget=d.i; return; }
@@ -2910,9 +2950,11 @@ function joinOnline(code){
     NET.conn=c;
     c.on('open',function(){
       NET.on=true;
-      elOv.classList.remove('show');
       if(!G) G=freshGame();
       say('YOU ARE THE RIVALS',2000);
+      NET.choosing=true;
+      PICK_THEN='guest';
+      showHeroPick();
     });
     c.on('data',function(d){ if(d&&d.t==='w') NET.world=d; });
     c.on('close',netDropped);
@@ -3013,6 +3055,7 @@ function publishWorld(dt){
 // The guest gets its own play sheet, driven off the phase the host reports.
 function guestSheet(){
   if(!G) return;
+  if(NET.choosing) return;          // the guest is picking a hero; leave it alone
   if(G.phase==='playcall'){
     if(!NET.sentPick && !elOv.classList.contains('show')) showPlaycall();
   } else {
@@ -3061,7 +3104,10 @@ function frame(ts){
       if(consumeWorld() && G.players.length) draw();
       if(G) hud();
       guestSheet();
-    }catch(err){ ctx.setTransform(dpr,0,0,dpr,0,0); }
+    }catch(err){
+      if(!frame._gerr){ frame._gerr=true; console.error('guest frame error:',err); }
+      ctx.setTransform(dpr,0,0,dpr,0,0);
+    }
     requestAnimationFrame(frame);
     return;
   }
