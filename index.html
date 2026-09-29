@@ -323,7 +323,7 @@ function freshGame(){
     diveUntil:0, hitCd:0, loose:null, windup:null, playClock:15, assistCd:0, switchFlash:0, newSeries:false, clockRunning:false, jukeCd:0, latCd:0, lastThrow:'', kick:null,
     celebrate:0, celAt:null, scoringTeam:'H',
     playNo:0, hostPick:null, pickAt:0, handoffAt:null,
-    cushion:0, covType:'man', zoneDeep:0, diveCd:0,
+    cushion:0, covType:'man', zoneDeep:0, diveCd:0, drag:null,
     abCd:{}, rocketArmed:false, perfectArmed:false, netAb:[0,0,0],
     stats:freshStats(), cur:null, showingStats:false,
     M2:{power:100, stam:100, moveCd:0, hitCd:0, jukeCd:0, latCd:0,
@@ -393,7 +393,7 @@ stage.addEventListener('pointermove',function(e){
     var tn=performance.now(), gap=tn-SWIPE.t;
     if(gap>4 && gap<110){
       var sx=(w0.x-SWIPE.x)/(gap/1000), sy=(w0.y-SWIPE.y)/(gap/1000);
-      if(Math.hypot(sx,sy) > 1500){
+      if(Math.hypot(sx,sy) > 620){
         if(NET.on && !NET.host) netSend({t:'dive', x:+sx.toFixed(0), y:+sy.toFixed(0)});
         else swipeTackle(sx,sy,'H');
       }
@@ -404,9 +404,28 @@ stage.addEventListener('pointermove',function(e){
   G && (G.mouse.x=w.x, G.mouse.y=w.y, G.mouse.on=true);
 });
 stage.addEventListener('pointerleave',function(){ G && (G.mouse.on=false); });
+
+// release the drag: dive along it
+function endDrag(e){
+  if(!G||!G.drag) return;
+  var d0=G.drag; G.drag=null;
+  if(G.phase!=='live'||iHaveBall()) return;
+  var w=screenToWorld(e.clientX,e.clientY);
+  var dx=w.x-d0.x, dy=w.y-d0.y;
+  if(Math.hypot(dx,dy) < 10) return;          // that was a click, not a drag
+  if(NET.on && !NET.host) netSend({t:'dive', x:Math.round(dx*9), y:Math.round(dy*9)});
+  else swipeTackle(dx,dy,'H');
+}
+stage.addEventListener('pointerup',endDrag);
+stage.addEventListener('pointercancel',function(){ if(G) G.drag=null; });
 stage.addEventListener('pointerdown',function(e){
   e.preventDefault();
   if(!G) return;
+  if(G.phase==='live' && !iHaveBall()){
+    var wd=screenToWorld(e.clientX,e.clientY);
+    G.drag={x:wd.x,y:wd.y,t:performance.now()};
+    return;                                   // on defence the button tackles
+  }
   if(NET.on && !NET.host){
     // the guest aims in its own camera, then posts field coordinates
     if(G.phase!=='live') return;
@@ -480,14 +499,14 @@ function setupPlay(playId){
   var lbRush = (dplay==='blitz');
   var deCount = (dplay==='zone'||dplay==='prevent'||dplay==='spy') ? 2 : 3;
   var spec=[
-    {r:'RUSH', x:5, y:-6,   pos:'DE'},
-    {r:'RUSH', x:5, y:0,    pos:'DE'},
-    {r: deCount>2?'RUSH':'COV', x:5, y:6, pos:'DE'},
-    {r: lbRush?'RUSH':'COV', x:8, y:-5, pos:'LB'},
-    {r: lbRush?'RUSH':'COV', x:8, y:5,  pos:'LB'},
-    {r:'COV', x:9,  y:-13.5,  pos:'CB'},
-    {r:'COV', x:9,  y:13.5,   pos:'CB'},
-    {r:'COV', x:17, y:0,      pos:'S'}
+    {r:'RUSH', x:0.9, y:-6,   pos:'DE'},
+    {r:'RUSH', x:0.9, y:0,    pos:'DE'},
+    {r: deCount>2?'RUSH':'COV', x:0.9, y:6, pos:'DE'},
+    {r: lbRush?'RUSH':'COV', x:4.5, y:-5, pos:'LB'},
+    {r: lbRush?'RUSH':'COV', x:4.5, y:5,  pos:'LB'},
+    {r:'COV', x:6.5,  y:-13.5,  pos:'CB'},
+    {r:'COV', x:6.5,  y:13.5,   pos:'CB'},
+    {r:'COV', x:13,   y:0,      pos:'S'}
   ];
   var secondary=[], spyMan=null;
   for(var i=0;i<spec.length;i++){
@@ -2643,12 +2662,33 @@ function draw(){
     }
   }
 
+  // the tackle you are winding up, drawn while you hold the button
+  if(G.drag && G.phase==='live' && G.mouse && G.mouse.on){
+    var me0=G.controlled;
+    if(me0){
+      var ddx=G.mouse.x-G.drag.x, ddy=G.mouse.y-G.drag.y;
+      var dm=Math.hypot(ddx,ddy);
+      if(dm>8){
+        var un=Math.min(1,dm/70);
+        ctx.strokeStyle='rgba(255,255,255,'+(0.35+un*0.5).toFixed(2)+')';
+        ctx.lineWidth=1.4+un*1.8; ctx.setLineDash([5,4]);
+        ctx.beginPath(); ctx.moveTo(me0.x,me0.y-12);
+        ctx.lineTo(me0.x+ddx/dm*(18+un*30), me0.y-12+ddy/dm*(18+un*30));
+        ctx.stroke(); ctx.setLineDash([]);
+      }
+    }
+  }
+
   // depth sort so players nearer the bottom overlap the ones behind them
   var order=G.players.slice().sort(function(a,b){ return a.y-b.y; });
   for(var i=0;i<order.length;i++) drawGuy(order[i]);
 
   for(var f=0;f<G.fx.length;f++){
     var e=G.fx[f], k2=Math.max(0,e.life/e.max);
+    // one bad number in a particle used to take the whole frame down with it
+    if(!isFinite(e.x)||!isFinite(e.y)||!isFinite(k2)) continue;
+    if(e.r!==undefined && !isFinite(e.r)) continue;
+    if(e.x2!==undefined && (!isFinite(e.x2)||!isFinite(e.y2))) continue;
     ctx.globalAlpha=k2;
     if(e.ringed){
       ctx.strokeStyle=e.c; ctx.lineWidth=2.4*k2;
@@ -2802,7 +2842,7 @@ function drawSprite(p){
   var HELMET = (S.helmetAlt && (p.num%2===1)) ? S.helmetAlt : S.helmet;
   // Torso carries the figure; the helmet must read smaller than the shoulders.
   var HIP=-16, SHO=-28.5;
-  var TH=8.5, WTH=5.4, SHN=8, WSHN=3.2, CL=4.5, HCL=2.2;
+  var TH=9.6, WTH=5.6, SHN=7.6, WSHN=3.2, CL=4.5, HCL=2.2;
   var UA=7, HUA=3.2, FA=6.5, HFA=2.2;
   var sp=Math.hypot(p.vx,p.vy), moving=sp>8 && p.down<=0 && p.stun<=0, ph=p.run;
   var gait=Math.min(1.25, 0.55+sp/150);       // stride opens up with speed
@@ -2815,7 +2855,7 @@ function drawSprite(p){
     return {t:thigh, s:thigh+0.22+tuck*1.5};
   }
   var LF,LB,bob,AF,AB;
-  if(p.down>0){
+  if(p.down>0 || p.stun>0){
     // sprawled: legs out along the body, arms thrown wide
     LF={t: 0.34, s: 0.52};
     LB={t:-0.30, s:-0.12};
@@ -2849,7 +2889,7 @@ function drawSprite(p){
   ctx.globalAlpha=1;
 
   // ---- torso: the widest thing on the figure
-  ctx.drawImage(TORSO, TORSO===S.torso?-5.4:-6.3, SHO-3.5, TORSO===S.torso?10.8:12.6, 18);
+  ctx.drawImage(TORSO, TORSO===S.torso?-5.4:-6.3, SHO-3.5, TORSO===S.torso?10.8:12.6, 15);
 
   // the art has a 12 painted on it, so patch it out and stamp the real number
   ctx.fillStyle = p.team==='H' ? '#223058' : '#a8232f';
@@ -2908,7 +2948,7 @@ function drawGuy(p){
 
   // ---- ground marks (stay flat on the turf)
   var sh=1-Math.min(0.6,p.z*0.6);
-  var lay=Math.min(1,(p.down||0)*1.6);
+  var lay=Math.min(1,Math.max(p.down||0,(p.stun||0)*0.9)*1.6);
   ctx.fillStyle='rgba(0,0,0,'+(0.38*sh)+')';
   ctx.beginPath();
   ctx.ellipse(p.x, p.y+lay*5, (8.5+lay*8)*sh, (3.4+lay*1.2)*sh,
@@ -2950,8 +2990,8 @@ function drawGuy(p){
   // three-point stance before the snap
   if(p.stance>0){ ctx.translate(0,3.4); ctx.scale(1,0.79); ctx.rotate(0.24); }
   if(p.phase>0) ctx.globalAlpha=1-p.phase*0.62;
-  if(p.down>0){                      // flat on the turf
-    var dn=Math.min(1,p.down*1.6);
+  if(p.down>0 || p.stun>0){          // flat on the turf
+    var dn=Math.min(1,Math.max(p.down,(p.stun||0)*0.9)*1.6);
     ctx.translate(0, dn*7);                                  // settle, screen space
     ctx.translate(0,-14); ctx.rotate(dn*1.42*p.face); ctx.translate(0,14);
   }
