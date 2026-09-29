@@ -3039,7 +3039,8 @@ function publishWorld(dt){
              +q.z.toFixed(2),+q.arm.toFixed(2),+q.spin.toFixed(2),
              +q.lean.toFixed(2),+q.throwArm.toFixed(2),
              Math.round(q.vx),Math.round(q.vy),
-             q===G.carrier?1:0, q===G.controlled?1:0, q===G.controlled2?1:0]);
+             q===G.carrier?1:0, q===G.controlled?1:0, q===G.controlled2?1:0,
+             +(q.stance||0).toFixed(2), q.skin, q.hero?1:0, +(q.cel||0).toFixed(2)]);
   }
   try{ NET.conn.send({
     t:'w', pn:G.playNo, p:ps,
@@ -3074,8 +3075,9 @@ function consumeWorld(){
     var q={x:a[0],y:a[1],face:a[2],run:a[3],team:a[4]?'H':'A',num:a[5],role:a[6],
            name:a[7],hp:a[8],stun:a[9],down:a[10],z:a[11],arm:a[12],spin:a[13],
            lean:a[14],throwArm:a[15],vx:a[16],vy:a[17],
-           cel:0,phase:0,burst:0,wrapped:0,iFrames:0,hero:false,skin:'#c98f63',
-           spd:1,pwr:1,agi:1,stance:0,engaged:0,shedAt:2,lane:0,cover:null,
+           phase:0,burst:0,wrapped:0,iFrames:0,
+           stance:a[21]||0, skin:a[22]||'#c98f63', hero:!!a[23], cel:a[24]||0,
+           spd:1,pwr:1,agi:1,engaged:0,shedAt:2,lane:0,cover:null,
            pos:'',assign:null,blockIdx:0,aiCd:0,route:null};
     G.players.push(q);
     if(a[18]) G.carrier=q;
