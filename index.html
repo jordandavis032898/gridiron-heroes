@@ -1604,10 +1604,14 @@ function drawKick(){
   ctx.save();
   ctx.translate(G.ball.x, G.ball.y - (k.h||0));
   ctx.rotate(k.t*13);
-  ctx.fillStyle='#7a4a28';
-  ctx.beginPath(); ctx.ellipse(0,0,6.2,3.7,0,0,Math.PI*2); ctx.fill();
-  ctx.strokeStyle='#f1f1ec'; ctx.lineWidth=0.9;
-  ctx.beginPath(); ctx.moveTo(-2.4,0); ctx.lineTo(2.4,0); ctx.stroke();
+  if(BALL_IMG.ready){
+    ctx.drawImage(BALL_IMG,-7.0,-4.3,14.0,8.6);
+  } else {
+    ctx.fillStyle='#7a4a28';
+    ctx.beginPath(); ctx.ellipse(0,0,6.2,3.7,0,0,Math.PI*2); ctx.fill();
+    ctx.strokeStyle='#f1f1ec'; ctx.lineWidth=0.9;
+    ctx.beginPath(); ctx.moveTo(-2.4,0); ctx.lineTo(2.4,0); ctx.stroke();
+  }
   ctx.restore();
 }
 
@@ -2432,6 +2436,13 @@ var PART_FILES = {
 };
 var SPR = { ready:false, H:{}, A:{}, pending:0 };
 
+// The ball. Lace-free on purpose: a spiral is rotation about the long axis,
+// so the laces sweep across the face rather than orbiting with the sprite,
+// and they are drawn on top per frame.
+var BALL_IMG = new Image(); BALL_IMG.ready=false;
+BALL_IMG.onload = function(){ BALL_IMG.ready=true; };
+BALL_IMG.src = 'parts/football-body.png';
+
 // recolour the navy kit to crimson for the away side, leaving skin and white alone
 function tintAway(img){
   var c=document.createElement('canvas'); c.width=img.width; c.height=img.height;
@@ -2825,14 +2836,17 @@ function drawBall(){
   ctx.rotate(wob);
 
   // body
-  ctx.fillStyle='#7a4a28';
-  ctx.beginPath(); ctx.ellipse(0,0,7.1,4.2,0,0,Math.PI*2); ctx.fill();
-  ctx.fillStyle='rgba(0,0,0,.22)';
-  ctx.beginPath(); ctx.ellipse(0,1.3,7.1,2.9,0,0,Math.PI*2); ctx.fill();
-  // white end caps
-  ctx.strokeStyle='#f1f1ec'; ctx.lineWidth=0.9;
-  ctx.beginPath(); ctx.arc(4.5,0,2.2,-1.05,1.05); ctx.stroke();
-  ctx.beginPath(); ctx.arc(-4.5,0,2.2,Math.PI-1.05,Math.PI+1.05); ctx.stroke();
+  if(BALL_IMG.ready){
+    ctx.drawImage(BALL_IMG,-7.9,-4.9,15.8,9.8);
+  } else {
+    ctx.fillStyle='#7a4a28';
+    ctx.beginPath(); ctx.ellipse(0,0,7.1,4.2,0,0,Math.PI*2); ctx.fill();
+    ctx.fillStyle='rgba(0,0,0,.22)';
+    ctx.beginPath(); ctx.ellipse(0,1.3,7.1,2.9,0,0,Math.PI*2); ctx.fill();
+    ctx.strokeStyle='#f1f1ec'; ctx.lineWidth=0.9;
+    ctx.beginPath(); ctx.arc(4.5,0,2.2,-1.05,1.05); ctx.stroke();
+    ctx.beginPath(); ctx.arc(-4.5,0,2.2,Math.PI-1.05,Math.PI+1.05); ctx.stroke();
+  }
 
   if(spiral){
     // Two seams half a turn apart. One of them is always on the near side, so
