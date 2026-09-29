@@ -118,6 +118,18 @@ differ: rushers, man versus zone, cushion, zone depth, and a spy on contain.
 six plays by power. The computer plays out of the same kits through the same
 `fireAbility`.
 
+**Tackling.** Contact is a hit, not a touch. A defender who reaches the
+carrier takes a chunk of his 100 HP (more on a dive or head on), then wraps
+up and hangs on, dragged along with him; the wrap drains the rest. Hold time
+scales with tackler power over carrier power. When it runs out, or the
+carrier jukes or spins, the tackler falls off, goes down, and has to get up
+before he can try again (`breakWrap`, `tackleCd`). Nothing drains from merely
+being close.
+
+**Knockdowns.** `knockPose` turns `down`/`stun` time into a posed timeline on
+the rig: fall back, lie flat, sit up, one knee, stand. Game logic freezes a
+man until both reach zero, so the get-up finishes exactly as he can move.
+
 **Stats.** Every play is logged in `G.stats`. Box score and play by play
 behind the STATS card.
 

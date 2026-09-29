@@ -2185,7 +2185,10 @@ function step(dt){
       var hasBall = G.carrier && G.carrier.role==='QB' && !G.loose && !G.thrown;
       var past    = hasBall ? (G.carrier.x-G.los)*d : 9999;
       var inPocket = hasBall && past < 4;
-      var stillAThreat = hasBall && past < 9*YD;
+      // He is a runner the moment he is a yard over the line. This used to be
+      // nine yards, so a scrambling quarterback ran straight past corners who
+      // were still carrying receivers down the field.
+      var stillAThreat = hasBall && past < 1*YD;
       var deepBack = (p.pos==='CB'||p.pos==='S');
       if(p.role==='COV' && (inPocket || (stillAThreat && deepBack))){
         if(p.spy){
@@ -2460,40 +2463,86 @@ function step(dt){
              ||((G.controlled2===G.carrier)&&performance.now()<G.M2.jukeUntil))
                || (G.carrier.iFrames>0) || (G.carrier.z>0.15);
     var defTeam=G.offense==='H'?'A':'H';
+    var car=G.carrier, res=Math.max(0.7,car.pwr||1), tnow=performance.now();
+    // a new ball carrier (a catch, a pick) starts with nobody on him
+    if(G.wrapCar!==car){
+      for(var wc=0;wc<G.players.length;wc++) G.players[wc].wrapT=0;
+      G.wrapCar=car;
+    }
     var grabbers=0, lastT=null;
-    if(!jking){
-      for(var m2=0;m2<G.players.length;m2++){
-        var t2=G.players[m2];
-        if(t2.team!==defTeam||t2.stun>0) continue;
-        var reach=((t2===G.controlled&&performance.now()<G.diveUntil)||
-                   (t2===G.controlled2&&performance.now()<G.M2.diveUntil))?TACKLE_R+10:TACKLE_R;
-        if(Math.hypot(t2.x-G.carrier.x,t2.y-G.carrier.y)>reach) continue;
+    for(var m2=0;m2<G.players.length;m2++){
+      var t2=G.players[m2];
+      if(t2.team!==defTeam) continue;
+      if(t2.tackleCd>0) t2.tackleCd-=dt;
 
-        // trucking still blows one man clean off you
-        var human=(G.controlled===G.carrier);
-        if(human&&wantSprint()&&G.power>=TRUCK_COST/G.carrier.pwr){
-          G.power-=TRUCK_COST/G.carrier.pwr;
-          t2.stun=1.1; t2.vx=(t2.x-G.carrier.x)*7; t2.vy=(t2.y-G.carrier.y)*7;
-          burst(t2.x,t2.y,'#ffd23f'); G.shake=REDUCED?0:13; say('TRUCKED!',520);
+      if(t2.wrapT>0){
+        // already hanging on. A juke or spin shakes him, and so does a back
+        // who keeps his legs churning long enough.
+        if(jking || t2.stun>0){ breakWrap(t2,car); continue; }
+        t2.wrapT-=dt;
+        if(t2.wrapT<=0){
+          breakWrap(t2,car);
+          if(G.controlled===car||G.controlled2===car) say('BROKE THE TACKLE!',700);
           continue;
         }
         grabbers++; lastT=t2;
+        continue;
       }
+      if(jking || t2.stun>0 || t2.down>0 || t2.tackleCd>0) continue;
+
+      var diving=((t2===G.controlled&&tnow<G.diveUntil)||
+                  (t2===G.controlled2&&tnow<G.M2.diveUntil));
+      var tdx=t2.x-car.x, tdy=t2.y-car.y, td=Math.hypot(tdx,tdy)||1;
+      if(td>(diving?TACKLE_R+10:TACKLE_R)) continue;
+
+      // trucking still blows one man clean off you
+      var human=(G.controlled===car);
+      if(human&&wantSprint()&&G.power>=TRUCK_COST/car.pwr){
+        G.power-=TRUCK_COST/car.pwr;
+        t2.stun=1.1; t2.vx=(t2.x-car.x)*7; t2.vy=(t2.y-car.y)*7;
+        burst(t2.x,t2.y,'#ffd23f'); G.shake=REDUCED?0:13; say('TRUCKED!',520);
+        continue;
+      }
+
+      // The tackle itself. Touching a man used to drain him for as long as
+      // you stayed close, so defenders jogged alongside the carrier while
+      // his bar ran down. Now contact is a hit: it takes a chunk, then the
+      // tackler wraps up and hangs on, and the drain comes from the wrap.
+      var hit=30*(t2.pwr||1)*(diving?1.7:1);
+      var cs2=Math.hypot(car.vx,car.vy);
+      if(cs2>1 && (tdx*car.vx+tdy*car.vy)/(cs2*td) > 0.5) hit*=1.3;  // met him head on
+      car.hp-=hit/res;
+      t2.wrapT=(0.85+Math.random()*0.7)*((t2.pwr||1)/res);
+      t2.wrapA=Math.atan2(tdy,tdx);
+      burst(car.x,car.y-8,'#ffffff');
+      G.shake=REDUCED?0:Math.max(G.shake,6);
+      grabbers++; lastT=t2;
     }
     if(grabbers>0){
-      var res=Math.max(0.7,G.carrier.pwr||1);
-      G.carrier.hp -= ((34+grabbers*26)/res)*dt;
-      var drag=Math.max(0.22, 1-grabbers*0.27);       // dragged down as they hang on
-      G.carrier.vx*=drag; G.carrier.vy*=drag;
-      G.carrier.wrapped=0.25; G.freeT=0;
-      if(Math.random()<dt*7) burst(G.carrier.x,G.carrier.y-8,'#e8eef2');
-      if(G.carrier.hp<=0){
-        burst(G.carrier.x,G.carrier.y,'#ffffff');
+      car.hp -= (58*grabbers/res)*dt;
+      var drag=Math.max(0.18, 1-grabbers*0.42);       // dragged down as they hang on
+      car.vx*=drag; car.vy*=drag;
+      car.wrapped=0.25; G.freeT=0;
+      // the men on him are dragged along with him, arms round him
+      for(var w2=0;w2<G.players.length;w2++){
+        var wq=G.players[w2];
+        if(wq.team!==defTeam || !(wq.wrapT>0)) continue;
+        wq.x=car.x+Math.cos(wq.wrapA)*11; wq.y=car.y+Math.sin(wq.wrapA)*7;
+        wq.vx=car.vx; wq.vy=car.vy; wq.arm=0.5;
+        wq.face=(car.x>=wq.x)?1:-1;
+      }
+      if(Math.random()<dt*7) burst(car.x,car.y-8,'#e8eef2');
+      if(car.hp<=0){
+        burst(car.x,car.y,'#ffffff');
         G.shake=REDUCED?0:10;
-        G.carrier.down=1.5;
+        car.down=1.5;
+        for(var w3=0;w3<G.players.length;w3++){
+          var wz=G.players[w3];
+          if(wz.wrapT>0){ wz.wrapT=0; wz.down=0.8; }
+        }
         if(lastT) lastT.down=0.8;
-        credit(lastT, G.carrier.role==='QB' ? 'SACK' : 'TACKLE');
-        endPlay(G.carrier.x,'TACKLED'); return;
+        credit(lastT, car.role==='QB' ? 'SACK' : 'TACKLE');
+        endPlay(car.x,'TACKLED'); return;
       }
     } else {
       G.freeT=(G.freeT||0)+dt;
@@ -3067,6 +3116,14 @@ function knockPose(p){
   }
   pose.flat=Math.min(1,Math.abs(pose.rot)/1.45);
   return pose;
+}
+
+// A tackler who loses his grip ends up on the grass.
+function breakWrap(t,car){
+  t.wrapT=0; t.tackleCd=1.1; t.arm=0;
+  t.down=Math.max(t.down||0,0.85);
+  var bx=t.x-car.x, by=t.y-car.y, bm=Math.hypot(bx,by)||1;
+  t.vx=bx/bm*90; t.vy=by/bm*90;
 }
 
 function drawGuy(p){
