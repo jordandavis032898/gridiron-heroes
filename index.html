@@ -2630,6 +2630,7 @@ function draw(){
     var reach = 30*YD;
     if(passing && pl.team===G.offense && pl!==G.carrier &&
        pl.role!=='C' && pl.role!=='OL' && pl.role!=='BL') reach = 40*YD;
+    if(!isFinite(pl.x)||!isFinite(pl.y)) continue;
     if(Math.hypot(pl.x-bx,pl.y-by) > reach) continue;
     if(pl.x<minX)minX=pl.x; if(pl.x>maxX)maxX=pl.x;
     if(pl.y<minY)minY=pl.y; if(pl.y>maxY)maxY=pl.y; n++;
@@ -2642,17 +2643,27 @@ function draw(){
   var needW=Math.min((maxX-minX)+padX*2, (passing?86:62)*YD);
   var needH=Math.min((maxY-minY)+padTop+padBot, (passing?46:40)*YD);
   var want=Math.min(VW/needW, VH/needH);
+  if(!isFinite(want)) want=1;
   want=Math.max(passing?0.76:0.82, Math.min(1.5, want));
   scale += (want-scale)*0.06;
 
   // centre mostly on the ball so the play stays where your eye already is
   var cx=(minX+maxX)/2, cy=(minY+maxY)/2+(padTop-padBot)/2;
   var tx=bx*0.62+cx*0.38, ty=by*0.62+cy*0.38;
+  if(!isFinite(tx)) tx=FW/2;
+  if(!isFinite(ty)) ty=FH/2;
   cam.x += (tx-cam.x)*0.11; cam.y += (ty-cam.y)*0.11;
 
+  // the viewport itself can come back wrong after a resize
+  if(!isFinite(VW)||!isFinite(VH)||VW<40||VH<40){ resize(); }
+  if(!isFinite(scale)||scale<=0.05) scale=VH/(VIEW_YDS*YD);
+  scale=Math.max(0.45,Math.min(2.4,scale));
+  if(!isFinite(cam.x)) cam.x=FW/2;
+  if(!isFinite(cam.y)) cam.y=FH/2;
+
   var halfW=VW/scale/2, halfH=VH/scale/2;
-  if(FW>halfW*2) cam.x=Math.max(halfW,Math.min(FW-halfW,cam.x)); else cam.x=FW/2;
-  if(FH>halfH*2) cam.y=Math.max(halfH,Math.min(FH-halfH,cam.y)); else cam.y=FH/2;
+  cam.x = (FW>halfW*2) ? Math.max(halfW,Math.min(FW-halfW,cam.x)) : FW/2;
+  cam.y = (FH>halfH*2) ? Math.max(halfH,Math.min(FH-halfH,cam.y)) : FH/2;
 
   var sx=0,sy=0;
   if(G.shake>0.3){ sx=(Math.random()-0.5)*G.shake; sy=(Math.random()-0.5)*G.shake; G.shake*=0.86; }
