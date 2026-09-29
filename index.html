@@ -323,11 +323,11 @@ function freshGame(){
     diveUntil:0, hitCd:0, loose:null, windup:null, playClock:15, assistCd:0, switchFlash:0, newSeries:false, clockRunning:false, jukeCd:0, latCd:0, lastThrow:'', kick:null,
     celebrate:0, celAt:null, scoringTeam:'H',
     playNo:0, hostPick:null, pickAt:0, handoffAt:null,
-    cushion:0, covType:'man', zoneDeep:0,
+    cushion:0, covType:'man', zoneDeep:0, diveCd:0,
     abCd:{}, rocketArmed:false, perfectArmed:false, netAb:[0,0,0],
     stats:freshStats(), cur:null, showingStats:false,
     M2:{power:100, stam:100, moveCd:0, hitCd:0, jukeCd:0, latCd:0,
-        assistCd:0, jukeUntil:0, diveUntil:0},
+        assistCd:0, jukeUntil:0, diveUntil:0, diveCd:0},
     fx:[], over:false, mouse:{x:0,y:0,on:false} };
 }
 
@@ -386,6 +386,20 @@ function screenToWorld(cx,cy){
   return { x: cam.x + (cx-r.left-VW/2)/scale, y: cam.y + (cy-r.top-VH/2)/scale };
 }
 stage.addEventListener('pointermove',function(e){
+  // measure the flick before anything else moves the cursor record
+  if(G && G.phase==='live'){
+    var r0=cv.getBoundingClientRect();
+    var w0=screenToWorld(e.clientX,e.clientY);
+    var tn=performance.now(), gap=tn-SWIPE.t;
+    if(gap>4 && gap<110){
+      var sx=(w0.x-SWIPE.x)/(gap/1000), sy=(w0.y-SWIPE.y)/(gap/1000);
+      if(Math.hypot(sx,sy) > 1500){
+        if(NET.on && !NET.host) netSend({t:'dive', x:+sx.toFixed(0), y:+sy.toFixed(0)});
+        else swipeTackle(sx,sy,'H');
+      }
+    }
+    SWIPE.x=w0.x; SWIPE.y=w0.y; SWIPE.t=tn;
+  }
   var w=screenToWorld(e.clientX,e.clientY);
   G && (G.mouse.x=w.x, G.mouse.y=w.y, G.mouse.on=true);
 });
@@ -1198,6 +1212,29 @@ function speedLines(p,c){
   }
 }
 
+// ---- swipe to tackle -----------------------------------------------------
+// On defence, a quick flick of the cursor sends your man into a diving
+// tackle along the swipe. Nothing to click; the gesture is the input.
+var SWIPE={x:0,y:0,t:0};
+function swipeTackle(dx,dy,side){
+  if(!G||G.phase!=='live') return false;
+  var mine=((side||'H')==='H')?G.controlled:G.controlled2;
+  if(!mine||mine.stun>0) return false;
+  if(G.offense===((side||'H'))) return false;          // defence only
+  var M=((side||'H')==='H')?G:G.M2;
+  if(M.diveCd>0) return false;
+  M.diveCd=0.75;
+  var m=Math.hypot(dx,dy)||1; dx/=m; dy/=m;
+  mine.vx=dx*BASE_SPD*3.1; mine.vy=dy*BASE_SPD*3.1;
+  mine.z=0.4;
+  if(side==='H') G.diveUntil=performance.now()+430;
+  else G.M2.diveUntil=performance.now()+430;
+  streak(mine.x,mine.y-16, mine.x+dx*38, mine.y-16+dy*38,'rgba(255,255,255,.75)',2.2,0.20);
+  dust(mine.x,mine.y,7,0.9);
+  if(side==='H'||!NET.on) say('DIVE!',420);
+  return true;
+}
+
 // ---- handoff: give it to the back, no risk, no air under it --------------
 var HANDOFF_R = 30;
 function handoffTarget(){
@@ -1593,6 +1630,7 @@ function deadTick(dt){
     q.lean += ((sp>6?Math.min(0.3,sp*0.0016):0)-q.lean)*Math.min(1,dt*9);
     if(q.stun>0)   q.stun-=dt;
     if(q.down>0)   q.down-=dt;
+    if(q.stun>0) q.down=Math.max(q.down, Math.min(q.stun,0.95));
     if(q.down>0||q.stun>0){ var dmp=Math.pow(0.002,dt); q.vx*=dmp; q.vy*=dmp; }
     if(q.burst>0 && sp>60){
       if(Math.random()<dt*26) ghost(q);
@@ -1836,6 +1874,7 @@ function driveHuman(seat, IN, dt, now){
   if(M.hitCd>0)  M.hitCd-=dt;
   if(M.jukeCd>0) M.jukeCd-=dt;
   if(M.latCd>0)  M.latCd-=dt;
+  if(M.diveCd>0) M.diveCd-=dt;
   if(M.assistCd>0) M.assistCd-=dt;
   if(!me) return;
 
@@ -2525,7 +2564,7 @@ function draw(){
   // pass targeting reticle
   if((G.phase==='live'||G.phase==='presnap')&&G.mouse.on&&G.carrier&&G.carrier.role==='QB'&&iHaveBall()&&!G.thrown&&!pastTheLine(G.carrier)){
     var tgt=pickTarget(G.mouse.x,G.mouse.y);
-    if(tgt){
+    if(tgt && Math.hypot(tgt.x-G.carrier.x,tgt.y-G.carrier.y) < 46*YD){
       ctx.strokeStyle='rgba(255,210,63,.85)'; ctx.lineWidth=2.1; ctx.setLineDash([6,5]);
       ctx.beginPath(); ctx.moveTo(G.carrier.x,G.carrier.y); ctx.lineTo(tgt.x,tgt.y); ctx.stroke();
       ctx.setLineDash([]);
@@ -2777,8 +2816,12 @@ function drawGuy(p){
 
   // ---- ground marks (stay flat on the turf)
   var sh=1-Math.min(0.6,p.z*0.6);
+  var lay=Math.min(1,(p.down||0)*1.6);
   ctx.fillStyle='rgba(0,0,0,'+(0.38*sh)+')';
-  ctx.beginPath(); ctx.ellipse(p.x,p.y,8.5*sh,3.4*sh,0,0,Math.PI*2); ctx.fill();
+  ctx.beginPath();
+  ctx.ellipse(p.x, p.y+lay*5, (8.5+lay*8)*sh, (3.4+lay*1.2)*sh,
+              0, 0, Math.PI*2);
+  ctx.fill();
   if(ctrl){
     ctx.strokeStyle='rgba(238,243,232,.9)'; ctx.lineWidth=1.5;
     ctx.beginPath(); ctx.ellipse(p.x,p.y,13,5.2,0,0,Math.PI*2); ctx.stroke();
@@ -2817,10 +2860,10 @@ function drawGuy(p){
   if(p.phase>0) ctx.globalAlpha=1-p.phase*0.62;
   if(p.down>0){                      // flat on the turf
     var dn=Math.min(1,p.down*1.6);
+    ctx.translate(0, dn*7);                                  // settle, screen space
     ctx.translate(0,-14); ctx.rotate(dn*1.42*p.face); ctx.translate(0,14);
-    ctx.translate(0, dn*9);
   }
-  if(p.stun>0){ ctx.globalAlpha=0.5; ctx.rotate(0.5); }
+  if(p.stun>0) ctx.globalAlpha=0.62;
 
   if(SPR.ready){ drawSprite(p); ctx.restore(); heroTag(p,lift); return; }
 
@@ -3746,6 +3789,7 @@ function hostOnline(tries){
         return;
       }
       if(d.t==='hero'){ GUEST_HERO=heroById(d.id)||GUEST_HERO; return; }
+      if(d.t==='dive'){ swipeTackle(d.x,d.y,'A'); return; }
       if(d.t==='hike'){ NET.remoteHike=true; return; }
       if(d.t==='thr'){ NET.remoteThrow={x:d.x,y:d.y}; return; }
       if(d.t==='tgt'){ NET.remoteTarget=d.i; return; }
