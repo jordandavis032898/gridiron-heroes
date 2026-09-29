@@ -227,6 +227,11 @@ var KITS={
      pants:'#e8e8e2', sock:'#14161a', num:'#f1f1ec', stripe:'#8c1a24', glove:'#191b1f'}
 };
 var BASE_SPD=118, SPRINT=1.34, DEF_SPD=123;
+// Everything ran at real time and plays were over before you could read them.
+// One dial slows the whole simulation together: movement, animation, the
+// clock, cooldown timers and the routes all scale off the same number, so
+// nothing drifts out of step with anything else.
+var GAME_SPEED=0.70;
 var TACKLE_R=23, CATCH_R=17, BLOCK_R=21;
 var JUKE_MS=330, JUKE_COST=28, TRUCK_COST=50, GAME_SECONDS=180;
 var REDUCED = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -314,7 +319,7 @@ function freshGame(){
   return { scoreH:0, scoreA:0, clock:GAME_SECONDS, offense:'H',
     los:EZ+25*YD, down:1, toGo:10, phase:'intro', play:null, aiPlay:'spy',
     players:[], ball:null, carrier:null, controlled:null, controlled2:null, thrown:null,
-    shake:0, snapT:0, power:100, stam:100, moveCd:0, jukeUntil:0,
+    shake:0, snapT:0, gt:0, power:100, stam:100, moveCd:0, jukeUntil:0,
     diveUntil:0, hitCd:0, loose:null, windup:null, playClock:15, assistCd:0, switchFlash:0, newSeries:false, clockRunning:false, jukeCd:0, latCd:0, lastThrow:'', kick:null,
     celebrate:0, celAt:null, scoringTeam:'H',
     playNo:0, hostPick:null, pickAt:0, handoffAt:null,
@@ -416,7 +421,7 @@ function setupPlay(playId){
   G.playNo=(G.playNo|0)+1;
   G.controlled2=null;
   openPlay(playId);
-  G.play=playId; G.players=[]; G.thrown=null; G.fx=[]; G.snapT=performance.now();
+  G.play=playId; G.players=[]; G.thrown=null; G.fx=[]; G.snapT=G.gt;
   G.loose=null; G.hitCd=0; G.diveUntil=0; G.windup=null;
   var d=dir(), mid=FH/2;
   var offCol=G.offense, defCol=G.offense==='H'?'A':'H';
@@ -557,7 +562,7 @@ function setupPlay(playId){
 
 function snapBall(){
   if(G.phase!=='presnap') return;
-  G.phase='live'; G.snapT=performance.now();
+  G.phase='live'; G.snapT=G.gt;
   for(var i=0;i<G.players.length;i++) G.players[i].stance=0;
   burst(G.ball.x,G.ball.y,'#f1f1ec');
   say('HIKE!',480);
@@ -719,19 +724,19 @@ function releaseThrow(best){
 // game: a stiff arm beats one defender and comes back next play, a teleport
 // or a forcefield sits for three.
 var ABIL = {
-  rocket:     {name:'Rocket Pass', cd:2, desc:'Flat bullet. Nobody gets there in time.'},
-  perfect:    {name:'Perfect Pass',cd:3, desc:'Guided. It follows him, cannot be defended, and he catches it in stride.'},
-  forcefield: {name:'Forcefield',  cd:3, desc:'Blast the pocket clear and shrug off the next hit.'},
-  dash:       {name:'Super Dash',  cd:2, desc:'Explode forward.'},
-  stiffarm:   {name:'Stiff Arm',   cd:1, desc:'Put the nearest man down and keep going.'},
-  teleport:   {name:'Teleport',    cd:3, desc:'Blink clean past the man in front of you.'},
-  superblock: {name:'Super Block', cd:2, desc:'Pancake everyone around you.'},
-  clothesline:{name:'Clothesline', cd:1, desc:'Take the nearest man off his feet.'},
-  superspeed: {name:'Super Speed', cd:2, desc:'Run away from the secondary.'},
-  spin:       {name:'Spin Move',   cd:1, desc:'Spin straight through the tackle.'},
-  slam:       {name:'Slam',        cd:2, desc:'Ground slam. Everyone near you goes down.'},
-  fumblegen:  {name:'Fumble Gen',  cd:3, desc:'Rip the ball clean out of his hands.'},
-  aagun:      {name:'Anti-Air',    cd:3, desc:'Shoot the ball out of the sky.'}
+  rocket:     {name:'Rocket Pass', cd:3, desc:'Flat bullet. Nobody gets there in time.'},
+  perfect:    {name:'Perfect Pass',cd:4, desc:'Guided. It follows him, cannot be defended, and he catches it in stride.'},
+  forcefield: {name:'Forcefield',  cd:4, desc:'Blast the pocket clear and shrug off the next hit.'},
+  dash:       {name:'Super Dash',  cd:3, desc:'Explode forward.'},
+  stiffarm:   {name:'Stiff Arm',   cd:2, desc:'Put the nearest man down and keep going.'},
+  teleport:   {name:'Teleport',    cd:4, desc:'Blink clean past the man in front of you.'},
+  superblock: {name:'Super Block', cd:3, desc:'Pancake everyone around you.'},
+  clothesline:{name:'Clothesline', cd:2, desc:'Take the nearest man off his feet.'},
+  superspeed: {name:'Super Speed', cd:3, desc:'Run away from the secondary.'},
+  spin:       {name:'Spin Move',   cd:2, desc:'Spin straight through the tackle.'},
+  slam:       {name:'Slam',        cd:3, desc:'Ground slam. Everyone near you goes down.'},
+  fumblegen:  {name:'Fumble Gen',  cd:4, desc:'Rip the ball clean out of his hands.'},
+  aagun:      {name:'Anti-Air',    cd:4, desc:'Shoot the ball out of the sky.'}
 };
 
 var KITS_AB = {
@@ -840,7 +845,7 @@ function fireAbility(seat, IN, slot){
     v.stun=1.3; v.down=Math.max(v.down,1.0); v.wrapped=0;
     v.vx=(v.x-me.x)*5.5; v.vy=(v.y-me.y)*5.5;
     me.arm=0.6; burst(v.x,v.y,'#ffd23f'); G.shake=REDUCED?0:10;
-    tell('STIFF ARM!',600); showCard(me,'STIFF ARM');
+    tell('STIFF ARM!',600); credit(me,'STIFF ARM');
   }
   else if(id==='teleport'){
     var hop=62;
@@ -860,7 +865,7 @@ function fireAbility(seat, IN, slot){
     var n2=flatten(46,1.5,195);
     me.z=0.5; ring(me.x,me.y,'#ffd23f'); G.shake=REDUCED?0:16;
     tell(n2?'PANCAKED!':'SUPER BLOCK',700);
-    if(n2) showCard(me,'SUPER BLOCK');
+    if(n2) credit(me,'SUPER BLOCK');
   }
   else if(id==='clothesline'){
     var v2=foeNear(40);
@@ -868,7 +873,7 @@ function fireAbility(seat, IN, slot){
     v2.stun=1.7; v2.down=Math.max(v2.down,1.3); v2.wrapped=0;
     v2.vx=(v2.x-me.x)*6.5; v2.vy=(v2.y-me.y)*6.5;
     me.arm=0.7; burst(v2.x,v2.y,'#ffffff'); G.shake=REDUCED?0:14;
-    tell('CLOTHESLINE!',700); showCard(me,'CLOTHESLINE');
+    tell('CLOTHESLINE!',700); credit(me,'CLOTHESLINE');
   }
 
   // ---- receivers -------------------------------------------------------
@@ -891,7 +896,7 @@ function fireAbility(seat, IN, slot){
     ring(me.x,me.y,'#ff8c2b'); burst(me.x,me.y,'#ffd23f');
     G.shake=REDUCED?0:22;
     tell(n3?'SLAM!':'SLAM',700);
-    if(n3) showCard(me,'SLAM');
+    if(n3) credit(me,'SLAM');
   }
   else if(id==='fumblegen'){
     if(!G.carrier || G.carrier.team===me.team) return;
@@ -900,7 +905,7 @@ function fireAbility(seat, IN, slot){
     var vic=G.carrier;
     fumble(vic,(vic.x-me.x)*3.6,(vic.y-me.y)*3.6);
     burst(vic.x,vic.y,'#ffd23f'); G.shake=REDUCED?0:20;
-    tell('STRIPPED!',1100); showCard(me,'FORCED FUMBLE');
+    tell('STRIPPED!',1100); credit(me,'FORCED FUMBLE');
   }
 
   // ---- the secondary ---------------------------------------------------
@@ -919,10 +924,10 @@ function fireAbility(seat, IN, slot){
       G.carrier=me; G.ball.held=true; G.ball.x=me.x; G.ball.y=me.y;
       me.iFrames=0.4; me.hp=100;
       if(me.team==='H') G.controlled=me; else if(NET.on) G.controlled2=me;
-      tell('SHOT IT DOWN - INTERCEPTED!',1400); showCard(me,'INTERCEPTION');
+      tell('SHOT IT DOWN - INTERCEPTED!',1400); credit(me,'INTERCEPTION');
     } else {
       G.thrown=null;
-      tell('SHOT OUT OF THE SKY!',1100); showCard(me,'PASS DEFENDED');
+      tell('SHOT OUT OF THE SKY!',1100); credit(me,'PASS DEFENDED');
       endPlay(G.los,'INCOMPLETE');
     }
   }
@@ -1139,7 +1144,7 @@ function recoverBall(p){
   }
   if(p.team==='H') G.controlled=p;      // you take over the recovery
   else if(NET.on) G.controlled2=p;
-  showCard(p, scoopSix?'SCOOP':'RECOVERY');
+  credit(p, scoopSix?'SCOOP':'RECOVERY');
   burst(p.x,p.y,'#f1f1ec');
   G.shake=REDUCED?0:10;
   // the play stays live
@@ -1157,10 +1162,10 @@ function bigHit(me,M){
   burst(c.x,c.y,'#ffd23f'); burst(c.x,c.y,'#ffffff');
   if(Math.random() < 0.055/Math.max(0.8,c.pwr||1)){
     fumble(c,(c.x-me.x)*3.2,(c.y-me.y)*3.2);
-    say('FUMBLE!',1200); showCard(me,'FORCED FUMBLE');
+    say('FUMBLE!',1200); credit(me,'FORCED FUMBLE');
   } else {
     c.hp-=72; c.vx*=0.2; c.vy*=0.2;
-    say('BIG HIT!',700); showCard(me,'BIG HIT');
+    say('BIG HIT!',700); credit(me,'BIG HIT');
     if(c.hp<=0){ c.down=1.6; endPlay(c.x,'BIG HIT'); }
   }
 }
@@ -1184,10 +1189,10 @@ function groundPound(me,M){
   if(G.carrier && Math.hypot(G.carrier.x-me.x,G.carrier.y-me.y)<38){
     if(Math.random()<0.10){
       fumble(G.carrier,(G.carrier.x-me.x)*3.4,(G.carrier.y-me.y)*3.4);
-      say('POUND — FUMBLE!',1300); showCard(me,'GROUND POUND'); return;
+      say('POUND — FUMBLE!',1300); credit(me,'GROUND POUND'); return;
     }
     G.carrier.hp-=88; G.carrier.vx*=0.15; G.carrier.vy*=0.15;
-    say('GROUND POUND!',760); showCard(me,'GROUND POUND');
+    say('GROUND POUND!',760); credit(me,'GROUND POUND');
     if(G.carrier.hp<=0) endPlay(G.carrier.x,'POUNDED');
     return;
   }
@@ -1364,7 +1369,7 @@ function cpuQB(now){
   if(G.handoffAt!=null) return;   // he is giving it to the back, not throwing
   if(pastTheLine(G.carrier)) return;   // he has crossed; he is a runner now
   if(!G.carrier||G.carrier.role!=='QB'||G.thrown||G.windup||G.loose) return;
-  var qb=G.carrier, d=dir(), since=(now-G.snapT)/1000;
+  var qb=G.carrier, d=dir(), since=G.gt-G.snapT;
   var rush=nearestOf(qb,'H');
   var pressure=rush?Math.hypot(rush.x-qb.x,rush.y-qb.y):999;
   if(since<0.55 && pressure>32) return;              // let him finish the drop
@@ -1768,7 +1773,8 @@ function driveHuman(seat, IN, dt, now){
 }
 
 function step(dt){
-  var d=dir(), now=performance.now(), since=(now-G.snapT)/1000;
+  G.gt+=dt;
+  var d=dir(), now=performance.now(), since=G.gt-G.snapT;
   G.clock-=dt;
   if(G.clock<=0){ G.clock=0; gameOver(); return; }
   if(G.handoffAt!=null && since>G.handoffAt && G.carrier && G.carrier.role==='QB'){
@@ -2078,7 +2084,7 @@ function step(dt){
         burst(cov.x,cov.y,'#ffd23f'); burst(cov.x,cov.y,'#ffffff');
         G.shake=REDUCED?0:14;
         say(cov.team==='H'?'PICKED OFF — RUN IT BACK!':'INTERCEPTED!',1400);
-        showCard(cov,'INTERCEPTION');
+        credit(cov,'INTERCEPTION');
       }
       else { endPlay(G.los, covd<=16?'BROKEN UP':'INCOMPLETE'); return; }
     }
@@ -2148,7 +2154,7 @@ function step(dt){
         G.shake=REDUCED?0:10;
         G.carrier.down=1.5;
         if(lastT) lastT.down=0.8;
-        showCard(lastT, G.carrier.role==='QB' ? 'SACK' : 'TACKLE');
+        credit(lastT, G.carrier.role==='QB' ? 'SACK' : 'TACKLE');
         endPlay(G.carrier.x,'TACKLED'); return;
       }
     } else {
@@ -2201,7 +2207,7 @@ function score(){
   logPlay(G.ball?G.ball.x:G.los, 'TOUCHDOWN', true);
   if(G.offense==='H') G.scoreH+=7; else G.scoreA+=7;
   G.scoringTeam=G.offense;
-  showCard(G.carrier,'TOUCHDOWN');
+  credit(G.carrier,'TOUCHDOWN');
   if(G.carrier) G.carrier.cel=1.4;
   burst(G.ball.x,G.ball.y,'#ffd23f'); burst(G.ball.x,G.ball.y,'#ffffff');
   say('TOUCHDOWN!',2600); G.shake=REDUCED?0:18; G.clockRunning=false;
@@ -2983,6 +2989,26 @@ function showCard(p, action){
 }
 
 
+
+// A card used to pop for every hit, block and spin, so the corner of the
+// screen was a slideshow. Nothing shows a card mid-play now; the play is
+// credited as it goes, and one card comes up at the whistle for whoever
+// actually decided it.
+var ACT_WEIGHT = {
+  'TOUCHDOWN':100, 'PICK SIX':100, 'INTERCEPTION':90, 'FORCED FUMBLE':85,
+  'SCOOP':80, 'SACK':70, 'RECOVERY':60, 'PASS DEFENDED':55,
+  'GROUND POUND':50, 'BIG HIT':45, 'CLOTHESLINE':42, 'SLAM':42,
+  'SUPER BLOCK':32, 'STIFF ARM':30, 'TACKLE':20
+};
+function credit(p, action){
+  if(!G.cur || !p) return;
+  var side = (p.team===G.cur.team) ? 'o' : 'd';
+  var w = ACT_WEIGHT[action] || 10;
+  if(w >= (G.cur[side+'W']||0)){
+    G.cur[side+'Star']=p; G.cur[side+'Act']=action; G.cur[side+'W']=w;
+  }
+}
+
 // ================================================================== the book
 // Every play gets written down: who called what, who touched it, how far it
 // went and how it ended. The box score is just the log added up.
@@ -3009,7 +3035,8 @@ function surname(p){
 function openPlay(playId){
   G.cur = {no:G.playNo, team:G.offense, down:G.down, toGo:Math.max(1,Math.round(G.toGo)),
            los:G.los, play:playName(playId), passer:null, target:null,
-           comp:false, pick:false, rusher:null, fum:false, kick:null, qb:null};
+           comp:false, pick:false, rusher:null, fum:false, kick:null, qb:null,
+           oStar:null, oAct:'', oW:0, dStar:null, dAct:'', dW:0};
 }
 
 function logPlay(atX, label, scored){
@@ -3045,6 +3072,25 @@ function logPlay(atX, label, scored){
           : c.passer? (surname(c.passer)+' incomplete')
           : sack    ? surname(c.qb)
           : car     ? surname(car) : '';
+
+  // Five yards or a score is the offence's play. Anything less, or a pick or
+  // a fumble, belongs to whoever on defence made it that way.
+  var offenceWon = scored || gained >= 5;
+  var star, act;
+  if(scored && car && car.team!==c.team){
+    star=car; act = c.pick ? 'PICK SIX' : 'SCOOP AND SCORE';
+  } else if(offenceWon){
+    star = c.oStar || car || c.target || c.rusher || c.qb;
+    act  = scored ? 'TOUCHDOWN'
+         : (c.oAct && c.oStar===star) ? c.oAct
+         : c.comp ? 'BIG CATCH' : 'BIG GAIN';
+  } else {
+    star = c.dStar;
+    act  = c.dAct || (c.pick?'INTERCEPTION' : c.fum?'FORCED FUMBLE'
+         : sack?'SACK' : (c.passer&&!c.comp)?'PASS DEFENDED' : 'TACKLE');
+    if(!star){ star = car || c.qb; act = c.passer?'INCOMPLETE':'NO GAIN'; }
+  }
+  if(star) showCard(star, act);
 
   G.stats.log.push({no:c.no, team:c.team, down:c.down, toGo:c.toGo,
                     spot:yardLineLabel(c.los), play:c.play, yds:gained,
@@ -3687,7 +3733,7 @@ function consumeWorld(){
 var last=0;
 function frame(ts){
   if(!last) last=ts;
-  var dt=Math.min(0.05,(ts-last)/1000); last=ts;
+  var dt=Math.min(0.05,(ts-last)/1000)*GAME_SPEED; last=ts;
   if(NET.on && !NET.host){
     // guest: render only, no simulation
     try{
