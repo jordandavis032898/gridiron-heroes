@@ -740,14 +740,17 @@ function releaseThrow(best){
   // A snap throw scatters; a held lock does not. A perfect pass is exempt,
   // and so is a rocket, because that is what those cost a cooldown for.
   if(!perfect && !rocket){
+    var reach = Math.hypot(tx-G.ball.x, ty-G.ball.y);  // how far it has to go
     var lock = (best===G.lockMan) ? Math.min(1, G.lockT/1.05) : 0;
     var miss = (1-lock)*(1-lock);                      // falls away quickly
     if(miss>0.01){
-      var spread = (3.0 + Math.min(3.4, dist/(14*YD))) * YD * miss;
+      var spread = (3.0 + Math.min(3.4, reach/(14*YD))) * YD * miss;
       var ma=Math.random()*Math.PI*2, mr=Math.sqrt(Math.random())*spread;
       tx += Math.cos(ma)*mr; ty += Math.sin(ma)*mr;
     }
   }
+  if(!isFinite(tx)||!isFinite(ty)){ tx=best.x; ty=best.y; }
+  tx = Math.max(6, Math.min(FW-6, tx));
   ty = Math.max(10, Math.min(FH-10, ty));               // not out of bounds
   var dist=Math.hypot(tx-G.ball.x,ty-G.ball.y);
   var hx=qb.x + (qb.face||1)*8, hy=qb.y-25;     // the throwing hand
@@ -1561,7 +1564,11 @@ function runLane(p,d){
   return best;
 }
 
-function aim(p,tx,ty,spd){ var dx=tx-p.x,dy=ty-p.y,m=Math.hypot(dx,dy)||1; p.vx=dx/m*spd; p.vy=dy/m*spd; }
+function aim(p,tx,ty,spd){
+  if(!isFinite(tx)||!isFinite(ty)||!isFinite(spd)) return;   // refuse nowhere
+  var dx=tx-p.x,dy=ty-p.y,m=Math.hypot(dx,dy)||1;
+  p.vx=dx/m*spd; p.vy=dy/m*spd;
+}
 
 // ---- CPU signature moves, so the AI is not just running in a straight line
 // How often each move gets considered, per frame, once the situation fits.
@@ -1730,6 +1737,11 @@ function deadTick(dt){
     q.lean += ((sp>6?Math.min(0.3,sp*0.0016):0)-q.lean)*Math.min(1,dt*9);
     if(q.stun>0)   q.stun-=dt;
     if(q.down>0)   q.down-=dt;
+    if(!isFinite(q.x)||!isFinite(q.y)){
+      q.x=G.los; q.y=FH/2; q.vx=0; q.vy=0;
+    }
+    if(!isFinite(q.vx)) q.vx=0;
+    if(!isFinite(q.vy)) q.vy=0;
     if(q.stun>0) q.down=Math.max(q.down, Math.min(q.stun,0.95));
     if(q.down>0||q.stun>0){ var dmp=Math.pow(0.002,dt); q.vx*=dmp; q.vy*=dmp; }
     if(q.burst>0 && sp>60){
