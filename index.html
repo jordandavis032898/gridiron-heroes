@@ -321,6 +321,7 @@ function freshGame(){
     celebrate:0, celAt:null, scoringTeam:'H',
     playNo:0, hostPick:null, pickAt:0, handoffAt:null,
     cushion:0, covType:'man', zoneDeep:0,
+    abCd:{}, rocketArmed:false, perfectArmed:false, netAb:[0,0,0],
     M2:{power:100, stam:100, moveCd:0, hitCd:0, jukeCd:0, latCd:0,
         assistCd:0, jukeUntil:0, diveUntil:0},
     fx:[], over:false, mouse:{x:0,y:0,on:false} };
@@ -328,6 +329,7 @@ function freshGame(){
 
 // ================================================================ input
 var keys=Object.create(null), touchVec={x:0,y:0}, touchJuke=false, touchSprint=false, touchMove=false, touchQ=false, touchSwitch=false;
+var touchAb=[false,false,false];
 window.addEventListener('keydown',function(e){
   var k=e.key.toLowerCase();
   if(!e.repeat) pressed[k]=true;        // latched; a lost keyup must not kill the key
@@ -367,6 +369,9 @@ function eligibleReceivers(){
   out.sort(function(a,b){ return (b.x-a.x)*d; });   // deepest first
   return out;
 }
+function tapAb1(){ if(eat('q')){return true;} if(touchAb[0]){touchAb[0]=false;return true;} return false; }
+function tapAb2(){ if(eat('r')){return true;} if(touchAb[1]){touchAb[1]=false;return true;} return false; }
+function tapAb3(){ if(eat('t')){return true;} if(touchAb[2]){touchAb[2]=false;return true;} return false; }
 function tapSwitch(){ if(eat('e')||eat('tab')){return true;} if(touchSwitch){touchSwitch=false;return true;} return false; }
 function tapHike(){ if(eat(' ')||eat('enter')){return true;} return false; }
 
@@ -648,7 +653,9 @@ function releaseThrow(best){
   if(!qb||!best){ G.windup=null; G.lastThrow='no passer/target'; return; }
   if(G.thrown){ return; }
   var fast = (HERO.move==='rocket' && qb.hero) ? 1.4 : 1;
-  var rocket = !!(G.windupWasRocket);
+  var rocket = !!(G.windupWasRocket) || !!G.rocketArmed;
+  var perfect = !!G.perfectArmed;
+  G.rocketArmed=false; G.perfectArmed=false;
   var speed = (rocket?1500:530)*fast;
 
   // Lead by the actual flight time, not a fixed 0.42 seconds. That constant
@@ -668,12 +675,231 @@ function releaseThrow(best){
   G.thrown={x:G.ball.x,y:G.ball.y,tx:tx,ty:ty,target:best,t:0,
             dur:Math.max(0.14,dist/speed),
             arc: rocket ? 4 : Math.max(7, Math.min(56, (dist/YD)*1.65)),
-            sure: rocket,
+            sure: rocket||perfect,
             deep: dist > 22*YD};
   G.windupWasRocket=false;
   G.ball.held=false; G.carrier=null;
   qb.throwArm=1;
   say(fast>1?'FIRED!':'IN THE AIR',400);
+}
+
+
+// ========================================================= position abilities
+// Every man on the field has his own kit on Q, R and T. Cooldowns are counted
+// in plays, not seconds, and they scale with how much the move breaks the
+// game: a stiff arm beats one defender and comes back next play, a teleport
+// or a forcefield sits for three.
+var ABIL = {
+  rocket:     {name:'Rocket Pass', cd:2, desc:'Flat bullet. Nobody gets there in time.'},
+  perfect:    {name:'Perfect Pass',cd:3, desc:'Next throw is on the money and cannot be broken up.'},
+  forcefield: {name:'Forcefield',  cd:3, desc:'Blast the pocket clear and shrug off the next hit.'},
+  dash:       {name:'Super Dash',  cd:2, desc:'Explode forward.'},
+  stiffarm:   {name:'Stiff Arm',   cd:1, desc:'Put the nearest man down and keep going.'},
+  teleport:   {name:'Teleport',    cd:3, desc:'Blink clean past the man in front of you.'},
+  superblock: {name:'Super Block', cd:2, desc:'Pancake everyone around you.'},
+  clothesline:{name:'Clothesline', cd:1, desc:'Take the nearest man off his feet.'},
+  superspeed: {name:'Super Speed', cd:2, desc:'Run away from the secondary.'},
+  spin:       {name:'Spin Move',   cd:1, desc:'Spin straight through the tackle.'},
+  slam:       {name:'Slam',        cd:2, desc:'Ground slam. Everyone near you goes down.'},
+  fumblegen:  {name:'Fumble Gen',  cd:3, desc:'Rip the ball clean out of his hands.'},
+  aagun:      {name:'Anti-Air',    cd:3, desc:'Shoot the ball out of the sky.'}
+};
+
+var KITS_AB = {
+  QB:['rocket','perfect','forcefield'],
+  RB:['dash','stiffarm','teleport'],
+  OL:['superblock','clothesline'],
+  C: ['superblock','clothesline'],
+  WR:['superspeed','spin'],
+  TE:['stiffarm','slam'],
+  DE:['clothesline','slam'],
+  LB:['dash','fumblegen'],
+  CB:['aagun'],
+  S: ['aagun']
+};
+
+// defenders are identified by pos (DE/LB/CB/S), the offence by role
+function kitFor(p){
+  if(!p) return [];
+  return KITS_AB[p.pos] || KITS_AB[p.role] || [];
+}
+
+// Cooldowns outlive the play, and players are rebuilt every snap, so they are
+// keyed by shirt rather than by object.
+function abKey(p,id){ return p.team+':'+p.num+':'+id; }
+function abLeft(p,id){
+  if(!p) return 0;
+  var due=G.abCd[abKey(p,id)];
+  if(due===undefined) return 0;
+  return Math.max(0, due-G.playNo);
+}
+function abReady(p,id){ return abLeft(p,id)===0; }
+function abSpend(p,id){
+  G.abCd[abKey(p,id)] = G.playNo + (ABIL[id]?ABIL[id].cd:2) + 1;
+}
+
+function fireAbility(seat, IN, slot){
+  var me=seat.man;
+  if(!me || G.phase!=='live' || me.stun>0) return;
+  var kit=kitFor(me), id=kit[slot];
+  if(!id || !abReady(me,id)) return;
+
+  var d=dir(), mine=seat.local;
+  var foeTeam=(me.team==='H')?'A':'H';
+  var fwd;
+  if(IN && (IN.x||IN.y)) fwd={x:IN.x, y:IN.y};
+  else if(me.team===G.offense) fwd={x:d, y:0};
+  else {
+    var bx=G.ball?G.ball.x:me.x, by=G.ball?G.ball.y:me.y;
+    var mx=bx-me.x, my=by-me.y, mm=Math.hypot(mx,my)||1;
+    fwd={x:mx/mm, y:my/mm};
+  }
+  function tell(t,ms){ if(mine||!NET.on) say(t,ms||600); }
+  function foeNear(r){
+    var best=null,bd=r;
+    for(var i=0;i<G.players.length;i++){
+      var q=G.players[i];
+      if(q.team!==foeTeam||q.stun>0) continue;
+      var dd=Math.hypot(q.x-me.x,q.y-me.y);
+      if(dd<bd){ bd=dd; best=q; }
+    }
+    return best;
+  }
+  function flatten(rad,stun,push){
+    var n=0;
+    for(var i=0;i<G.players.length;i++){
+      var q=G.players[i];
+      if(q.team===me.team) continue;
+      var dd=Math.hypot(q.x-me.x,q.y-me.y);
+      if(dd>rad) continue;
+      n++; q.stun=stun; q.wrapped=0; q.down=Math.max(q.down,0.8);
+      q.vx=(q.x-me.x)/(dd||1)*push; q.vy=(q.y-me.y)/(dd||1)*push;
+    }
+    return n;
+  }
+
+  // ---- quarterback ---------------------------------------------------
+  if(id==='rocket'){
+    if(me!==G.carrier){ return; }
+    G.rocketArmed=true; me.arm=0.5;
+    ring(me.x,me.y,'#ffd23f'); tell('ROCKET ARMED',700);
+  }
+  else if(id==='perfect'){
+    if(me!==G.carrier){ return; }
+    G.perfectArmed=true; me.arm=0.5;
+    ring(me.x,me.y,'#7fd8ff'); burst(me.x,me.y,'#7fd8ff');
+    tell('PERFECT PASS ARMED',800);
+  }
+  else if(id==='forcefield'){
+    var hit=flatten(52,1.3,210);
+    me.iFrames=Math.max(me.iFrames,1.4);
+    ring(me.x,me.y,'#7fd8ff'); ring(me.x,me.y,'#ffffff');
+    burst(me.x,me.y,'#7fd8ff'); G.shake=REDUCED?0:18;
+    tell(hit?'FORCEFIELD!':'FORCEFIELD',800);
+  }
+
+  // ---- backs and backers ----------------------------------------------
+  else if(id==='dash'){
+    me.burst=1.7;
+    me.vx=fwd.x*BASE_SPD*2.9*(me.spd||1); me.vy=fwd.y*BASE_SPD*2.9*(me.spd||1);
+    burst(me.x,me.y,'#ff8c2b'); ring(me.x,me.y,'#ff8c2b');
+    tell('SUPER DASH!',600);
+  }
+  else if(id==='stiffarm'){
+    var v=foeNear(36);
+    if(!v) return;                              // nothing to put down, no charge
+    v.stun=1.3; v.down=Math.max(v.down,1.0); v.wrapped=0;
+    v.vx=(v.x-me.x)*5.5; v.vy=(v.y-me.y)*5.5;
+    me.arm=0.6; burst(v.x,v.y,'#ffd23f'); G.shake=REDUCED?0:10;
+    tell('STIFF ARM!',600); showCard(me,'STIFF ARM');
+  }
+  else if(id==='teleport'){
+    var hop=62;
+    for(var t=0;t<9;t++){
+      G.fx.push({x:me.x+fwd.x*hop*(t/9), y:me.y+fwd.y*hop*(t/9)-8,
+                 vx:0,vy:-10,life:0.36,max:0.36,r:3.4,c:'#7fd8ff'});
+    }
+    me.x=Math.max(6,Math.min(FW-6,me.x+fwd.x*hop));
+    me.y=Math.max(8,Math.min(FH-8,me.y+fwd.y*hop));
+    me.iFrames=Math.max(me.iFrames,0.5); me.phase=0.6; me.wrapped=0;
+    burst(me.x,me.y,'#7fd8ff');
+    tell('TELEPORT!',700);
+  }
+
+  // ---- the line --------------------------------------------------------
+  else if(id==='superblock'){
+    var n2=flatten(46,1.5,195);
+    me.z=0.5; ring(me.x,me.y,'#ffd23f'); G.shake=REDUCED?0:16;
+    tell(n2?'PANCAKED!':'SUPER BLOCK',700);
+    if(n2) showCard(me,'SUPER BLOCK');
+  }
+  else if(id==='clothesline'){
+    var v2=foeNear(40);
+    if(!v2) return;
+    v2.stun=1.7; v2.down=Math.max(v2.down,1.3); v2.wrapped=0;
+    v2.vx=(v2.x-me.x)*6.5; v2.vy=(v2.y-me.y)*6.5;
+    me.arm=0.7; burst(v2.x,v2.y,'#ffffff'); G.shake=REDUCED?0:14;
+    tell('CLOTHESLINE!',700); showCard(me,'CLOTHESLINE');
+  }
+
+  // ---- receivers -------------------------------------------------------
+  else if(id==='superspeed'){
+    me.burst=2.6;
+    ring(me.x,me.y,'#4fd18b');
+    tell('SUPER SPEED!',700);
+  }
+  else if(id==='spin'){
+    me.spin=1.5; me.iFrames=Math.max(me.iFrames,0.55); me.wrapped=0;
+    me.vx=fwd.x*BASE_SPD*2.5*(me.agi||1); me.vy=fwd.y*BASE_SPD*2.5*(me.agi||1);
+    burst(me.x,me.y,'#7fd8ff');
+    tell('SPIN MOVE!',600);
+  }
+
+  // ---- tight end and the front ----------------------------------------
+  else if(id==='slam'){
+    me.z=0.9;
+    var n3=flatten(44,1.6,205);
+    ring(me.x,me.y,'#ff8c2b'); burst(me.x,me.y,'#ffd23f');
+    G.shake=REDUCED?0:22;
+    tell(n3?'SLAM!':'SLAM',700);
+    if(n3) showCard(me,'SLAM');
+  }
+  else if(id==='fumblegen'){
+    if(!G.carrier || G.carrier.team===me.team) return;
+    var fd=Math.hypot(G.carrier.x-me.x, G.carrier.y-me.y);
+    if(fd>48) return;                            // nothing to strip, no charge
+    var vic=G.carrier;
+    fumble(vic,(vic.x-me.x)*3.6,(vic.y-me.y)*3.6);
+    burst(vic.x,vic.y,'#ffd23f'); G.shake=REDUCED?0:20;
+    tell('STRIPPED!',1100); showCard(me,'FORCED FUMBLE');
+  }
+
+  // ---- the secondary ---------------------------------------------------
+  else if(id==='aagun'){
+    if(!G.thrown) return;                        // nothing in the air, no charge
+    var tgt=G.thrown.target;
+    for(var g=0;g<10;g++){
+      G.fx.push({x:me.x,y:me.y-10,vx:(G.ball.x-me.x)*1.6,vy:(G.ball.y-me.y)*1.6,
+                 life:0.3,max:0.3,r:2.4,c:'#ffd23f'});
+    }
+    burst(G.ball.x,G.ball.y,'#ffffff'); G.shake=REDUCED?0:12;
+    var roll=Math.random();
+    if(roll<0.24){
+      G.thrown=null;
+      G.offense=me.team; G.newSeries=true;
+      G.carrier=me; G.ball.held=true; G.ball.x=me.x; G.ball.y=me.y;
+      me.iFrames=0.4; me.hp=100;
+      if(me.team==='H') G.controlled=me; else if(NET.on) G.controlled2=me;
+      tell('SHOT IT DOWN - INTERCEPTED!',1400); showCard(me,'INTERCEPTION');
+    } else {
+      G.thrown=null;
+      tell('SHOT OUT OF THE SKY!',1100); showCard(me,'PASS DEFENDED');
+      endPlay(G.los,'INCOMPLETE');
+    }
+  }
+  else return;
+
+  abSpend(me,id);
 }
 
 // ================================================================ specials
@@ -1401,16 +1627,18 @@ function localInput(){
   var a=axis();
   return {x:a.x, y:a.y, sp:wantSprint()?1:0,
           b1:tapJuke()?1:0, b2:tapMove()?1:0, b3:tapQ()?1:0,
-          sw:tapSwitch()?1:0, tg:tapTarget()};
+          sw:tapSwitch()?1:0, tg:tapTarget(),
+          k1:tapAb1()?1:0, k2:tapAb2()?1:0, k3:tapAb3()?1:0};
 }
 
 // whatever the guest last sent. Taps latch on arrival and are spent here.
 function remoteInput(){
   var r=NET.remoteIn;
-  if(!r) return {x:0,y:0,sp:0,b1:0,b2:0,b3:0,sw:0,tg:-1};
+  if(!r) return {x:0,y:0,sp:0,b1:0,b2:0,b3:0,sw:0,tg:-1,k1:0,k2:0,k3:0};
   var out={x:r.x, y:r.y, sp:r.sp, b1:r.b1, b2:r.b2, b3:r.b3, sw:r.sw,
+           k1:r.k1, k2:r.k2, k3:r.k3,
            tg:(NET.remoteTarget===undefined?-1:NET.remoteTarget)};
-  r.b1=r.b2=r.b3=r.sw=0;
+  r.b1=r.b2=r.b3=r.sw=r.k1=r.k2=r.k3=0;
   NET.remoteTarget=-1;
   return out;
 }
@@ -1487,6 +1715,9 @@ function driveHuman(seat, IN, dt, now){
       if(seat.local) say('JUKE!',300);
     }
   }
+  if(IN.k1) fireAbility(seat, IN, 0);
+  if(IN.k2) fireAbility(seat, IN, 1);
+  if(IN.k3) fireAbility(seat, IN, 2);
   M.power=Math.min(100,M.power+13*dt);
 
   var jk=now<M.jukeUntil;
@@ -2622,35 +2853,19 @@ function setAb(i,cap,key,ready,live,cd){
   e.classList.toggle('off', !ok);
 }
 function abilities(onD){
-  var live = (G.phase==='live'), pre=(G.phase==='presnap');
-  if(NET.on && !NET.host){
-    // The guest drives an ordinary Rival, so the third slot is a plain
-    // power move rather than a hero signature. Everything else matches.
-    var p2=G.M2.power;
-    if(onD){
-      setAb(1,'Dive','1', p2>=26 && G.M2.jukeCd<=0, live);
-      setAb(2,'Big Hit','2', p2>=45 && G.M2.hitCd<=0, live);
-      setAb(3,'Pound','3', p2>=58 && G.M2.hitCd<=0, live);
-    } else {
-      setAb(1,'Juke','1', p2>=JUKE_COST && G.M2.jukeCd<=0, live);
-      setAb(2,HERO.moveName,'2', G.M2.moveCd<=0 && p2>=HERO.cost, live);
-      setAb(3, handoffTarget()?'Handoff':'Lateral','3', !!G.carrier && G.M2.latCd<=0, live);
-    }
-    setAb(4,'Switch','E', true, live);
-    setAb(5, pre?'Hike':'Pass', pre?'SPC':'CLK', true, pre||live);
-    return;
+  var live=(G.phase==='live'), pre=(G.phase==='presnap');
+  var me = G.controlled;                 // on the guest this is its own man
+  var kit = kitFor(me);
+  var KEYS=['Q','R','T'];
+  var net = (NET.on && !NET.host) ? (G.netAb||[0,0,0]) : null;
+  for(var i=0;i<3;i++){
+    var id=kit[i];
+    if(!id){ setAb(i+1,'\u2014',KEYS[i],false,false); continue; }
+    var left = Math.min(net ? net[i] : abLeft(me,id), ABIL[id].cd);
+    setAb(i+1, left>0 ? (left+(left===1?' PLAY':' PLAYS')) : ABIL[id].name,
+          KEYS[i], left===0, live);
   }
-  if(onD){
-    setAb(1,'Dive','1', G.power>=26 && G.diveUntil<performance.now(), live);
-    setAb(2,'Big Hit','2', G.power>=45 && G.hitCd<=0, live);
-    setAb(3,'Pound','3', G.power>=58 && G.hitCd<=0, live);
-    setAb(4,'Switch','E', true, live);
-  } else {
-    setAb(1,'Juke','1', G.power>=JUKE_COST, live);
-    setAb(2,HERO.moveName,'2', G.moveCd<=0 && G.power>=HERO.cost, live);
-    setAb(3, handoffTarget()?'Handoff':'Lateral','3', !!G.carrier && G.latCd<=0, live);
-    setAb(4,'Switch','E', !!G.thrown, live);
-  }
+  setAb(4,'Switch','E', true, live);
   setAb(5, pre?'Hike':'Pass', pre?'SPC':'CLK', true, pre||live);
 }
 
@@ -2928,9 +3143,9 @@ if(window.matchMedia&&window.matchMedia('(pointer: coarse)').matches){
 }
 
 // ---- the icons double as buttons ----------------------------------------
-[[1,function(){ if(G.phase==='presnap'){snapBall();return;} touchJuke=true; }],
- [2,function(){ touchMove=true; }],
- [3,function(){ touchQ=true; }],
+[[1,function(){ if(G.phase==='presnap'){snapBall();return;} touchAb[0]=true; }],
+ [2,function(){ touchAb[1]=true; }],
+ [3,function(){ touchAb[2]=true; }],
  [4,function(){ touchSwitch=true; }],
  [5,function(){ if(G.phase==='presnap') snapBall(); }]
 ].forEach(function(pair){
@@ -3078,12 +3293,15 @@ function hostOnline(tries){
       if(d.t==='thr'){ NET.remoteThrow={x:d.x,y:d.y}; return; }
       if(d.t==='tgt'){ NET.remoteTarget=d.i; return; }
       if(d.t!=='in') return;
-      var r=NET.remoteIn||(NET.remoteIn={x:0,y:0,sp:0,b1:0,b2:0,b3:0,sw:0});
+      var r=NET.remoteIn||(NET.remoteIn={x:0,y:0,sp:0,b1:0,b2:0,b3:0,sw:0,k1:0,k2:0,k3:0});
       r.x=d.x; r.y=d.y; r.sp=d.sp;
       if(d.b1) r.b1=1;                 // taps latch until the sim consumes them
       if(d.b2) r.b2=1;
       if(d.b3) r.b3=1;
       if(d.sw) r.sw=1;
+      if(d.k1) r.k1=1;
+      if(d.k2) r.k2=1;
+      if(d.k3) r.k3=1;
     });
     c.on('open',function(){
       NET.on=true;
@@ -3156,7 +3374,8 @@ function publishInput(){
   netSend({t:'in',
     x:+a.x.toFixed(2), y:+a.y.toFixed(2),
     sp:wantSprint()?1:0,
-    b1:tapJuke()?1:0, b2:tapMove()?1:0, b3:tapQ()?1:0, sw:tapSwitch()?1:0
+    b1:tapJuke()?1:0, b2:tapMove()?1:0, b3:tapQ()?1:0, sw:tapSwitch()?1:0,
+    k1:tapAb1()?1:0, k2:tapAb2()?1:0, k3:tapAb3()?1:0
   });
 }
 
@@ -3218,7 +3437,12 @@ function publishWorld(dt){
     sh:G.scoreH, sa:G.scoreA, ck:Math.round(G.clock), pc:Math.round(G.playClock),
     of:G.offense, cr:G.clockRunning?1:0,
     p2:Math.round(G.M2.power), s2:Math.round(G.M2.stam),
-    h2:+G.M2.hitCd.toFixed(2), m2:+G.M2.moveCd.toFixed(2)
+    h2:+G.M2.hitCd.toFixed(2), m2:+G.M2.moveCd.toFixed(2),
+    ab:(function(){
+      var k=kitFor(G.controlled2), o=[0,0,0];
+      for(var i=0;i<3;i++) o[i]=k[i]?abLeft(G.controlled2,k[i]):0;
+      return o;
+    })()
   }); }catch(e){}
 }
 
@@ -3259,6 +3483,7 @@ function consumeWorld(){
   G.M2.power=w.p2===undefined?100:w.p2;
   G.M2.stam=w.s2===undefined?100:w.s2;
   G.M2.hitCd=w.h2||0; G.M2.moveCd=w.m2||0;
+  G.netAb=w.ab||[0,0,0];
   G.thrown=null; G.loose=null; G.windup=null; G.fx=G.fx||[];
   return true;
 }
