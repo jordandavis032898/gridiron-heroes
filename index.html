@@ -315,7 +315,8 @@ function freshGame(){
     diveUntil:0, hitCd:0, loose:null, windup:null, playClock:15, assistCd:0, switchFlash:0, newSeries:false, clockRunning:false, jukeCd:0, latCd:0, lastThrow:'', kick:null,
     celebrate:0, celAt:null, scoringTeam:'H',
     playNo:0, hostPick:null, pickAt:0,
-    power2:100, stam2:100, jukeUntil2:0, hitCd2:0,
+    M2:{power:100, stam:100, moveCd:0, hitCd:0, jukeCd:0, latCd:0,
+        assistCd:0, jukeUntil:0, diveUntil:0},
     fx:[], over:false, mouse:{x:0,y:0,on:false} };
 }
 
@@ -619,19 +620,41 @@ function releaseThrow(best){
 }
 
 // ================================================================ specials
-function fireSpecial(){
-  var me=G.controlled; if(!me) return;
-  if(G.moveCd>0) return;
-  var m=HERO.move;
-  if(!me.hero) return;                       // only your hero has a signature
-  if(G.power<HERO.cost) return;
-  var a=axis(), d=dir();
-  var fwd=(a.x||a.y)?a:{x:d,y:0};
-  G.power-=HERO.cost;
+function fireSpecial(seat,IN){
+  seat=seat||{side:'H',man:G.controlled,M:G,hero:HERO};
+  var me=seat.man; if(!me) return;
+  var M=seat.M;
+  if(M.moveCd>0) return;
+  var d=dir();
+  var a=IN?{x:IN.x,y:IN.y}:axis();
+  var fwd=(a.x||a.y)?a:{x:(seat.side==='H'?d:-d),y:0};
+
+  // a seat without a hero (the guest drives ordinary Rivals) gets a truck
+  if(!seat.hero || !me.hero){
+    if(M.power<TRUCK_COST) return;
+    M.power-=TRUCK_COST; M.moveCd=1.4; me.arm=0.6;
+    G.shake=REDUCED?0:12; ring(me.x,me.y,'#e0384e');
+    var tn=0;
+    for(var tk=0;tk<G.players.length;tk++){
+      var vt=G.players[tk];
+      if(vt.team===me.team) continue;
+      var vd=Math.hypot(vt.x-me.x,vt.y-me.y);
+      if(vd>32) continue;
+      tn++; vt.stun=0.9+Math.random()*0.4; vt.wrapped=0;
+      vt.vx=(vt.x-me.x)/(vd||1)*180; vt.vy=(vt.y-me.y)/(vd||1)*180;
+    }
+    me.vx=fwd.x*BASE_SPD*1.7*(me.pwr||1); me.vy=fwd.y*BASE_SPD*1.7*(me.pwr||1);
+    if(seat.side==='H'||!NET.on||!NET.host) say(tn?'TRUCKED!':'TRUCK',700);
+    return;
+  }
+
+  var HRO=seat.hero, m=HRO.move;
+  if(M.power<HRO.cost) return;
+  M.power-=HRO.cost;
 
   if(m==='quake'){
     // stomp: everyone nearby loses their footing
-    G.moveCd=1.5; me.z=0.7; G.shake=REDUCED?0:20;
+    M.moveCd=1.5; me.z=0.7; G.shake=REDUCED?0:20;
     ring(me.x,me.y,'#ffd23f'); burst(me.x,me.y,'#ffd23f'); burst(me.x,me.y,'#c8a63c');
     var n=0, foe=G.offense==='H'?'A':'H';
     for(var i=0;i<G.players.length;i++){
@@ -645,28 +668,28 @@ function fireSpecial(){
     say(n?'EARTHQUAKE!':'EARTHQUAKE',760);
 
   } else if(m==='skyhop'){
-    G.moveCd=1.6; me.z=1.6;
-    G.jukeUntil=performance.now()+900;
+    M.moveCd=1.6; me.z=1.6;
+    M.jukeUntil=performance.now()+900;
     me.vx=fwd.x*BASE_SPD*2.6; me.vy=fwd.y*BASE_SPD*2.6;
     burst(me.x,me.y,'#f1f1ec');
     say('SKY HOP!',760);
 
   } else if(m==='afterburner'){
-    me.burst=2.0; G.moveCd=2.0; G.stam=Math.min(100,G.stam+45);
+    me.burst=2.0; M.moveCd=2.0; M.stam=Math.min(100,M.stam+45);
     ring(me.x,me.y,'#ff8c2b');
     say('AFTERBURNER!',760);
 
   } else if(m==='phase'){
-    me.spin=1.4; G.moveCd=1.2;
+    me.spin=1.4; M.moveCd=1.2;
     me.phase=0.75;                            // goes half-transparent
-    G.jukeUntil=performance.now()+780;
+    M.jukeUntil=performance.now()+780;
     me.vx=fwd.x*BASE_SPD*2.9; me.vy=fwd.y*BASE_SPD*2.9;
     burst(me.x,me.y,'#7fd8ff');
     say('PHASE SPIN!',760);
 
   } else if(m==='blur'){
     // short teleport through the rush
-    G.moveCd=1.3;
+    M.moveCd=1.3;
     var hop=34;
     for(var t=0;t<7;t++){
       G.fx.push({x:me.x+fwd.x*hop*(t/7), y:me.y+fwd.y*hop*(t/7)-8,
@@ -674,13 +697,13 @@ function fireSpecial(){
     }
     me.x=Math.max(6,Math.min(FW-6,me.x+fwd.x*hop));
     me.y=Math.max(8,Math.min(FH-8,me.y+fwd.y*hop));
-    G.jukeUntil=performance.now()+260;
+    M.jukeUntil=performance.now()+260;
     if(G.carrier===me){ G.ball.x=me.x; G.ball.y=me.y; }
     say('BLUR STEP!',700);
 
   } else if(m==='rocket'){
     // flat uninterceptable bullet to whoever is most open
-    if(me.role!=='QB'||G.carrier!==me||G.thrown||G.windup){ G.power+=HERO.cost; return; }
+    if(me.role!=='QB'||G.carrier!==me||G.thrown||G.windup){ M.power+=HRO.cost; return; }
     var best=null,bs=-1e9;
     for(var j=0;j<G.players.length;j++){
       var r=G.players[j];
@@ -690,8 +713,8 @@ function fireSpecial(){
       var sc=op*1.2+(r.x-G.los)*d/YD*1.4;
       if(sc>bs){bs=sc;best=r;}
     }
-    if(!best){ G.power+=HERO.cost; return; }
-    G.moveCd=1.4;
+    if(!best){ M.power+=HRO.cost; return; }
+    M.moveCd=1.4;
     G.windup={target:best,t:0,dur:0.14,qb:me,rocket:true};
     say('ROCKET!',700);
   }
@@ -703,26 +726,30 @@ function ring(x,y,c){
 }
 
 // ---- take over any of your players --------------------------------------
-function switchPlayer(){
+function switchPlayer(side){
+  side=side||'H';
+  var cur=(side==='H')?G.controlled:G.controlled2;
   var pool=[];
   for(var i=0;i<G.players.length;i++){
     var q=G.players[i];
-    if(q.team==='H' && q.stun<=0) pool.push(q);
+    if(q.team===side && q.stun<=0) pool.push(q);
   }
   if(pool.length<2) return;
   var bx=G.ball?G.ball.x:0, by=G.ball?G.ball.y:0;
   pool.sort(function(a,b){
     return Math.hypot(a.x-bx,a.y-by)-Math.hypot(b.x-bx,b.y-by);
   });
-  var idx=pool.indexOf(G.controlled);
-  G.controlled=pool[(idx+1)%pool.length];
-  G.switchFlash=0.5;
-  say((G.controlled.name||'').split(' ').pop().toUpperCase(),600);
+  var idx=pool.indexOf(cur);
+  var nxt=pool[(idx+1)%pool.length];
+  if(side==='H'){ G.controlled=nxt; G.switchFlash=0.5; }
+  else { G.controlled2=nxt; }
+  if(side==='H'||!NET.on||!NET.host) say((nxt.name||'').split(' ').pop().toUpperCase(),600);
 }
 
 // ---- lateral: pitch it backwards to a trailing team-mate -----------------
-function lateral(){
-  if(!G.carrier||G.controlled!==G.carrier||G.thrown||G.loose||G.windup) return;
+function lateral(side){
+  var mine=((side||'H')==='H')?G.controlled:G.controlled2;
+  if(!G.carrier||mine!==G.carrier||G.thrown||G.loose||G.windup) return;
   var d=dir(), best=null, bd=Infinity;
   for(var i=0;i<G.players.length;i++){
     var q=G.players[i];
@@ -771,10 +798,11 @@ function recoverBall(p){
 }
 
 // ---- defensive brawling --------------------------------------------------
-function bigHit(me){
-  if(!G.carrier||G.power<45||G.hitCd>0) return;
+function bigHit(me,M){
+  M=M||G;
+  if(!G.carrier||M.power<45||M.hitCd>0) return;
   var dd=Math.hypot(G.carrier.x-me.x,G.carrier.y-me.y);
-  G.hitCd=0.8; G.power-=45; me.arm=0.5;
+  M.hitCd=0.8; M.power-=45; me.arm=0.5;
   if(dd>28){ say('WHIFF',420); return; }
   var c=G.carrier;
   G.shake=REDUCED?0:18;
@@ -789,9 +817,10 @@ function bigHit(me){
   }
 }
 
-function groundPound(me){
-  if(G.power<58||G.hitCd>0) return;
-  G.power-=58; G.hitCd=1.3; me.z=0.85;
+function groundPound(me,M){
+  M=M||G;
+  if(M.power<58||M.hitCd>0) return;
+  M.power-=58; M.hitCd=1.3; me.z=0.85;
   G.shake=REDUCED?0:22;
   ring(me.x,me.y,'#ffd23f');
   burst(me.x,me.y,'#ffd23f'); burst(me.x,me.y,'#ff8c2b');
@@ -1203,7 +1232,11 @@ function presnap(dt){
     p.lean += (tgt-p.lean)*Math.min(1,dt*5);
   }
   if(G.autoSnapAt!==null && (15-G.playClock) >= G.autoSnapAt){ snapBall(); return; }
-  if(tapSwitch()) switchPlayer();
+  if(tapSwitch()) switchPlayer('H');
+  // the guest can shuffle his man pre-snap too
+  if(NET.on && NET.host && NET.remoteIn && NET.remoteIn.sw){
+    NET.remoteIn.sw=0; switchPlayer('A');
+  }
   // only the side with the ball can put it in play
   var mineToSnap = (G.offense==='H');
   if(mineToSnap && (tapHike()||tapJuke())){ snapBall(); return; }
@@ -1211,79 +1244,126 @@ function presnap(dt){
   if(G.playClock<=0){ say('DELAY — SNAPPED',700); snapBall(); }
 }
 
+
+// =============================================================== the seats
+// A seat is one person at the controls: the side they play, the man they are
+// driving right now, and their own meters. Host sits in H, guest sits in A,
+// and both run driveHuman(). Anything the host can do, the guest can do.
+
+function hostSeat(){
+  return {side:'H', man:G.controlled, M:G, hero:HERO, local:true};
+}
+function guestSeat(){
+  if(!G.controlled2||G.controlled2.stun>0||G.controlled2.team!=='A'||
+     G.players.indexOf(G.controlled2)<0){
+    G.controlled2=pickRemoteMan(false);
+  }
+  return {side:'A', man:G.controlled2, M:G.M2, hero:null, local:false};
+}
+
+// keyboard, touch stick and the on-screen buttons, in the shape driveHuman wants
+function localInput(){
+  var a=axis();
+  return {x:a.x, y:a.y, sp:wantSprint()?1:0,
+          b1:tapJuke()?1:0, b2:tapMove()?1:0, b3:tapQ()?1:0,
+          sw:tapSwitch()?1:0, tg:tapTarget()};
+}
+
+// whatever the guest last sent. Taps latch on arrival and are spent here.
+function remoteInput(){
+  var r=NET.remoteIn;
+  if(!r) return {x:0,y:0,sp:0,b1:0,b2:0,b3:0,sw:0,tg:-1};
+  var out={x:r.x, y:r.y, sp:r.sp, b1:r.b1, b2:r.b2, b3:r.b3, sw:r.sw,
+           tg:(NET.remoteTarget===undefined?-1:NET.remoteTarget)};
+  r.b1=r.b2=r.b3=r.sw=0;
+  NET.remoteTarget=-1;
+  return out;
+}
+
+function driveHuman(seat, IN, dt, now){
+  var M=seat.M, me=seat.man, d=dir();
+  if(M.moveCd>0) M.moveCd-=dt;
+  if(M.hitCd>0)  M.hitCd-=dt;
+  if(M.jukeCd>0) M.jukeCd-=dt;
+  if(M.latCd>0)  M.latCd-=dt;
+  if(M.assistCd>0) M.assistCd-=dt;
+  if(!me) return;
+
+  var onO = (G.offense===seat.side);
+  var fwd = (seat.side==='H') ? d : -d;      // downfield, from this seat's view
+  var a={x:IN.x, y:IN.y};
+  var sprinting = IN.sp && M.stam>2 && (a.x||a.y);
+  if(sprinting) M.stam=Math.max(0,M.stam-33*dt); else M.stam=Math.min(100,M.stam+20*dt);
+  if(me.burst>0) me.burst-=dt;
+
+  if(IN.sw){
+    switchPlayer(seat.side);
+    me = seat.man = (seat.side==='H') ? G.controlled : G.controlled2;
+    if(!me) return;
+  }
+  if(IN.tg>=0 && onO){
+    var rl=eligibleReceivers();
+    if(rl[IN.tg]) throwAt(rl[IN.tg].x, rl[IN.tg].y, seat.side);
+  }
+
+  // Auto-assist: when a tackler is right on you, your man reacts by himself.
+  // Same instinct the CPU carriers have, so you are never a sitting duck.
+  if(onO && me===G.carrier && M.assistCd<=0){
+    var foe=(seat.side==='H')?'A':'H';
+    var thr=nearestOf(me,foe);
+    var thd2=thr?Math.hypot(thr.x-me.x,thr.y-me.y):999;
+    if(thd2<27){
+      var roll=Math.random();
+      if(roll<0.55 && M.power>=JUKE_COST){
+        M.power-=JUKE_COST; M.assistCd=1.1;
+        M.jukeUntil=now+JUKE_MS;
+        var away=(me.y-thr.y)>=0?1:-1;
+        me.vx=fwd*BASE_SPD*1.9*me.agi; me.vy=away*BASE_SPD*2.3*me.agi;
+        if(seat.local) say('SIDESTEP!',420);
+      } else if(roll<0.85 && M.power>=34){
+        M.power-=34; M.assistCd=1.2; me.arm=0.5;
+        thr.stun=1.0; thr.vx=(thr.x-me.x)*6.5; thr.vy=(thr.y-me.y)*6.5;
+        burst(thr.x,thr.y,'#ffd23f'); G.shake=REDUCED?0:10;
+        if(seat.local) say('STIFF ARM!',520);
+      }
+    }
+  }
+
+  if(!onO){
+    // ---- you are on defense: brawler controls
+    if(IN.b3) groundPound(me,M);
+    if(IN.b2) bigHit(me,M);
+    if(IN.b1 && M.power>=26 && M.jukeCd<=0){
+      M.power-=26; M.jukeCd=1.05; M.diveUntil=now+400;
+      var dv=(a.x||a.y)?a:{x:fwd,y:0};
+      me.vx=dv.x*BASE_SPD*2.9; me.vy=dv.y*BASE_SPD*2.9;
+      if(seat.local) say('DIVE!',320);
+    }
+  } else {
+    if(IN.b3 && M.latCd<=0){ M.latCd=1.4; lateral(seat.side); }
+    if(IN.b2) fireSpecial(seat, IN);
+    if(IN.b1 && M.power>=JUKE_COST && M.jukeCd<=0){
+      M.power-=JUKE_COST; M.jukeCd=0.95; M.jukeUntil=now+JUKE_MS;
+      var jd=(a.x||a.y)?a:{x:fwd,y:0};
+      me.vx=jd.x*BASE_SPD*2.6*me.agi; me.vy=jd.y*BASE_SPD*2.6*me.agi;
+      if(seat.local) say('JUKE!',300);
+    }
+  }
+  M.power=Math.min(100,M.power+13*dt);
+
+  var jk=now<M.jukeUntil;
+  var mult=(sprinting?SPRINT:1)*(me.burst>0?1.7:1)*me.spd;
+  if(!jk||me.z>0){ me.vx=a.x*BASE_SPD*mult; me.vy=a.y*BASE_SPD*mult; }
+  else { me.vx*=0.90; me.vy*=0.90; }
+}
+
 function step(dt){
   var d=dir(), now=performance.now(), since=(now-G.snapT)/1000;
   G.clock-=dt;
   if(G.clock<=0){ G.clock=0; gameOver(); return; }
-  if(G.moveCd>0) G.moveCd-=dt;
-  if(G.hitCd>0) G.hitCd-=dt;
-  if(G.jukeCd>0) G.jukeCd-=dt;
-  if(G.latCd>0) G.latCd-=dt;
-
   applyRemoteInput(dt);
-  var me=G.controlled;
-  if(me){
-    var a=axis();
-    var sprinting=wantSprint()&&G.stam>2&&(a.x||a.y);
-    if(sprinting) G.stam=Math.max(0,G.stam-33*dt); else G.stam=Math.min(100,G.stam+20*dt);
-    if(me.burst>0) me.burst-=dt;
-
-    if(tapSwitch()) switchPlayer();
-    var tKey=tapTarget();
-    if(tKey>=0 && G.offense==='H'){
-      var rl=eligibleReceivers();
-      if(rl[tKey]) throwAt(rl[tKey].x, rl[tKey].y);
-    }
-
-    // Auto-assist: when a tackler is right on you, your man reacts by himself.
-    // Same instinct the CPU carriers have, so you are never a sitting duck.
-    if(G.assistCd>0) G.assistCd-=dt;
-    if(G.offense==='H' && me===G.carrier && G.assistCd<=0){
-      var thr=nearestOf(me,'A');
-      var thd2=thr?Math.hypot(thr.x-me.x,thr.y-me.y):999;
-      if(thd2<27){
-        var roll=Math.random();
-        if(roll<0.55 && G.power>=JUKE_COST){
-          G.power-=JUKE_COST; G.assistCd=1.1;
-          G.jukeUntil=now+JUKE_MS;
-          var away=(me.y-thr.y)>=0?1:-1;
-          me.vx=d*BASE_SPD*1.9*me.agi; me.vy=away*BASE_SPD*2.3*me.agi;
-          say('SIDESTEP!',420);
-        } else if(roll<0.85 && G.power>=34){
-          G.power-=34; G.assistCd=1.2; me.arm=0.5;
-          thr.stun=1.0; thr.vx=(thr.x-me.x)*6.5; thr.vy=(thr.y-me.y)*6.5;
-          burst(thr.x,thr.y,'#ffd23f'); G.shake=REDUCED?0:10;
-          say('STIFF ARM!',520);
-        }
-      }
-    }
-    if(G.offense!=='H'){
-      // ---- you are on defense: brawler controls
-      if(tapQ()) groundPound(me);
-      if(tapMove()) bigHit(me);
-      if(tapJuke()&&G.power>=26&&G.jukeCd<=0){
-        G.power-=26; G.jukeCd=1.05; G.diveUntil=now+400;
-        var dv=(a.x||a.y)?a:{x:d,y:0};
-        me.vx=dv.x*BASE_SPD*2.9; me.vy=dv.y*BASE_SPD*2.9;
-        say('DIVE!',320);
-      }
-    } else {
-      if(tapQ()&&G.latCd<=0){ G.latCd=1.4; lateral(); }
-      if(tapMove()) fireSpecial();
-      if(tapJuke()&&G.power>=JUKE_COST&&G.jukeCd<=0){
-        G.power-=JUKE_COST; G.jukeCd=0.95; G.jukeUntil=now+JUKE_MS;
-        var jd=(a.x||a.y)?a:{x:d,y:0};
-        me.vx=jd.x*BASE_SPD*2.6*me.agi; me.vy=jd.y*BASE_SPD*2.6*me.agi;
-        say('JUKE!',300);
-      }
-    }
-    G.power=Math.min(100,G.power+13*dt);
-
-    var jk=now<G.jukeUntil;
-    var mult=(sprinting?SPRINT:1)*(me.burst>0?1.7:1)*me.spd;
-    if(!jk||me.z>0){ me.vx=a.x*BASE_SPD*mult; me.vy=a.y*BASE_SPD*mult; }
-    else { me.vx*=0.90; me.vy*=0.90; }
-  }
+  driveHuman(hostSeat(), localInput(), dt, now);
+  if(NET.on && NET.host) driveHuman(guestSeat(), remoteInput(), dt, now);
 
   // AI
   for(var i=0;i<G.players.length;i++){
@@ -1557,7 +1637,7 @@ function step(dt){
   // three bring him down fast, and a powerful back resists all of it.
   if(G.carrier){
     var jking=(((G.controlled===G.carrier)&&(performance.now()<G.jukeUntil||G.carrier.z>0.15))
-             ||((G.controlled2===G.carrier)&&performance.now()<G.jukeUntil2))
+             ||((G.controlled2===G.carrier)&&performance.now()<G.M2.jukeUntil))
                || (G.carrier.iFrames>0) || (G.carrier.z>0.15);
     var defTeam=G.offense==='H'?'A':'H';
     var grabbers=0, lastT=null;
@@ -1565,7 +1645,8 @@ function step(dt){
       for(var m2=0;m2<G.players.length;m2++){
         var t2=G.players[m2];
         if(t2.team!==defTeam||t2.stun>0) continue;
-        var reach=(t2===G.controlled&&performance.now()<G.diveUntil)?TACKLE_R+10:TACKLE_R;
+        var reach=((t2===G.controlled&&performance.now()<G.diveUntil)||
+                   (t2===G.controlled2&&performance.now()<G.M2.diveUntil))?TACKLE_R+10:TACKLE_R;
         if(Math.hypot(t2.x-G.carrier.x,t2.y-G.carrier.y)>reach) continue;
 
         // trucking still blows one man clean off you
@@ -2326,8 +2407,8 @@ function hud(){
     dbg.style.color = NET.on ? ((NET.conn&&NET.conn.open)?'#4fd18b':'#e0384e') : '#6d818f';
   }
   var guest=(NET.on&&!NET.host);
-  var pw=guest?(G.power2===undefined?100:G.power2):G.power;
-  var st=guest?(G.stam2===undefined?100:G.stam2):G.stam;
+  var pw=guest?G.M2.power:G.power;
+  var st=guest?G.M2.stam:G.stam;
   barPw.style.width=pw+'%'; barSt.style.width=st+'%';
   var onD=!iHaveBall();
   var rdy = onD ? (G.hitCd>0?0:Math.min(100,(G.power/45)*100))
@@ -2351,16 +2432,17 @@ function setAb(i,cap,key,ready,live,cd){
 function abilities(onD){
   var live = (G.phase==='live'), pre=(G.phase==='presnap');
   if(NET.on && !NET.host){
-    // the guest plays a Rival, not a hero, so its buttons are the plain ones
-    var p2=(G.power2===undefined?100:G.power2);
+    // The guest drives an ordinary Rival, so the third slot is a plain
+    // power move rather than a hero signature. Everything else matches.
+    var p2=G.M2.power;
     if(onD){
-      setAb(1,'Wrap Up','1', p2>=26, live);
-      setAb(2,'Big Hit','2', p2>=45 && (G.hitCd2||0)<=0, live);
-      setAb(3,'\u2014','3', false, false);
+      setAb(1,'Dive','1', p2>=26 && G.M2.jukeCd<=0, live);
+      setAb(2,'Big Hit','2', p2>=45 && G.M2.hitCd<=0, live);
+      setAb(3,'Pound','3', p2>=58 && G.M2.hitCd<=0, live);
     } else {
-      setAb(1,'Juke','1', p2>=JUKE_COST, live);
-      setAb(2,'Truck','2', p2>=TRUCK_COST, live);
-      setAb(3,'\u2014','3', false, false);
+      setAb(1,'Juke','1', p2>=JUKE_COST && G.M2.jukeCd<=0, live);
+      setAb(2,'Truck','2', G.M2.moveCd<=0 && p2>=TRUCK_COST, live);
+      setAb(3,'Lateral','3', !!G.carrier && G.M2.latCd<=0, live);
     }
     setAb(4,'Switch','E', true, live);
     setAb(5, pre?'Hike':'Pass', pre?'SPC':'CLK', true, pre||live);
@@ -2553,10 +2635,6 @@ function tryStartPlay(force){
   if(theirs == null && !force) return;
   NET.guestPick = null;
   var mine = G.hostPick; G.hostPick = null; G.pickAt = 0;
-  // drop the waiting banner the moment both calls are in
-  if(elCall.textContent==='WAITING ON THE OTHER COACH'){
-    elCall.style.transition='opacity .2s'; elCall.style.opacity='0';
-  }
 
   // a kick ends the down on its own, whoever called it
   if(G.offense==='H' && (mine==='punt'||mine==='fg')){ startKick(mine); return; }
@@ -2572,7 +2650,7 @@ function tryStartPlay(force){
 // Host only, while one coach is still staring at the sheet.
 function waitTick(){
   if(!G.hostPick) return;
-  if(elCall.textContent!=='WAITING ON THE OTHER COACH') say('WAITING ON THE OTHER COACH', 60000);
+  say('WAITING ON THE OTHER COACH', 350);
   if(performance.now() - G.pickAt > 12000) tryStartPlay(true);
 }
 function showOver(){
@@ -2873,73 +2951,15 @@ function publishInput(){
 
 // host: drive the Rivals man from whatever the guest sent
 function applyRemoteInput(dt){
+  // Only the throw mailbox now. Movement, abilities, switching and the meters
+  // all run through driveHuman(guestSeat()), the same path the host uses.
   if(!NET.on||!NET.host) return;
-  if(G.offense==='A' && G.phase==='live'){
-    if(NET.remoteThrow){
-      var rt=NET.remoteThrow; NET.remoteThrow=null;
-      throwAt(rt.x, rt.y, 'A');
-    }
-    if(NET.remoteTarget>=0){
-      var ri=NET.remoteTarget; NET.remoteTarget=-1;
-      var rl=eligibleReceivers();
-      if(rl[ri]) throwAt(rl[ri].x, rl[ri].y, 'A');
-    }
-  } else { NET.remoteThrow=null; NET.remoteTarget=-1; }
-  var inp=NET.remoteIn; if(!inp) return;
-  if(!G.controlled2||G.controlled2.stun>0||G.controlled2.team!=='A'){
-    G.controlled2=pickRemoteMan(false);
+  if(G.offense==='A' && G.phase==='live' && NET.remoteThrow){
+    var rt=NET.remoteThrow; NET.remoteThrow=null;
+    throwAt(rt.x, rt.y, 'A');
+  } else if(G.offense!=='A' || G.phase!=='live'){
+    NET.remoteThrow=null;
   }
-  if(inp.sw) G.controlled2=pickRemoteMan(true);
-  var q=G.controlled2;
-  if(q){
-    if(G.stam2===undefined) G.stam2=100;
-    var moving2=(inp.x||inp.y);
-    var sprint2=inp.sp && G.stam2>2 && moving2;
-    if(sprint2) G.stam2=Math.max(0,G.stam2-33*dt);
-    else G.stam2=Math.min(100,G.stam2+20*dt);
-    var mult=(sprint2?SPRINT:1)*(q.spd||1);
-    q.vx=inp.x*BASE_SPD*mult; q.vy=inp.y*BASE_SPD*mult;
-    G.power2=Math.min(100,(G.power2===undefined?100:G.power2)+13*dt);
-    if(G.hitCd2>0) G.hitCd2-=dt;
-
-    if(q===G.carrier){
-      // ---- the guest has the ball: juke and truck, same costs as the host
-      if(inp.b1 && G.power2>=JUKE_COST){
-        G.power2-=JUKE_COST; G.jukeUntil2=performance.now()+JUKE_MS;
-        var ja=Math.hypot(inp.x,inp.y)||1;
-        q.vx=(inp.x/ja)*BASE_SPD*2.1*(q.agi||1);
-        q.vy=(inp.y/ja)*BASE_SPD*2.4*(q.agi||1);
-        q.spin=1.1; burst(q.x,q.y,'#e0384e');
-      }
-      if(inp.b2 && G.power2>=TRUCK_COST){
-        G.power2-=TRUCK_COST; q.arm=0.6; G.shake=REDUCED?0:10;
-        ring(q.x,q.y,'#e0384e');
-        for(var tk=0;tk<G.players.length;tk++){
-          var vt=G.players[tk];
-          if(vt.team==='A') continue;
-          var vd=Math.hypot(vt.x-q.x,vt.y-q.y);
-          if(vd>30) continue;
-          vt.stun=0.9+Math.random()*0.4;
-          vt.vx=(vt.x-q.x)/(vd||1)*170; vt.vy=(vt.y-q.y)/(vd||1)*170;
-          vt.wrapped=0;
-        }
-      }
-    } else if(G.carrier && G.carrier.team!=='A'){
-      // ---- the guest is defending: wrap up, or line him up
-      var dd=Math.hypot(q.x-G.carrier.x,q.y-G.carrier.y);
-      if(inp.b1 && dd<TACKLE_R+12 && G.power2>=26){
-        G.power2-=26; G.carrier.hp-=26;
-        burst(G.carrier.x,G.carrier.y,'#ffffff'); G.shake=REDUCED?0:5;
-      }
-      if(inp.b2 && dd<TACKLE_R+16 && G.power2>=45 && G.hitCd2<=0){
-        G.power2-=45; G.hitCd2=0.8; q.arm=0.5;
-        G.carrier.hp-=40; G.carrier.stun=Math.max(G.carrier.stun,0.5);
-        burst(G.carrier.x,G.carrier.y,'#ffd23f'); G.shake=REDUCED?0:10;
-        say('BIG HIT!',520);
-      }
-    }
-  }
-  inp.b1=inp.b2=inp.b3=inp.sw=0;   // taps fire once
 }
 
 function pickRemoteMan(cycle){
@@ -2985,9 +3005,8 @@ function publishWorld(dt){
     ph:G.phase, lo:Math.round(G.los), dn:G.down, tg:Math.round(G.toGo),
     sh:G.scoreH, sa:G.scoreA, ck:Math.round(G.clock), pc:Math.round(G.playClock),
     of:G.offense, cr:G.clockRunning?1:0,
-    p2:Math.round(G.power2===undefined?100:G.power2),
-    s2:Math.round(G.stam2===undefined?100:G.stam2),
-    h2:+(G.hitCd2||0).toFixed(2)
+    p2:Math.round(G.M2.power), s2:Math.round(G.M2.stam),
+    h2:+G.M2.hitCd.toFixed(2), m2:+G.M2.moveCd.toFixed(2)
   }); }catch(e){}
 }
 
@@ -3023,9 +3042,9 @@ function consumeWorld(){
   G.phase=w.ph; G.los=w.lo; G.down=w.dn; G.toGo=w.tg;
   G.scoreH=w.sh; G.scoreA=w.sa; G.clock=w.ck; G.playClock=w.pc;
   G.offense=w.of; G.clockRunning=!!w.cr; G.playNo=w.pn|0;
-  G.power2=w.p2===undefined?100:w.p2;
-  G.stam2=w.s2===undefined?100:w.s2;
-  G.hitCd2=w.h2||0;
+  G.M2.power=w.p2===undefined?100:w.p2;
+  G.M2.stam=w.s2===undefined?100:w.s2;
+  G.M2.hitCd=w.h2||0; G.M2.moveCd=w.m2||0;
   G.thrown=null; G.loose=null; G.windup=null; G.fx=G.fx||[];
   return true;
 }
