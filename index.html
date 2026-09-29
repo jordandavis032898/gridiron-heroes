@@ -407,7 +407,7 @@ function mk(team,role,x,y,info){
   var p={team:team,role:role,x:x,y:y,vx:0,vy:0,route:null,stun:0,
          num:info&&info.num||0, name:info&&info.name||'', skin:info&&info.skin||'#c98f63',
          spd:1,pwr:1,agi:1, run:0, lean:0, spin:0, z:0, arm:0, hero:false, cel:0,
-         face:(team==='H'?1:-1), burst:0, aiCd:0, iFrames:0, phase:0, throwArm:0, stance:0, assign:null, blockIdx:0, engaged:0, shedAt:1.6, shed:false, lane:0, cover:null, spy:false, zy:0, zdepth:10, pos:'', hp:100, wrapped:0, down:0};
+         face:(team==='H'?1:-1), burst:0, aiCd:0, iFrames:0, phase:0, throwArm:0, stance:0, assign:null, blockIdx:0, engaged:0, shedAt:1.6, shed:false, lane:0, cover:null, spy:false, brk:1, zy:0, zdepth:10, pos:'', hp:100, wrapped:0, down:0};
   G.players.push(p); return p;
 }
 
@@ -444,6 +444,8 @@ function setupPlay(playId){
   else if(off==='screen'){ w1.route='lead'; w2.route='lead'; te.route='block'; rb.route='screen'; }
   else { w1.route='slant'; w2.route='slant'; te.route='flat'; rb.route='flat'; }
   c.route='block'; o1.route='block'; o2.route='block';
+  // lock in which way each man breaks now, so it cannot flip mid-route
+  [w1,w2,te,rb].forEach(function(rr){ rr.brk = (rr.y < mid) ? 1 : -1; });
   // ---- DEFENSE: DE, DE, DE, LB, LB, CB, CB, S
   var dplay = youOnO ? G.aiPlay : G.play;
   // What the call actually changes. Until now every defence played man with
@@ -603,16 +605,16 @@ function nearestRusher(p){
 }
 
 // ================================================================ passing
-function throwAt(wx,wy,side){
-  if(G.offense!==(side||'H')){ return; }
-  if(G.phase!=='live'){ say('BALL IS DEAD',700); G.lastThrow='phase '+G.phase; return; }
-  if(G.thrown){ say('ALREADY IN THE AIR',600); G.lastThrow='already in the air'; return; }
-  if(G.windup){ G.lastThrow='already throwing'; return; }
-  if(G.loose){ say('LOOSE BALL — GO GET IT',700); return; }
-  if(!G.carrier){ say('NOBODY HAS THE BALL',900); G.lastThrow='no carrier'; return; }
-  if(G.carrier.role!=='QB'){ say('CANNOT PASS — '+G.carrier.role+' HAS IT',1100); G.lastThrow='carrier is '+G.carrier.role; return; }
+// A forward pass is only legal from behind the line of scrimmage. Half a yard
+// of grace so a passer standing right on it is not punished for sprite width.
+function pastTheLine(p){
+  return p && ((p.x - G.los) * dir()) > 7;
+}
 
-  // eligible = anyone on offense who is not the passer and not a lineman
+// The one place a pass target is decided. The aiming ring and the throw both
+// call this, so the man with the circle on him is always the man it goes to.
+function pickTarget(wx,wy){
+  if(!G.carrier) return null;
   var best=null,bd=Infinity,any=false;
   for(var i=0;i<G.players.length;i++){
     var q=G.players[i];
@@ -622,22 +624,39 @@ function throwAt(wx,wy,side){
     var dd=Math.hypot(q.x-wx,q.y-wy);
     if(dd<bd){bd=dd;best=q;}
   }
-  if(!any){ say('NO RECEIVERS OUT',700); G.lastThrow='none eligible'; return; }
-  // if the click missed everyone, take whoever lies closest to that bearing
-  if(!best||bd>26*YD){
-    var ax=wx-G.carrier.x, ay=wy-G.carrier.y, am=Math.hypot(ax,ay)||1;
-    ax/=am; ay/=am;
-    var bestDot=-2;
-    for(var j=0;j<G.players.length;j++){
-      var r2=G.players[j];
-      if(r2.team!==G.offense||r2===G.carrier) continue;
-      if(r2.role==='C'||r2.role==='OL'||r2.role==='BL') continue;
-      var rx=r2.x-G.carrier.x, ry=r2.y-G.carrier.y, rm=Math.hypot(rx,ry)||1;
-      var dot=(rx/rm)*ax+(ry/rm)*ay;
-      if(dot>bestDot){ bestDot=dot; best=r2; }
-    }
-    if(!best||bestDot<0.25){ say('THROWN AWAY',700); G.lastThrow='no target that way'; return; }
+  if(!any) return null;
+  if(best && bd<=26*YD) return best;
+  // the cursor missed everybody, so take whoever lies nearest that bearing
+  var ax=wx-G.carrier.x, ay=wy-G.carrier.y, am=Math.hypot(ax,ay)||1;
+  ax/=am; ay/=am;
+  var pick=null, bestDot=-2;
+  for(var j=0;j<G.players.length;j++){
+    var r2=G.players[j];
+    if(r2.team!==G.offense||r2===G.carrier) continue;
+    if(r2.role==='C'||r2.role==='OL'||r2.role==='BL') continue;
+    var rx=r2.x-G.carrier.x, ry=r2.y-G.carrier.y, rm=Math.hypot(rx,ry)||1;
+    var dot=(rx/rm)*ax+(ry/rm)*ay;
+    if(dot>bestDot){ bestDot=dot; pick=r2; }
   }
+  return (pick && bestDot>=0.25) ? pick : null;
+}
+
+function throwAt(wx,wy,side){
+  if(G.offense!==(side||'H')){ return; }
+  if(G.phase!=='live'){ say('BALL IS DEAD',700); G.lastThrow='phase '+G.phase; return; }
+  if(G.thrown){ say('ALREADY IN THE AIR',600); G.lastThrow='already in the air'; return; }
+  if(G.windup){ G.lastThrow='already throwing'; return; }
+  if(G.loose){ say('LOOSE BALL — GO GET IT',700); return; }
+  if(!G.carrier){ say('NOBODY HAS THE BALL',900); G.lastThrow='no carrier'; return; }
+  if(G.carrier.role!=='QB'){ say('CANNOT PASS — '+G.carrier.role+' HAS IT',1100); G.lastThrow='carrier is '+G.carrier.role; return; }
+  if(pastTheLine(G.carrier)){
+    say('PAST THE LINE — RUN IT',1000);
+    G.lastThrow='past the line'; return;
+  }
+
+  var best=pickTarget(wx,wy);
+  if(!best){ say('THROWN AWAY',700); G.lastThrow='no target that way'; return; }
+
   // Throw NOW. The windup state machine could cancel itself between frames
   // (carrier changes, play ends, an exception upstream) and swallow the pass.
   // The arm animation plays out after the release instead.
@@ -650,6 +669,11 @@ function releaseThrow(best){
   var qb=G.carrier;
   if(!qb||!best){ G.windup=null; G.lastThrow='no passer/target'; return; }
   if(G.thrown){ return; }
+  if(pastTheLine(qb)){                      // illegal forward pass; he keeps it
+    G.windup=null; qb.throwArm=0;
+    G.rocketArmed=false; G.perfectArmed=false;
+    G.lastThrow='past the line'; return;
+  }
   var fast = (HERO.move==='rocket' && qb.hero) ? 1.4 : 1;
   var rocket = !!(G.windupWasRocket) || !!G.rocketArmed;
   var perfect = !!G.perfectArmed;
@@ -1182,16 +1206,17 @@ function routePoint(p,since){
     }
     return {x:tx, y:p.y+Math.sin(since*1.6)*1.4*YD};
   }
+  var br=p.brk||1;                       // which way he broke, fixed at the snap
   if(p.route==='slant'){
     if(since<0.45) return {x:p.x+6*YD*d, y:p.y};        // stem, then break in
-    return {x:p.x+5*YD*d, y:mid+(p.y<mid?6:-6)*YD};
+    return {x:p.x+5*YD*d, y:mid+br*6*YD};
   }
-  if(p.route==='flat')  return {x:p.x+5*YD*d,  y:p.y+(p.y<mid?-9:9)*YD};
+  if(p.route==='flat')  return {x:p.x+5*YD*d,  y:p.y-br*9*YD};
 
   // break for the sideline once he has the depth
   if(p.route==='out'){
     if(since<1.05) return {x:p.x+12*YD*d, y:p.y};
-    return {x:p.x+2*YD*d, y:(p.y<mid? 4*YD : FH-4*YD)};
+    return {x:p.x+2*YD*d, y:(br>0 ? 4*YD : FH-4*YD)};
   }
   // get depth, then come back to the ball
   if(p.route==='curl'){
@@ -1201,7 +1226,7 @@ function routePoint(p,since){
   }
   // widen, then straight up the sideline
   if(p.route==='wheel'){
-    if(since<0.75) return {x:p.x+2*YD*d, y:(p.y<mid? p.y-8*YD : p.y+8*YD)};
+    if(since<0.75) return {x:p.x+2*YD*d, y:p.y-br*8*YD};
     return {x:p.x+30*YD*d, y:p.y};
   }
   // the mesh point: run at the passer and take the ball off him
@@ -1211,7 +1236,7 @@ function routePoint(p,since){
   }
   // slip out behind the rush, then turn upfield
   if(p.route==='screen'){
-    if(since<0.8) return {x:G.los-4*YD*d, y:(p.y<mid? p.y-7*YD : p.y+7*YD)};
+    if(since<0.8) return {x:G.los-4*YD*d, y:p.y-br*7*YD};
     return {x:p.x+20*YD*d, y:p.y};
   }
   return null;
@@ -1329,6 +1354,7 @@ function cpuQB(now){
   if(G.offense==='H') return;
   if(NET.on) return;          // the Rivals offence is the guest, a person
   if(G.handoffAt!=null) return;   // he is giving it to the back, not throwing
+  if(pastTheLine(G.carrier)) return;   // he has crossed; he is a runner now
   if(!G.carrier||G.carrier.role!=='QB'||G.thrown||G.windup||G.loose) return;
   var qb=G.carrier, d=dir(), since=(now-G.snapT)/1000;
   var rush=nearestOf(qb,'H');
@@ -2316,16 +2342,9 @@ function draw(){
     ctx.beginPath(); ctx.moveTo(fd,0); ctx.lineTo(fd,FH); ctx.stroke(); }
 
   // pass targeting reticle
-  if((G.phase==='live'||G.phase==='presnap')&&G.mouse.on&&G.carrier&&G.carrier.role==='QB'&&iHaveBall()&&!G.thrown){
-    var tgt=null,bd=Infinity;
-    for(var q0=0;q0<G.players.length;q0++){
-      var pp=G.players[q0];
-      if(pp.team!==G.offense||pp===G.carrier) continue;
-      if(pp.role==='C'||pp.role==='OL'||pp.role==='BL') continue;
-      var dd2=Math.hypot(pp.x-G.mouse.x,pp.y-G.mouse.y);
-      if(dd2<bd){bd=dd2;tgt=pp;}
-    }
-    if(tgt&&bd<34*YD){
+  if((G.phase==='live'||G.phase==='presnap')&&G.mouse.on&&G.carrier&&G.carrier.role==='QB'&&iHaveBall()&&!G.thrown&&!pastTheLine(G.carrier)){
+    var tgt=pickTarget(G.mouse.x,G.mouse.y);
+    if(tgt){
       ctx.strokeStyle='rgba(255,210,63,.85)'; ctx.lineWidth=2.1; ctx.setLineDash([6,5]);
       ctx.beginPath(); ctx.moveTo(G.carrier.x,G.carrier.y); ctx.lineTo(tgt.x,tgt.y); ctx.stroke();
       ctx.setLineDash([]);
