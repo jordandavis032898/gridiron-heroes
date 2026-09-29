@@ -324,7 +324,7 @@ function freshGame(){
     celebrate:0, celAt:null, scoringTeam:'H',
     playNo:0, hostPick:null, pickAt:0, handoffAt:null,
     cushion:0, covType:'man', zoneDeep:0, diveCd:0, drag:null,
-    lockMan:null, lockT:0,
+    lockMan:null, lockT:0, freeT:0,
     abCd:{}, rocketArmed:false, perfectArmed:false, netAb:[0,0,0],
     stats:freshStats(), cur:null, showingStats:false,
     M2:{power:100, stam:100, moveCd:0, hitCd:0, jukeCd:0, latCd:0,
@@ -2457,7 +2457,7 @@ function step(dt){
       G.carrier.hp -= ((34+grabbers*26)/res)*dt;
       var drag=Math.max(0.22, 1-grabbers*0.27);       // dragged down as they hang on
       G.carrier.vx*=drag; G.carrier.vy*=drag;
-      G.carrier.wrapped=0.25;
+      G.carrier.wrapped=0.25; G.freeT=0;
       if(Math.random()<dt*7) burst(G.carrier.x,G.carrier.y-8,'#e8eef2');
       if(G.carrier.hp<=0){
         burst(G.carrier.x,G.carrier.y,'#ffffff');
@@ -2468,7 +2468,8 @@ function step(dt){
         endPlay(G.carrier.x,'TACKLED'); return;
       }
     } else {
-      G.carrier.hp=Math.min(100, G.carrier.hp + 26*dt);   // breaks free, regains footing
+      G.freeT=(G.freeT||0)+dt;
+      if(G.freeT>0.7) G.carrier.hp=Math.min(100, G.carrier.hp + 7*dt);
     }
     // sideline: getting out stops the clock, which is the whole point
     if(G.carrier.y<=9 || G.carrier.y>=FH-9){
