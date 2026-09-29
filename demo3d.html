@@ -398,7 +398,7 @@ function screenToWorld(cx,cy){
 // stands. The ground is drawn in perspective row by row (far rows shrink),
 // and each player is drawn at his projected spot, scaled by his distance.
 var VIEW3D=true, P3LAST=null;
-var Z3=820, TILT3=0.60, ZOOM3=1.45;   // camera distance, ground foreshortening, zoom
+var Z3=820, TILT3=0.60, BASE3=1.7;    // camera distance, ground foreshortening, base zoom
 window.addEventListener('keydown',function(e){
   if(e.key==='v'||e.key==='V'){ VIEW3D=!VIEW3D; }
 });
@@ -439,8 +439,56 @@ function makeW3(){
   g.drawImage(fieldCanvas, M, MT);
   return {cv:c, g:c.getContext('2d'), base:base, M:M, MT:MT};
 }
+// Everything that must stay on screen this frame.
+function camPoints(){
+  var pts=[]; if(!G) return pts;
+  if(G.ball) pts.push([G.ball.x,G.ball.y]);
+  if(G.thrown){
+    pts.push([G.thrown.tx,G.thrown.ty]);
+    if(G.thrown.target) pts.push([G.thrown.target.x,G.thrown.target.y]);
+  }
+  var c=G.carrier, bx=G.ball?G.ball.x:FW/2, by=G.ball?G.ball.y:FH/2;
+  var live=(G.phase==='live');
+  var passing=live && c && c.role==='QB' && !G.thrown && !pastTheLine(c);
+  for(var i=0;i<G.players.length;i++){
+    var q=G.players[i];
+    if(!isFinite(q.x)||!isFinite(q.y)) continue;
+    if(!live){
+      if(Math.hypot(q.x-bx,q.y-by)<24*YD) pts.push([q.x,q.y]);
+      continue;
+    }
+    if(q===c || q===G.controlled){ pts.push([q.x,q.y]); continue; }
+    // while you are passing, every man you can throw to has to be visible
+    if(passing && q.team===G.offense && q.role!=='C' && q.role!=='OL' && q.role!=='BL'){
+      if(Math.hypot(q.x-c.x,q.y-c.y)<45*YD) pts.push([q.x,q.y]);
+      continue;
+    }
+    // with a runner, the men closing on him
+    if(c && !passing && q.team!==c.team && Math.hypot(q.x-c.x,q.y-c.y)<9*YD) pts.push([q.x,q.y]);
+  }
+  return pts;
+}
+// Largest zoom that keeps every point inside the safe frame. Screen offsets
+// from centre are exactly proportional to the zoom for a fixed camera, so
+// this is one pass, no search.
+function camFit(pts,camx,camy){
+  var Z0=Z3, c=TILT3, best=9;
+  for(var i=0;i<pts.length;i++){
+    var zc=Math.max(160, Z0-(pts[i][1]-camy));
+    var ox=(pts[i][0]-camx)*Z0/zc, oy=c*Z0*(Z0/zc-1);
+    if(Math.abs(ox)>1) best=Math.min(best,(VW/2-60)/Math.abs(ox));
+    if(oy<-1) best=Math.min(best,(VH/2-100)/(-oy));
+    else if(oy>1) best=Math.min(best,(VH/2-80)/oy);
+  }
+  return best;
+}
 function setupProj(sx,sy){
-  var S0=scale*ZOOM3, Z0=Z3, c=TILT3;
+  var want=BASE3*CAM3.z, fit=camFit(camPoints(),cam.x,cam.y);
+  var tgt=Math.max(0.35,Math.min(want,fit));
+  if(!CAM3.S) CAM3.S=tgt;
+  // pull out fast so nothing leaves the frame, push in gently
+  CAM3.S += (tgt-CAM3.S)*(tgt<CAM3.S?0.3:0.06);
+  var S0=CAM3.S, Z0=Z3, c=TILT3;
   var K=c*S0*Z0*Z0;
   var P={S0:S0, Z0:Z0, K:K, hz:VH/2+sy - c*S0*Z0, cx:VW/2+sx, camx:cam.x, camy:cam.y};
   P3LAST=P; return P;
@@ -485,6 +533,38 @@ function blit3D(P){
     lg.addColorStop(0,'rgba(255,250,225,.30)'); lg.addColorStop(1,'rgba(255,250,225,0)');
     ctx.fillStyle=lg; ctx.fillRect(lx-VW*0.14,0,VW*0.28,VW*0.14);
   }
+}
+
+// ---- dynamic camera: wide before the snap, tight on the action, a quick
+// punch-in on big hits and hero moves, and a pull-back on a breakaway so you
+// can see the end zone and whoever is chasing.
+var CAM3={z:0.86, actUntil:0, ax:0, ay:0, prevShake:0, prevSpin:0};
+function camMood(now){
+  if(CAM3.actUntil>now) return 1.55;
+  if(!G || G.phase!=='live') return 0.86;
+  if(G.thrown) return 0.92;
+  var c=G.carrier;
+  if(!c) return 1.0;
+  if(c.role==='QB' && !pastTheLine(c)) return 1.0;
+  var dfn=nearestOf(c, c.team==='H'?'A':'H');
+  var dd=dfn?Math.hypot(dfn.x-c.x,dfn.y-c.y):999;
+  var past=(c.x-G.los)*dir();
+  if(dd>8*YD && past>3*YD) return 0.8;
+  return 1.14;
+}
+function camDirect(){
+  var now=performance.now();
+  if(G && G.phase==='live'){
+    var c=G.carrier, sp=c?(c.spin||0):0;
+    if(G.shake > CAM3.prevShake+2 || (sp>0.85 && CAM3.prevSpin<=0.85)){
+      CAM3.actUntil=now+620; CAM3.ax=G.ball.x; CAM3.ay=G.ball.y;
+    }
+    CAM3.prevSpin=sp;
+  }
+  CAM3.prevShake=G?G.shake:0;
+  var zt=camMood(now), act=CAM3.actUntil>now;
+  CAM3.z += (zt-CAM3.z)*(act?0.2:0.05);
+  return act;
 }
 
 // A proper spin: two quick turns, a whirl round his waist, afterimages.
@@ -2900,9 +2980,23 @@ function draw(){
   // centre mostly on the ball so the play stays where your eye already is
   var cx=(minX+maxX)/2, cy=(minY+maxY)/2+(padTop-padBot)/2;
   var tx=bx*0.62+cx*0.38, ty=by*0.62+cy*0.38;
+  var actCam = VIEW3D ? camDirect() : false;
+  if(actCam){ tx=CAM3.ax; ty=CAM3.ay; }
+  else if(VIEW3D){
+    var cp=camPoints();
+    if(cp.length){
+      var x0=1e9,x1=-1e9,y0=1e9,y1=-1e9;
+      for(var ci=0;ci<cp.length;ci++){
+        x0=Math.min(x0,cp[ci][0]); x1=Math.max(x1,cp[ci][0]);
+        y0=Math.min(y0,cp[ci][1]); y1=Math.max(y1,cp[ci][1]);
+      }
+      tx=(x0+x1)/2*0.6+bx*0.4; ty=(y0+y1)/2*0.6+by*0.4;
+    }
+  }
   if(!isFinite(tx)) tx=FW/2;
   if(!isFinite(ty)) ty=FH/2;
-  cam.x += (tx-cam.x)*0.11; cam.y += (ty-cam.y)*0.11;
+  var follow = actCam ? 0.2 : (VIEW3D ? 0.15 : 0.11);
+  cam.x += (tx-cam.x)*follow; cam.y += (ty-cam.y)*follow;
 
   // the viewport itself can come back wrong after a resize
   if(!isFinite(VW)||!isFinite(VH)||VW<40||VH<40){ resize(); }
