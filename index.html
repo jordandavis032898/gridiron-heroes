@@ -878,9 +878,10 @@ function fireAbility(seat, IN, slot){
     var hit=flatten(52,1.3,210);
     me.iFrames=Math.max(me.iFrames,1.4);
     flash(me.x,me.y-16,'rgba(127,216,255,.95)',46);
+    G.fx.push({dome:true,x:me.x,y:me.y+4,c:'rgba(127,216,255,.95)',
+               r:52,life:0.75,max:0.75});
     shock(me.x,me.y,'rgba(255,255,255,.95)',6,58,0.34);
-    shock(me.x,me.y,'rgba(127,216,255,.85)',6,52,0.48);
-    shock(me.x,me.y,'rgba(127,216,255,.55)',6,44,0.62);
+    shock(me.x,me.y,'rgba(127,216,255,.6)',6,48,0.55);
     dust(me.x,me.y,14,1.3); G.shake=REDUCED?0:18;
     tell(hit?'FORCEFIELD!':'FORCEFIELD',800);
   }
@@ -1010,7 +1011,8 @@ function fireAbility(seat, IN, slot){
   else if(id==='aagun'){
     if(!G.thrown) return;                        // nothing in the air, no charge
     var tgt=G.thrown.target;
-    streak(me.x,me.y-24,G.ball.x,G.ball.y,'rgba(255,210,63,.95)',2.4,0.18);
+    G.fx.push({bolt:true,x:me.x,y:me.y-24,x2:G.ball.x,y2:G.ball.y,
+               c:'rgba(255,240,170,1)',life:0.20,max:0.20});
     streak(me.x,me.y-24,G.ball.x,G.ball.y,'rgba(255,255,255,.7)',1.0,0.26);
     flash(me.x+(G.ball.x-me.x)*0.08, me.y-24+(G.ball.y-(me.y-24))*0.08,
           'rgba(255,210,63,.95)',18);
@@ -1164,18 +1166,83 @@ function switchPlayer(side){
 }
 
 
+
+// ------------------------------------------------- effect art
+// Five of these are painted white on solid black and composited with
+// 'lighter', so the black contributes nothing and the edges blend for free,
+// no keying and no fringe. The dust puff is an ordinary opaque sprite, so it
+// is the one that gets the magenta treatment.
+var FXI={}, FXTINT={};
+(function(){
+  ['impact','shock','dome','streak','bolt'].forEach(function(n){
+    var i=new Image(); i.ready=false; i.tag=n;
+    i.onload=function(){ i.ready=true; };
+    i.src='parts/fx/fx-'+n+'.png';
+    FXI[n]=i;
+  });
+  var d=new Image();
+  d.onload=function(){
+    var c=document.createElement('canvas'); c.width=d.width; c.height=d.height;
+    var x=c.getContext('2d'); x.drawImage(d,0,0);
+    try{
+      var im=x.getImageData(0,0,c.width,c.height), a=im.data;
+      for(var i=0;i<a.length;i+=4){
+        if(a[i]>195 && a[i+1]<80 && a[i+2]>195) a[i+3]=0;
+      }
+      x.putImageData(im,0,0);
+    }catch(e){}
+    FXI.dust=c; FXI.dust.ready=true;
+  };
+  d.src='parts/fx/fx-dust.png';
+})();
+
+// rgba(...) or #hex down to a solid colour we can multiply by
+function solidOf(c){
+  if(!c) return '#ffffff';
+  if(c.charAt(0)==='#') return c;
+  var m=/rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/.exec(c);
+  return m ? ('rgb('+m[1]+','+m[2]+','+m[3]+')') : '#ffffff';
+}
+// white art multiplied by a colour, cached, because these repeat constantly
+function fxTint(img,col){
+  if(!img||!img.ready) return null;
+  var key=img.tag+'|'+col;
+  if(FXTINT[key]) return FXTINT[key];
+  var c=document.createElement('canvas'); c.width=img.width; c.height=img.height;
+  var x=c.getContext('2d');
+  x.drawImage(img,0,0);
+  x.globalCompositeOperation='multiply';
+  x.fillStyle=col; x.fillRect(0,0,c.width,c.height);
+  FXTINT[key]=c; c.ready=true;
+  return c;
+}
+function addSprite(img,x,y,w,h,a,rot,sy){
+  if(!img) return false;
+  ctx.save();
+  ctx.globalCompositeOperation='lighter';
+  ctx.globalAlpha=a;
+  ctx.translate(x,y);
+  if(rot) ctx.rotate(rot);
+  if(sy&&sy!==1) ctx.scale(1,sy);
+  ctx.drawImage(img,-w/2,-h/2,w,h);
+  ctx.restore();
+  return true;
+}
+
 // ============================================================ effects toolbox
 // Every ability used to look the same: an expanding flat ellipse and ten
 // circles. These are the pieces that let each one read differently.
 
 // an expanding shockwave with real thickness
 function shock(x,y,c,r0,r1,ms){
-  G.fx.push({shock:true,x:x,y:y,c:c,r0:r0,r1:r1,life:ms||0.42,max:ms||0.42});
+  G.fx.push({shock:true,x:x,y:y,c:c,r0:r0,r1:r1,rot:Math.random()*6.28,
+             life:ms||0.42,max:ms||0.42});
 }
 // a bright radial bloom, for the instant of contact
 function flash(x,y,c,r){
   if(REDUCED) return;
-  G.fx.push({flash:true,x:x,y:y,c:c||'rgba(255,255,255,0.9)',r:r||22,life:0.24,max:0.24});
+  G.fx.push({flash:true,x:x,y:y,c:c||'rgba(255,255,255,0.9)',r:r||22,
+             rot:Math.random()*6.28,life:0.26,max:0.26});
 }
 // turf torn up: brown, heavy, falls back down
 function dust(x,y,n,spread){
@@ -1183,9 +1250,9 @@ function dust(x,y,n,spread){
   var cols=['#6d5836','#7d6a45','#5a4a2e','#8a7550'];
   for(var i=0;i<n;i++){
     var a=Math.random()*Math.PI*2, sp=(24+Math.random()*70)*spread;
-    G.fx.push({x:x+(Math.random()-0.5)*8, y:y+(Math.random()-0.5)*4,
+    G.fx.push({puff:true, x:x+(Math.random()-0.5)*8, y:y+(Math.random()-0.5)*4,
                vx:Math.cos(a)*sp, vy:Math.sin(a)*sp*0.45-18,
-               grav:120, r:1.4+Math.random()*2.0,
+               grav:120, r:5+Math.random()*7, rot:Math.random()*6.28,
                life:0.5+Math.random()*0.35, max:0.85,
                c:cols[(Math.random()*cols.length)|0]});
   }
@@ -2219,7 +2286,7 @@ function step(dt){
   for(var f=G.fx.length-1;f>=0;f--){
     var e=G.fx[f]; e.life-=dt;
     if(e.ringed){ e.r+=dt*130; }
-    else if(e.shock||e.flash||e.streak||e.gh){ /* these live on their timer */ }
+    else if(e.shock||e.flash||e.streak||e.gh||e.dome||e.bolt){ /* on a timer */ }
     else { e.x+=e.vx*dt; e.y+=e.vy*dt; e.vx*=0.93; e.vy*=0.93;
            if(e.grav){ e.vy+=e.grav*dt; } }
     if(e.life<=0) G.fx.splice(f,1);
@@ -2588,16 +2655,41 @@ function draw(){
       ctx.beginPath(); ctx.ellipse(e.x,e.y,e.r,e.r*0.42,0,0,Math.PI*2); ctx.stroke();
     } else if(e.shock){
       var ggg=1-k2, rr2=e.r0+(e.r1-e.r0)*ggg;
-      ctx.strokeStyle=e.c; ctx.lineWidth=0.8+3.6*k2;
-      ctx.beginPath(); ctx.ellipse(e.x,e.y,rr2,rr2*0.40,0,0,Math.PI*2); ctx.stroke();
+      if(!addSprite(fxTint(FXI.shock,solidOf(e.c)),e.x,e.y,rr2*2.2,rr2*2.2,k2,e.rot,0.40)){
+        ctx.strokeStyle=e.c; ctx.lineWidth=0.8+3.6*k2;
+        ctx.beginPath(); ctx.ellipse(e.x,e.y,rr2,rr2*0.40,0,0,Math.PI*2); ctx.stroke();
+      }
+    } else if(e.dome){
+      var dr=e.r*(0.5+(1-k2)*0.6);
+      addSprite(fxTint(FXI.dome,solidOf(e.c)),e.x,e.y-dr*0.28,dr*2,dr*2,k2*0.9,0,0.8);
+    } else if(e.bolt){
+      var bl=Math.hypot(e.x2-e.x,e.y2-e.y), ba=Math.atan2(e.y2-e.y,e.x2-e.x);
+      addSprite(fxTint(FXI.bolt,solidOf(e.c)),(e.x+e.x2)/2,(e.y+e.y2)/2,
+                bl,bl*0.5*(128/256),k2,ba,1);
     } else if(e.flash){
-      var fr=e.r*(0.35+(1-k2)*1.4);
-      var gr=ctx.createRadialGradient(e.x,e.y,0,e.x,e.y,fr);
-      gr.addColorStop(0,e.c); gr.addColorStop(1,'rgba(255,255,255,0)');
-      ctx.fillStyle=gr; ctx.beginPath(); ctx.arc(e.x,e.y,fr,0,Math.PI*2); ctx.fill();
+      var fr=e.r*(0.45+(1-k2)*1.5);
+      if(!addSprite(fxTint(FXI.impact,solidOf(e.c)),e.x,e.y,fr*2.6,fr*2.6,k2,e.rot,1)){
+        var gr=ctx.createRadialGradient(e.x,e.y,0,e.x,e.y,fr);
+        gr.addColorStop(0,e.c); gr.addColorStop(1,'rgba(255,255,255,0)');
+        ctx.fillStyle=gr; ctx.beginPath(); ctx.arc(e.x,e.y,fr,0,Math.PI*2); ctx.fill();
+      }
     } else if(e.streak){
-      ctx.strokeStyle=e.c; ctx.lineWidth=e.w; ctx.lineCap='round';
-      ctx.beginPath(); ctx.moveTo(e.x,e.y); ctx.lineTo(e.x2,e.y2); ctx.stroke();
+      var sl=Math.hypot(e.x2-e.x,e.y2-e.y), sa=Math.atan2(e.y2-e.y,e.x2-e.x);
+      if(!addSprite(fxTint(FXI.streak,solidOf(e.c)),(e.x+e.x2)/2,(e.y+e.y2)/2,
+                    sl,Math.max(3,e.w*3.2),k2,sa,1)){
+        ctx.strokeStyle=e.c; ctx.lineWidth=e.w; ctx.lineCap='round';
+        ctx.beginPath(); ctx.moveTo(e.x,e.y); ctx.lineTo(e.x2,e.y2); ctx.stroke();
+      }
+    } else if(e.puff){
+      if(FXI.dust && FXI.dust.ready){
+        ctx.save(); ctx.globalAlpha=k2*0.85;
+        ctx.translate(e.x,e.y); ctx.rotate(e.rot);
+        ctx.drawImage(FXI.dust,-e.r,-e.r,e.r*2,e.r*2);
+        ctx.restore();
+      } else {
+        ctx.fillStyle=e.c; ctx.beginPath();
+        ctx.arc(e.x,e.y,e.r*0.3,0,Math.PI*2); ctx.fill();
+      }
     } else if(e.gh){
       ctx.globalAlpha=k2*0.40; ctx.fillStyle=e.c;
       ctx.beginPath(); ctx.ellipse(e.x,e.y-15,5.2,11,0,0,Math.PI*2); ctx.fill();
