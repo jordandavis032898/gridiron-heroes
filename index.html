@@ -1934,9 +1934,17 @@ function step(dt){
       var ax=bx, ay=by;
       if(G.carrier){
         var rx=G.carrier.x-p.x, ry=G.carrier.y-p.y;
-        var closeT=Math.min(1.6, (Math.hypot(rx,ry)||1)/(DEF_SPD*1.15));
-        ax=G.carrier.x+G.carrier.vx*closeT;
-        ay=G.carrier.y+G.carrier.vy*closeT;
+        var dist=Math.hypot(rx,ry)||1;
+        var cvx=G.carrier.vx, cvy=G.carrier.vy, cs=Math.hypot(cvx,cvy);
+        // Only lead him when he is running away from me. A defender who is
+        // already downfield of the carrier has him coming the other way, and
+        // leading there aims at a spot further downfield still, so he backs
+        // off the man he is supposed to be closing on. That looked exactly
+        // like the defence running away.
+        var away = cs>1 ? ((cvx*rx + cvy*ry)/(cs*dist)) : 0;   // +1 fleeing me
+        var leadT = Math.min(1.2, dist/(DEF_SPD*1.15)) * Math.max(0, away);
+        ax=G.carrier.x+cvx*leadT;
+        ay=G.carrier.y+cvy*leadT;
       }
       aim(p, ax, ay+lane, DEF_SPD*(p.role==='RUSH'?1.10:0.96)*openChase());
     }
@@ -2437,7 +2445,10 @@ var PART_FILES = {
   helmet:'parts/football-helmet.png', torso:'parts/football-torso.png',
   uarm:'parts/football-upper-arm.png', farm:'parts/football-forearm.png',
   thigh:'parts/football-thigh.png', shin:'parts/football-lower-leg.png',
-  cleat:'parts/football-cleat.png'
+  cleat:'parts/football-cleat.png',
+  torsoOL:'parts/football-torso-lineman.png',      // heavier build for the line
+  helmetAlt:'parts/football-helmet-alt.png',       // second lid, for variety
+  farmHand:'parts/football-forearm-hand.png'       // open glove, for the reach
 };
 var SPR = { ready:false, H:{}, A:{}, pending:0 };
 
@@ -2499,6 +2510,8 @@ function boneH(img,x,y,a,len,thk){
 
 function drawSprite(p){
   var S = p.team==='H' ? SPR.H : SPR.A;
+  var TORSO  = (p.role==='OL'||p.role==='C'||p.role==='BL') && S.torsoOL ? S.torsoOL : S.torso;
+  var HELMET = (S.helmetAlt && (p.num%2===1)) ? S.helmetAlt : S.helmet;
   // Torso carries the figure; the helmet must read smaller than the shoulders.
   var HIP=-16, SHO=-28.5;
   var TH=8.5, WTH=5.4, SHN=8, WSHN=3.2, CL=4.5, HCL=2.2;
@@ -2543,7 +2556,7 @@ function drawSprite(p){
   ctx.globalAlpha=1;
 
   // ---- torso: the widest thing on the figure
-  ctx.drawImage(S.torso,-5.4,SHO-3.5,10.8,18);
+  ctx.drawImage(TORSO, TORSO===S.torso?-5.4:-6.3, SHO-3.5, TORSO===S.torso?10.8:12.6, 18);
 
   // the art has a 12 painted on it, so patch it out and stamp the real number
   ctx.fillStyle = p.team==='H' ? '#223058' : '#a8232f';
@@ -2561,7 +2574,7 @@ function drawSprite(p){
   boneH(S.cleat,fF.x-1,fF.y-0.6,LF.s+1.25,CL,HCL);
 
   // ---- helmet: must sit narrower than the shoulders, or it reads bobblehead
-  ctx.drawImage(S.helmet,-4.4,SHO-10.7,9.2,8.2);
+  ctx.drawImage(HELMET,-4.4,SHO-10.7,9.2,8.2);
 
   // ---- front arm: throw, stiff arm, or normal swing
   if(p.throwArm>0){
@@ -2574,7 +2587,7 @@ function drawSprite(p){
   } else if(p.arm>0){
     var k=p.arm/0.55;
     var elS=boneH(S.uarm,3.6,SHO+1,1.38*k,UA,HUA);
-    boneH(S.farm,elS.x,elS.y,1.52*k,FA,HFA);
+    boneH(S.farmHand||S.farm,elS.x,elS.y,1.52*k,FA+1.4,HFA+0.5);
   } else {
     var elF=boneH(S.uarm,3.6,SHO+1,AF,UA,HUA);
     boneH(S.farm,elF.x,elF.y,AF-0.88,FA,HFA);
