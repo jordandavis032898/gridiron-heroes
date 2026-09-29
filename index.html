@@ -2944,12 +2944,12 @@ function drawSprite(p){
     var tuck=Math.max(0,-Math.sin(phase-0.7));
     return {t:thigh, s:thigh+0.22+tuck*1.5};
   }
-  var LF,LB,bob,AF,AB;
-  if(p.down>0 || p.stun>0){
-    // sprawled: legs out along the body, arms thrown wide
-    LF={t: 0.34, s: 0.52};
-    LB={t:-0.30, s:-0.12};
-    bob=0; AF=-0.95; AB=1.05;
+  var LF,LB,bob,AF,AB,EF=-0.88,EB=-0.88, KD=p._pose;
+  if(KD){
+    // knocked down, or getting back up: see knockPose
+    LF={t:KD.lt, s:KD.ls};
+    LB={t:KD.bt, s:KD.bs};
+    bob=0; AF=KD.af; AB=KD.ab; EF=KD.ef; EB=KD.eb;
   } else if(moving){
     LF=leg(ph); LB=leg(ph+Math.PI);
     bob=-Math.abs(Math.sin(ph))*2.2;                 // rises twice per stride
@@ -2975,7 +2975,7 @@ function drawSprite(p){
   var fB=boneV(S.shin,kB.x,kB.y,LB.s,SHN,WSHN);
   boneH(S.cleat,fB.x-1,fB.y-0.6,LB.s+1.25,CL,HCL);
   var elB=boneH(S.uarm,-3.6,SHO+1,AB,UA,HUA);
-  boneH(S.farm,elB.x,elB.y,AB-0.88,FA,HFA);   // elbow held near 90 degrees
+  boneH(S.farm,elB.x,elB.y,AB+EB,FA,HFA);   // elbow held near 90 degrees
   ctx.globalAlpha=1;
 
   // ---- torso: the widest thing on the figure
@@ -3000,20 +3000,20 @@ function drawSprite(p){
   ctx.drawImage(HELMET,-4.4,SHO-10.7,9.2,8.2);
 
   // ---- front arm: throw, stiff arm, or normal swing
-  if(p.throwArm>0){
+  if(!KD && p.throwArm>0){
     var u=1-p.throwArm;               // 0 at the release, 1 by the follow-through
     // cock it back, then whip over the top. This ran backwards before.
     var ta = u<0.32 ? (-0.5 - u*4.4)
                     : (-1.91 + (u-0.32)*5.0);
     var elT=boneH(S.uarm,3.6,SHO+1,ta,UA,HUA);
     boneH(S.farm,elT.x,elT.y,ta+0.35,FA,HFA);
-  } else if(p.arm>0){
+  } else if(!KD && p.arm>0){
     var k=p.arm/0.55;
     var elS=boneH(S.uarm,3.6,SHO+1,1.38*k,UA,HUA);
     boneH(S.farmHand||S.farm,elS.x,elS.y,1.52*k,FA+1.4,HFA+0.5);
   } else {
     var elF=boneH(S.uarm,3.6,SHO+1,AF,UA,HUA);
-    boneH(S.farm,elF.x,elF.y,AF-0.88,FA,HFA);
+    boneH(S.farm,elF.x,elF.y,AF+EF,FA,HFA);
   }
 
   // ---- ball tucked under the near arm
@@ -3028,6 +3028,47 @@ function drawSprite(p){
   }
 }
 
+// ---- knockdown: fall, stay down, then climb back to his feet -------------
+// Poses are in the player's own frame (after the facing flip), so everyone
+// goes over backwards from the way he was facing. rot turns the body about
+// the hip; drop lowers the hip toward the turf. Leg and arm angles are the
+// same bone angles drawSprite uses, so the whole rig moves, not a stiff cutout.
+var KD_STAND={rot:0,    drop:0,   lt:0.17, ls:0.33, bt:-0.17, bs:-0.02, af:-0.15, ef:-0.88, ab:0.15,  eb:-0.88};
+var KD_LIE  ={rot:-1.45,drop:10.5,lt:-0.15,ls:0.0,  bt:0.45,  bs:-0.55, af:-2.3,  ef:0.4,   ab:-2.9,  eb:0.2};
+var KD_SIT  ={rot:-0.2, drop:13,  lt:1.3,  ls:1.2,  bt:0.9,   bs:-0.5,  af:0.2,   ef:-0.5,  ab:-0.8,  eb:0};
+var KD_KNEEL={rot:0.35, drop:5.5, lt:1.8,  ls:0.4,  bt:0.25,  bs:-1.15, af:1.25,  ef:-0.3,  ab:0.65,  eb:-0.4};
+var KD_FALL=0.25, KD_GETUP=0.75;
+function kdMix(a,b,t){
+  t=t*t*(3-2*t);
+  var o={}; for(var k in a) o[k]=a[k]+(b[k]-a[k])*t; return o;
+}
+function knockPose(p){
+  var r=Math.max(p.down||0,p.stun||0);
+  if(!(r>0)){ p._kd0=0; p._kdLast=0; return null; }
+  if(!p._kd0 || r>p._kdLast+0.02){
+    // a fresh knockdown starts from the fall; a second hit on a man already
+    // down keeps him down rather than replaying the fall
+    p._kd0 = r + (p._kd0 ? KD_FALL : 0);
+  }
+  p._kdLast=r;
+  var total=p._kd0, e=total-r;
+  var fall=Math.min(KD_FALL,total*0.3);
+  var up=Math.min(KD_GETUP,total*0.55);
+  var pose;
+  if(e<fall){
+    var u=e/fall; pose=kdMix(KD_STAND,KD_LIE,u*u);        // gravity: slow, then fast
+  } else if(r>up){
+    pose=kdMix(KD_LIE,KD_LIE,0);
+  } else {
+    var g=1-r/up;                                         // 0 flat, 1 standing
+    pose = g<0.35 ? kdMix(KD_LIE,KD_SIT,g/0.35)
+         : g<0.70 ? kdMix(KD_SIT,KD_KNEEL,(g-0.35)/0.35)
+         :          kdMix(KD_KNEEL,KD_STAND,(g-0.70)/0.30);
+  }
+  pose.flat=Math.min(1,Math.abs(pose.rot)/1.45);
+  return pose;
+}
+
 function drawGuy(p){
   var K=KITS[p.team];
   var ctrl=(p===G.controlled), carry=(p===G.carrier);
@@ -3038,7 +3079,8 @@ function drawGuy(p){
 
   // ---- ground marks (stay flat on the turf)
   var sh=1-Math.min(0.6,p.z*0.6);
-  var lay=Math.min(1,Math.max(p.down||0,(p.stun||0)*0.9)*1.6);
+  var kd=p._pose=knockPose(p);
+  var lay=kd?kd.flat:0;
   ctx.fillStyle='rgba(0,0,0,'+(0.38*sh)+')';
   ctx.beginPath();
   ctx.ellipse(p.x, p.y+lay*5, (8.5+lay*8)*sh, (3.4+lay*1.2)*sh,
@@ -3080,10 +3122,9 @@ function drawGuy(p){
   // three-point stance before the snap
   if(p.stance>0){ ctx.translate(0,3.4); ctx.scale(1,0.79); ctx.rotate(0.24); }
   if(p.phase>0) ctx.globalAlpha=1-p.phase*0.62;
-  if(p.down>0 || p.stun>0){          // flat on the turf
-    var dn=Math.min(1,Math.max(p.down,(p.stun||0)*0.9)*1.6);
-    ctx.translate(0, dn*7);                                  // settle, screen space
-    ctx.translate(0,-14); ctx.rotate(dn*1.42*p.face); ctx.translate(0,14);
+  if(kd){                            // on the turf, or climbing off it
+    ctx.translate(0,kd.drop);
+    ctx.translate(0,-16); ctx.rotate(kd.rot); ctx.translate(0,16);
   }
   if(p.stun>0) ctx.globalAlpha=0.62;
 
