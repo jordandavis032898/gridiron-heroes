@@ -654,7 +654,7 @@ function releaseThrow(best){
   var rocket = !!(G.windupWasRocket) || !!G.rocketArmed;
   var perfect = !!G.perfectArmed;
   G.rocketArmed=false; G.perfectArmed=false;
-  var speed = (rocket?1500:530)*fast;
+  var speed = (rocket?1500:(perfect?690:530))*fast;
 
   // Lead by the actual flight time, not a fixed 0.42 seconds. That constant
   // was about right for a five yard out, but a deep ball hangs for a second
@@ -674,6 +674,7 @@ function releaseThrow(best){
             dur:Math.max(0.14,dist/speed),
             arc: rocket ? 4 : Math.max(7, Math.min(56, (dist/YD)*1.65)),
             sure: rocket||perfect,
+            homing: perfect,
             deep: dist > 22*YD};
   G.windupWasRocket=false;
   G.ball.held=false; G.carrier=null;
@@ -689,7 +690,7 @@ function releaseThrow(best){
 // or a forcefield sits for three.
 var ABIL = {
   rocket:     {name:'Rocket Pass', cd:2, desc:'Flat bullet. Nobody gets there in time.'},
-  perfect:    {name:'Perfect Pass',cd:3, desc:'Next throw is on the money and cannot be broken up.'},
+  perfect:    {name:'Perfect Pass',cd:3, desc:'Guided. It follows him, cannot be defended, and he catches it in stride.'},
   forcefield: {name:'Forcefield',  cd:3, desc:'Blast the pocket clear and shrug off the next hit.'},
   dash:       {name:'Super Dash',  cd:2, desc:'Explode forward.'},
   stiffarm:   {name:'Stiff Arm',   cd:1, desc:'Put the nearest man down and keep going.'},
@@ -1999,6 +2000,9 @@ function step(dt){
   if(G.thrown){
     var t=G.thrown; t.t+=dt;
     var k=Math.min(1,t.t/t.dur);
+    if(t.homing && t.target && t.target.stun<=0){
+      t.tx=t.target.x; t.ty=t.target.y;      // a perfect pass follows him
+    }
     G.ball.x=t.x+(t.tx-t.x)*k; G.ball.y=t.y+(t.ty-t.y)*k;
     t.h=Math.sin(k*Math.PI)*(t.arc||0);          // height above the turf
     (t.trail=t.trail||[]).push({x:G.ball.x,y:G.ball.y-t.h});
@@ -2019,6 +2023,10 @@ function step(dt){
       }
       if(caught){ G.carrier=r; G.ball.held=true; if(G.offense==='H') G.controlled=r;
         else if(NET.on) G.controlled2=r;
+        if(t.homing){                        // caught in stride, not standing still
+          r.iFrames=Math.max(r.iFrames,0.7); r.burst=1.1; r.wrapped=0;
+          burst(r.x,r.y,'#7fd8ff'); ring(r.x,r.y,'#7fd8ff');
+        }
                   say(wasLat?'GOT IT!':'CAUGHT!',500); }
       else if(cov && covd<10.5){
         // Picked off, and it is live. He can take it all the way back.
@@ -2751,8 +2759,9 @@ function drawBall(){
   if(t&&t.trail&&t.trail.length>1){
     for(var i=1;i<t.trail.length;i++){
       var a0=t.trail[i-1], a1=t.trail[i], f=i/t.trail.length;
-      ctx.strokeStyle='rgba(241,241,236,'+(f*0.5).toFixed(3)+')';
-      ctx.lineWidth=0.5+f*2.2; ctx.lineCap='round';
+      ctx.strokeStyle = t.homing ? ('rgba(127,216,255,'+(f*0.85).toFixed(3)+')')
+                                 : ('rgba(241,241,236,'+(f*0.5).toFixed(3)+')');
+      ctx.lineWidth=(t.homing?1.1:0.5)+f*2.2; ctx.lineCap='round';
       ctx.beginPath(); ctx.moveTo(a0.x,a0.y); ctx.lineTo(a1.x,a1.y); ctx.stroke();
     }
   }
