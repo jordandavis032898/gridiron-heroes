@@ -324,6 +324,7 @@ function freshGame(){
     celebrate:0, celAt:null, scoringTeam:'H',
     playNo:0, hostPick:null, pickAt:0, handoffAt:null,
     cushion:0, covType:'man', zoneDeep:0, diveCd:0, drag:null,
+    lockMan:null, lockT:0,
     abCd:{}, rocketArmed:false, perfectArmed:false, netAb:[0,0,0],
     stats:freshStats(), cur:null, showingStats:false,
     M2:{power:100, stam:100, moveCd:0, hitCd:0, jukeCd:0, latCd:0,
@@ -735,6 +736,17 @@ function releaseThrow(best){
     flight = Math.max(0.14, Math.hypot(tx-G.ball.x, ty-G.ball.y)/speed);
     tx = best.x + best.vx*flight;
     ty = best.y + best.vy*flight;
+  }
+  // A snap throw scatters; a held lock does not. A perfect pass is exempt,
+  // and so is a rocket, because that is what those cost a cooldown for.
+  if(!perfect && !rocket){
+    var lock = (best===G.lockMan) ? Math.min(1, G.lockT/1.05) : 0;
+    var miss = (1-lock)*(1-lock);                      // falls away quickly
+    if(miss>0.01){
+      var spread = (3.0 + Math.min(3.4, dist/(14*YD))) * YD * miss;
+      var ma=Math.random()*Math.PI*2, mr=Math.sqrt(Math.random())*spread;
+      tx += Math.cos(ma)*mr; ty += Math.sin(ma)*mr;
+    }
   }
   ty = Math.max(10, Math.min(FH-10, ty));               // not out of bounds
   var dist=Math.hypot(tx-G.ball.x,ty-G.ball.y);
@@ -1471,7 +1483,9 @@ function routePoint(p,since){
   // works across the face of the goal line instead
   var endLine = d>0 ? (FW-EZ*0.45) : (EZ*0.45);
   if(p.route==='go'){
+    var cap=G.los+38*YD*d;                        // a streak is not a marathon
     var tx=p.x+40*YD*d;
+    if((d>0&&tx>cap)||(d<0&&tx<cap)) tx=cap;
     if((d>0&&tx>endLine)||(d<0&&tx<endLine)){
       return {x:endLine, y:p.y+Math.sin(since*1.9)*5*YD};
     }
@@ -2050,6 +2064,15 @@ function step(dt){
   if(G.handoffAt!=null && since>G.handoffAt && G.carrier && G.carrier.role==='QB'){
     if(handoff(G.offense,true)) G.handoffAt=null;
   }
+  // Lock-on: the longer you keep the cursor on a receiver, the better the
+  // ball goes. Snap it off the moment you see him and it sails.
+  if(G.carrier && G.carrier.role==='QB' && !G.thrown && iHaveBall() &&
+     G.mouse && G.mouse.on && !pastTheLine(G.carrier)){
+    var lt=pickTarget(G.mouse.x,G.mouse.y);
+    if(lt && lt===G.lockMan) G.lockT=Math.min(1.5, G.lockT+dt);
+    else { G.lockMan=lt; G.lockT=0; }
+  } else { G.lockMan=null; G.lockT=0; }
+
   applyRemoteInput(dt);
   driveHuman(hostSeat(), localInput(), dt, now);
   if(NET.on && NET.host) driveHuman(guestSeat(), remoteInput(), dt, now);
@@ -2291,7 +2314,8 @@ function step(dt){
       var dlen=Math.sqrt(dsq);
       var shove=(SEP-dlen)/SEP*46*dt;
       // the ball carrier holds his ground a little better than the crowd
-      var wA=(A===G.carrier)?0.35:1, wB=(B===G.carrier)?0.35:1;
+      var wA=(A===G.carrier)?0.35:((A.down>0||A.stun>0)?0.06:1);
+      var wB=(B===G.carrier)?0.35:((B.down>0||B.stun>0)?0.06:1);
       A.x-=ddx/dlen*shove*wA; A.y-=ddy/dlen*shove*wA;
       B.x+=ddx/dlen*shove*wB; B.y+=ddy/dlen*shove*wB;
     }
@@ -2604,7 +2628,7 @@ function draw(){
     // screen or he cannot pick them, which is why long passes felt impossible.
     var reach = 30*YD;
     if(passing && pl.team===G.offense && pl!==G.carrier &&
-       pl.role!=='C' && pl.role!=='OL' && pl.role!=='BL') reach = 58*YD;
+       pl.role!=='C' && pl.role!=='OL' && pl.role!=='BL') reach = 40*YD;
     if(Math.hypot(pl.x-bx,pl.y-by) > reach) continue;
     if(pl.x<minX)minX=pl.x; if(pl.x>maxX)maxX=pl.x;
     if(pl.y<minY)minY=pl.y; if(pl.y>maxY)maxY=pl.y; n++;
@@ -2617,7 +2641,7 @@ function draw(){
   var needW=Math.min((maxX-minX)+padX*2, (passing?86:62)*YD);
   var needH=Math.min((maxY-minY)+padTop+padBot, (passing?46:40)*YD);
   var want=Math.min(VW/needW, VH/needH);
-  want=Math.max(passing?0.62:0.82, Math.min(1.5, want));
+  want=Math.max(passing?0.76:0.82, Math.min(1.5, want));
   scale += (want-scale)*0.06;
 
   // centre mostly on the ball so the play stays where your eye already is
@@ -2652,14 +2676,22 @@ function draw(){
   if((G.phase==='live'||G.phase==='presnap')&&G.mouse.on&&G.carrier&&G.carrier.role==='QB'&&iHaveBall()&&!G.thrown&&!pastTheLine(G.carrier)){
     var tgt=pickTarget(G.mouse.x,G.mouse.y);
     if(tgt && Math.hypot(tgt.x-G.carrier.x,tgt.y-G.carrier.y) < 46*YD){
-      ctx.strokeStyle='rgba(255,210,63,.85)'; ctx.lineWidth=2.1; ctx.setLineDash([6,5]);
+      var lk=(tgt===G.lockMan)?Math.min(1,G.lockT/1.05):0;
+      var col=lk>0.92 ? '79,209,139' : (lk>0.45 ? '255,210,63' : '224,140,63');
+      ctx.strokeStyle='rgba('+col+',.85)'; ctx.lineWidth=2.1; ctx.setLineDash([6,5]);
       ctx.beginPath(); ctx.moveTo(G.carrier.x,G.carrier.y); ctx.lineTo(tgt.x,tgt.y); ctx.stroke();
       ctx.setLineDash([]);
-      ctx.lineWidth=2.4;
-      ctx.beginPath(); ctx.ellipse(tgt.x,tgt.y,17,7,0,0,Math.PI*2); ctx.stroke();
-      ctx.fillStyle='rgba(255,210,63,.95)';
+      // the ring closes in as the lock builds
+      var rw=17+(1-lk)*15;
+      ctx.lineWidth=1.6+lk*2.0;
+      ctx.strokeStyle='rgba('+col+',.95)';
+      ctx.beginPath(); ctx.ellipse(tgt.x,tgt.y,rw,rw*0.41,0,0,Math.PI*2); ctx.stroke();
+      if(lk>0.92){
+        ctx.beginPath(); ctx.ellipse(tgt.x,tgt.y,rw+5,(rw+5)*0.41,0,0,Math.PI*2); ctx.stroke();
+      }
+      ctx.fillStyle='rgba('+col+',.95)';
       ctx.font='700 8px "Barlow Condensed", sans-serif'; ctx.textAlign='center';
-      ctx.fillText('THROW', tgt.x, tgt.y-24);
+      ctx.fillText(lk>0.92?'LOCKED':'THROW', tgt.x, tgt.y-24);
     }
   }
 
