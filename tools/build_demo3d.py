@@ -81,7 +81,8 @@ function makeW3(){
   g.strokeStyle='rgba(255,210,63,.55)'; g.lineWidth=2; g.setLineDash([10,8]);
   g.beginPath(); g.moveTo(M+EZ+25*YD, MT+FH+BW+2.2*YD); g.lineTo(M+FW-EZ-25*YD, MT+FH+BW+2.2*YD); g.stroke();
   g.setLineDash([]);
-  return {cv:c, g:c.getContext('2d'), base:base, M:M, MT:MT};
+  var w3g=c.getContext('2d'); w3g.drawImage(base,0,0);   // painted in full once, then patched
+  return {cv:c, g:w3g, base:base, M:M, MT:MT, dirty:[]};
 }
 // Everything that must stay on screen this frame.
 function camPoints(){
@@ -125,6 +126,28 @@ function camFit(pts,camx,camy){
     else if(oy>1) best=Math.min(best,(VH/2-80)/oy);
   }
   return best;
+}
+// Where the ground marks will be drawn this frame, in world-canvas pixels.
+function dirtyRects3(){
+  var out=[], M=W3.M, MT=W3.MT, cw=W3.cv.width, ch=W3.cv.height;
+  function add(x,y,w,h){
+    x=Math.max(0,Math.floor(x)); y=Math.max(0,Math.floor(y));
+    w=Math.min(cw-x,Math.ceil(w)); h=Math.min(ch-y,Math.ceil(h));
+    if(w>0&&h>0) out.push([x,y,w,h]);
+  }
+  add(M+G.los-5, MT-2, 10, FH+4);                               // line of scrimmage
+  var fd=G.los+G.toGo*YD*dir();
+  add(M+fd-5, MT-2, 10, FH+4);                                  // first-down line
+  if(G.carrier && G.mouse && G.mouse.on){                       // pass aim marker
+    var tg=aimTarget(), cx=G.carrier.x, cy=G.carrier.y;
+    var x0=Math.min(cx, tg?tg.x:cx)-45, x1=Math.max(cx, tg?tg.x:cx)+45;
+    var y0=Math.min(cy, tg?tg.y:cy)-45, y1=Math.max(cy, tg?tg.y:cy)+30;
+    add(M+x0, MT+y0, x1-x0, y1-y0);
+  }
+  if(G.drag && G.controlled){                                   // tackle wind-up line
+    add(M+G.controlled.x-90, MT+G.controlled.y-100, 180, 180);
+  }
+  return out;
 }
 function setupProj(sx,sy){
   var want=BASE3*CAM3.z, fit=camFit(camPoints(),cam.x,cam.y);
@@ -242,7 +265,15 @@ subs.append(('''  ctx.setTransform(dpr,0,0,dpr,0,0);
   var P3 = VIEW3D ? setupProj(sx,sy) : null, realCtx3=ctx;
   if(P3){
     if(!W3) W3=makeW3();
-    ctx=W3.g; ctx.setTransform(1,0,0,1,0,0); ctx.drawImage(W3.base,0,0);
+    ctx=W3.g; ctx.setTransform(1,0,0,1,0,0);
+    // Only the lines and the aim marker change on the ground. Repainting the
+    // whole field and stands every frame was millions of pixels a frame, which
+    // made every input feel late. Put back just last frame's marks.
+    for(var di=0;di<W3.dirty.length;di++){
+      var rr=W3.dirty[di]; ctx.drawImage(W3.base,rr[0],rr[1],rr[2],rr[3],rr[0],rr[1],rr[2],rr[3]);
+    }
+    W3.dirty=dirtyRects3();
+    SKIP_FIELD=true;
     ctx.save(); ctx.translate(W3.M, W3.MT);
   } else {
     ctx.save();
@@ -253,7 +284,7 @@ subs.append(('''  ctx.setTransform(dpr,0,0,dpr,0,0);
 subs.append(('''  // depth sort so players nearer the bottom overlap the ones behind them
   var order=G.players.slice().sort(function(a,b){ return a.y-b.y; });
   for(var i=0;i<order.length;i++) drawGuy(order[i]);
-''', '''  if(P3){ ctx.restore(); ctx=realCtx3; blit3D(P3); ctx.save(); }
+''', '''  if(P3){ ctx.restore(); ctx=realCtx3; SKIP_FIELD=false; blit3D(P3); ctx.save(); }
 
   // depth sort so players nearer the bottom overlap the ones behind them
   var order=G.players.slice().sort(function(a,b){ return a.y-b.y; });

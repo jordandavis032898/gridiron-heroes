@@ -159,9 +159,11 @@ V toggles flat. Syntax check `game.html` and `index.html` before pushing.
 bend forward (forearm = upper arm plus flex). They were both reversed
 once, which made every runner look like he was running backwards.
 
-**Impact.** `drawGuy` is a wrapper: ground marks, then the body drawn
-offscreen and stamped over a dilated black silhouette (the outline), then
-the name tag. A fresh stun launches the man (`vz`), and he lands and skids.
+**Impact.** Outlines are baked into every body part once at load
+(`outlinePart`, drawn with `drawPart` so joints still meet); `drawGuy` just
+draws. A per-frame outline pass used to cost more than the players and made
+every click feel late. The 3D world canvas is patched with dirty rectangles
+(`dirtyRects3`) instead of repainted whole. A fresh stun launches the man (`vz`), and he lands and skids.
 Rocket passes trail fire. There is deliberately NO hit-stop: Jordan read the
 freeze on every hit as the game lagging, so it was removed. `say()` only
 shows words matching `SAY_OK` (fumble, pick, first down, sack, touchdown,
@@ -181,6 +183,16 @@ celebrates (`cel`: hop, fists pumping), then back to the play call.
 downfield (`backpedal`, stride runs in reverse) until the stick is touched.
 Within `POCKET_YDS` (6) behind his snap spot and behind the line he stays a
 passer: faces downfield, ball at his chest (`pocket`). Past it he runs.
+
+**After the play (checklist).** `logPlay` picks the card: touchdown (scorer,
+`td` dance), sack (sacker, `flex`), first down (carrier, pump), out of
+bounds on offence (carrier), tackle for 5 or less (tackler, `flex`,
+"DEFENSIVE STOP!" banner). The card slides from off the left to centre.
+
+**Stances.** `STANCES`/`stancePose` per position (three/four point, backer
+crouch, DB, WR stagger, QB), built from rig angles plus a body lean and
+drop. Pre-snap fidgets (breathing, shuffles, claps, glances) run on each
+man's own clock seeded by his number.
 
 **Knockdowns.** `knockPose` turns `down`/`stun` time into a posed timeline on
 the rig: fall back, lie flat, sit up, one knee, stand. Game logic freezes a

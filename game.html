@@ -137,14 +137,14 @@
 
   /* ---------- play card ---------- */
   #card{
-    position:absolute; right:28px; top:46%; z-index:7; width:240px;
-    transform:translate(60%,-50%) scale(.8); opacity:0; pointer-events:none;
-    transition:transform .34s cubic-bezier(.2,1.3,.4,1), opacity .24s;
+    position:absolute; left:50%; top:46%; z-index:7; width:250px;
+    transform:translate(calc(-50% - 60vw),-50%) scale(.5); opacity:0; pointer-events:none;
+    transition:transform .5s cubic-bezier(.2,1.15,.4,1), opacity .3s;
     background:linear-gradient(160deg,#1b262e,#101820);
     border:2px solid var(--gold); border-radius:6px; overflow:hidden;
     box-shadow:0 14px 40px rgba(0,0,0,.65);
   }
-  #card.in{transform:translate(0,-50%) scale(1); opacity:1;}
+  #card.in{transform:translate(-50%,-50%) scale(1); opacity:1;}
   #card .pcTop{
     display:flex; align-items:center; gap:6px; padding:5px 8px;
     background:var(--gold); color:#14181c;
@@ -2780,6 +2780,8 @@ function endPlay(atX,label){
   if(G.toGo<=0){ G.down=1; G.toGo=10; txt='FIRST DOWN'; G.stats[G.offense].fd++; }
   else { G.down+=1; if(G.down>4){ turnover(); txt='TURNOVER ON DOWNS'; } }
   if(G.wasSack && txt===label) txt='SACK!';
+  if(G.stopBanner && txt===label) txt='DEFENSIVE STOP!';
+  G.stopBanner=false;
   G.wasSack=false;
   postPlay(txt);
 }
@@ -2792,7 +2794,7 @@ function postPlay(txt, minHold){
     setTimeout(function(){
       if(G.over) return;
       showCard(q.p, q.act);
-      q.p.cel=Math.max(q.p.cel||0, 1.9);               // his celebration runs with the card
+      q.p.cel=Math.max(q.p.cel||0, 2.0); q.p.celKind=q.dance||'pump';               // his celebration runs with the card
     }, cardAt);
   }
   var done = cardAt + (q && q.p ? 2000 : 500);
@@ -2821,7 +2823,7 @@ function gameOver(){ G.over=true; G.phase='over'; showOver(); }
 var callTimer=null;
 // Only these get words on the screen. Every hit and move used to shout its
 // own name in the middle of the field, which was noise.
-var SAY_OK=/FUMBLE|INTERCEPT|PICKED OFF|FIRST DOWN|SACK|TOUCHDOWN|TURNOVER|SAFETY|IT IS GOOD|NO GOOD|HIKE FIRST|WAITING|OTHER PLAYER|YOU ARE THE|THEY ARE IN|LIBRARY|PLAY IN/;
+var SAY_OK=/DEFENSIVE STOP|FUMBLE|INTERCEPT|PICKED OFF|FIRST DOWN|SACK|TOUCHDOWN|TURNOVER|SAFETY|IT IS GOOD|NO GOOD|HIKE FIRST|WAITING|OTHER PLAYER|YOU ARE THE|THEY ARE IN|LIBRARY|PLAY IN/;
 function say(text,ms){
   if(!SAY_OK.test(String(text))) return;
   elCall.textContent=text; elCall.style.transition=''; elCall.style.opacity='1';
@@ -2965,7 +2967,7 @@ function draw(){
   // The turf never changes, so it is painted once into an offscreen canvas
   // and blitted. Re-stroking 200-odd hash marks every frame was costing more
   // than everything else in the renderer put together.
-  ctx.drawImage(fieldCanvas, 0, 0);
+  if(!SKIP_FIELD) ctx.drawImage(fieldCanvas, 0, 0);
 
   var fd=G.los+G.toGo*YD*dir();
   ctx.lineWidth=2.5; ctx.strokeStyle='#3aa0ff';
@@ -3143,13 +3145,32 @@ function tintAway(img){
   return c;
 }
 
+// Give a body part its cartoon outline, once: a dark ring round the art,
+// grown outward so the part keeps its size. padX/padY tell drawPart how far
+// to widen the box it draws into, so joints still meet where they did.
+function outlinePart(img){
+  var w=img.width, h=img.height; if(!w||!h) return img;
+  var P=Math.max(3, Math.round(Math.max(w,h)*0.04));
+  var c=document.createElement('canvas'); c.width=w+2*P; c.height=h+2*P;
+  var g=c.getContext('2d');
+  for(var k=0;k<16;k++){ var an=k*Math.PI/8; g.drawImage(img, P+Math.cos(an)*P, P+Math.sin(an)*P); }
+  g.globalCompositeOperation='source-in'; g.fillStyle='#0a0c10'; g.fillRect(0,0,c.width,c.height);
+  g.globalCompositeOperation='source-over'; g.drawImage(img,P,P);
+  c.padX=P/w; c.padY=P/h;
+  return c;
+}
+function drawPart(img,x,y,w,h){
+  if(img.padX){ var ex=w*img.padX, ey=h*img.padY; ctx.drawImage(img,x-ex,y-ey,w+2*ex,h+2*ey); }
+  else ctx.drawImage(img,x,y,w,h);
+}
+
 (function loadParts(){
   var keys=Object.keys(PART_FILES);
   SPR.pending=keys.length;
   keys.forEach(function(k){
     var im=new Image();
     im.onload=function(){
-      SPR.H[k]=im; SPR.A[k]=tintAway(im);
+      SPR.H[k]=outlinePart(im); SPR.A[k]=outlinePart(tintAway(im));
       if(--SPR.pending===0) SPR.ready=true;
     };
     im.onerror=function(){ SPR.pending--; };   // stay on the vector fallback
@@ -3168,6 +3189,8 @@ function thighBone(x,y,a,len,wid,pants,stripe){
   roundRect(w*0.12, 0, w*0.38, len, w*0.2); ctx.fill();
   ctx.fillStyle=stripe;                            // seam stripe
   ctx.fillRect(-w*0.46, len*0.10, w*0.17, len*0.82);
+  ctx.strokeStyle='#0a0c10'; ctx.lineWidth=0.5;    // same outline as the art
+  roundRect(-w/2, 0, w, len, w*0.42); ctx.stroke();
   ctx.restore();
   return {x:x+Math.sin(a)*len, y:y+Math.cos(a)*len};
 }
@@ -3175,13 +3198,13 @@ function thighBone(x,y,a,len,wid,pants,stripe){
 // draw a part whose artwork runs top-to-bottom, pivoting at (x,y)
 function boneV(img,x,y,a,len,wid){
   ctx.save(); ctx.translate(x,y); ctx.rotate(-a);
-  ctx.drawImage(img,-wid/2,0,wid,len); ctx.restore();
+  drawPart(img,-wid/2,0,wid,len); ctx.restore();
   return {x:x+Math.sin(a)*len, y:y+Math.cos(a)*len};
 }
 // draw a part whose artwork runs left-to-right, pivoting at (x,y)
 function boneH(img,x,y,a,len,thk){
   ctx.save(); ctx.translate(x,y); ctx.rotate(Math.PI/2-a);
-  ctx.drawImage(img,0,-thk/2,len,thk); ctx.restore();
+  drawPart(img,0,-thk/2,len,thk); ctx.restore();
   return {x:x+Math.sin(a)*len, y:y+Math.cos(a)*len};
 }
 
@@ -3229,11 +3252,45 @@ function drawSprite(p){
     AB =  0.15+Math.sin(ph*1.7+2.6)*0.22*amp;
   }
 
+  // pre-snap stance for his position (body lean and drop are in drawGuy)
+  var HB=0, LOOK=false;                       // head bob, and a glance back
+  if(!KD && p.stance>0){
+    var STp=stancePose(p), ft=performance.now()/1000, sd=((p.num||1)*2.399)%6.283;
+    LF={t:STp.lt, s:STp.ls}; LB={t:STp.bt, s:STp.bs};
+    AF=STp.af; EF=STp.ef; AB=STp.ab; EB=STp.eb; bob=0;
+    // Nobody stands like a statue. Each man fidgets on his own clock (seeded
+    // by his number) so the whole defence does not move in step.
+    HB=Math.sin(ft*1.7+sd)*0.35;             // breathing, head bobbing
+    if(STp===STANCES.lb || STp===STANCES.db){
+      var shf=Math.sin(ft*2.6+sd);            // little shuffle steps
+      if(shf>0.6){ LF.t+=0.25*(shf-0.6)/0.4; LF.s+=0.1; }
+      if(shf<-0.6){ LB.t-=0.2*(-shf-0.6)/0.4; }
+      var clp=(ft/4.5+sd)%1;                  // now and then, a clap
+      if(clp<0.12){
+        var cc=Math.sin(clp/0.12*Math.PI);
+        AF+=(1.35-AF)*cc; AB+=(1.35-AB)*cc; EF+=(0.9-EF)*cc; EB+=(0.9-EB)*cc;
+      }
+    }
+    if(STp===STANCES.lb || STp===STANCES.db || STp===STANCES.qb){
+      LOOK=((ft/5.5+sd*0.37)%1)<0.13;         // a look over the shoulder
+    }
+  }
   // celebrating: both fists up and pumping (the hop comes from cel in drawGuy)
   if(!KD && p.cel>0 && p!==G.carrier){
     var ct=performance.now()/1000;
-    AF= 2.75+Math.sin(ct*13)*0.35; EF=-0.3;
-    AB=-2.55+Math.sin(ct*13+1.7)*0.35; EB=0.3;
+    if(p.celKind==='td'){
+      // touchdown dance: arms trading up and down, hips swinging (see drawGuy)
+      var dw=Math.sin(ct*8);
+      AF=1.3+1.3*dw; EF=0.9; AB=1.3-1.3*dw; EB=0.9;
+      LF={t: 0.25*dw, s: 0.25*dw-0.35}; LB={t:-0.25*dw, s:-0.25*dw-0.35};
+    } else if(p.celKind==='flex'){
+      // the flex: upper arms out, fists up by the ears, a little shake
+      var fs=Math.sin(ct*22)*0.06;
+      AF=1.57+fs; EF=1.6; AB=-1.57-fs; EB=-1.6;
+    } else {
+      AF= 2.75+Math.sin(ct*13)*0.35; EF=-0.3;
+      AB=-2.55+Math.sin(ct*13+1.7)*0.35; EB=0.3;
+    }
   }
   // locked in a block: both hands out on the other man's chest
   if(!KD && p.locked>0 && !(p.cel>0)){
@@ -3258,7 +3315,7 @@ function drawSprite(p){
   ctx.globalAlpha=1;
 
   // ---- torso: the widest thing on the figure
-  ctx.drawImage(TORSO, TORSO===S.torso?-5.4:-6.3, SHO-3.5, TORSO===S.torso?10.8:12.6, 15);
+  drawPart(TORSO, TORSO===S.torso?-5.4:-6.3, SHO-3.5, TORSO===S.torso?10.8:12.6, 15);
 
   // the art has a 12 painted on it, so patch it out and stamp the real number
   ctx.fillStyle = p.team==='H' ? '#223058' : '#a8232f';
@@ -3276,7 +3333,8 @@ function drawSprite(p){
   boneH(S.cleat,fF.x-1,fF.y-0.6,LF.s+1.25,CL,HCL);
 
   // ---- helmet: must sit narrower than the shoulders, or it reads bobblehead
-  ctx.drawImage(HELMET,-4.4,SHO-10.7,9.2,8.2);
+  if(LOOK){ ctx.save(); ctx.scale(-1,1); drawPart(HELMET,-4.8,SHO-10.7+HB,9.2,8.2); ctx.restore(); }
+  else drawPart(HELMET,-4.4,SHO-10.7+HB,9.2,8.2);
 
   // ---- front arm: throw, stiff arm, or normal swing
   if(!KD && p.throwArm>0){
@@ -3316,6 +3374,7 @@ function heldBall(p, x, y, fa, pocket){
   var rot = pocket ? -1.25 : (fa===null ? -0.45 : Math.atan2(Math.cos(fa),Math.sin(fa)));
   ctx.rotate(rot + sway*0.10 + (Math.random()-0.5)*shake*0.7);
   ctx.fillStyle='#7a4a28'; ctx.beginPath(); ctx.ellipse(0,0,4,2.5,0,0,Math.PI*2); ctx.fill();
+  ctx.strokeStyle='#0a0c10'; ctx.lineWidth=0.5; ctx.stroke();
   ctx.fillStyle='rgba(0,0,0,.22)';
   ctx.beginPath(); ctx.ellipse(-1.2,0.5,2.4,1.6,0,0,Math.PI*2); ctx.fill();
   ctx.strokeStyle='#f1f1ec'; ctx.lineWidth=0.7;
@@ -3328,6 +3387,31 @@ function heldBall(p, x, y, fa, pocket){
 // goes over backwards from the way he was facing. rot turns the body about
 // the hip; drop lowers the hip toward the turf. Leg and arm angles are the
 // same bone angles drawSprite uses, so the whole rig moves, not a stiff cutout.
+// ---- pre-snap stances, one per position ------------------------------------
+// Same joints as the knockdown poses: rot leans the whole man forward over his
+// hips, drop sinks the hips, and the leg angles are given in his own frame, so
+// they carry that lean (world angle = local angle minus rot). The old stance
+// squashed the standing sprite and tipped it, which read as a short man
+// falling over rather than a lineman down in his stance.
+var STANCES={
+  three:{rot:1.15, drop:2.9, lt:2.05, ls:0.8,  bt:1.75, bs:0.35,  af:1.25, ef:0,   ab:1.65, eb:0.6},   // one hand down
+  four: {rot:1.15, drop:2.9, lt:2.05, ls:0.8,  bt:1.75, bs:0.35,  af:1.25, ef:0,   ab:1.2,  eb:0},     // both hands down
+  lb:   {rot:0.45, drop:1.1, lt:1.05, ls:0.05, bt:0.85, bs:-0.05, af:0.95, ef:0.2, ab:0.85, eb:0.2},   // hands on knees
+  db:   {rot:0.30, drop:0,   lt:0.65, ls:0.0,  bt:0.5,  bs:-0.1,  af:0.5,  ef:0.8, ab:0.3,  eb:0.8},   // light, ready to turn
+  wr:   {rot:0.40, drop:1.1, lt:1.1,  ls:0.25, bt:0.1,  bs:-0.3,  af:0.1,  ef:1.0, ab:0.9,  eb:0.9},   // sprinter's stagger
+  qb:   {rot:0.15, drop:0,   lt:0.45, ls:-0.05,bt:-0.05,bs:-0.4,  af:1.1,  ef:1.2, ab:1.0,  eb:1.2}    // hands up for the snap
+};
+function stancePose(p){
+  var r=p.role, pos=p.pos||'';
+  if(r==='C'||r==='OL'||r==='TE'||r==='BL') return STANCES.three;
+  if(pos==='DE') return (p.num%2) ? STANCES.four : STANCES.three;
+  if(pos==='LB'||r==='RB') return STANCES.lb;
+  if(pos==='CB'||pos==='S'||r==='COV') return STANCES.db;
+  if(r==='WR') return STANCES.wr;
+  if(r==='QB') return STANCES.qb;
+  return STANCES.lb;
+}
+
 var KD_STAND={rot:0,    drop:0,   lt:0.17, ls:0.03, bt:-0.17, bs:-0.31, af:-0.15, ef:0.45,  ab:0.15,  eb:0.45};
 var KD_LIE  ={rot:-1.45,drop:10.5,lt:-0.15,ls:0.0,  bt:0.45,  bs:-0.55, af:-2.3,  ef:0.4,   ab:-2.9,  eb:0.2};
 var KD_SIT  ={rot:-0.2, drop:13,  lt:1.3,  ls:1.2,  bt:0.9,   bs:-0.5,  af:0.2,   ef:0.5,   ab:-0.8,  eb:0};
@@ -3372,33 +3456,12 @@ function breakWrap(t,car){
   t.vx=bx/bm*90; t.vy=by/bm*90;
 }
 
-var GUY_PASS=null, OUTL=null, OUTLINE_W=0.85;   // outline thickness, world units
-function drawGuy(p){
-  if(!SPR.ready){ drawGuyRaw(p); return; }
-  var lift=p.z*15 + (p.cel>0?Math.abs(Math.sin(p.cel*9))*10:0);
-  GUY_PASS='marks'; drawGuyRaw(p);
-  var R=4, L=38, T=76, W=76, H=94;              // offscreen box round the man, world units
-  if(!OUTL){
-    OUTL={a:document.createElement('canvas'), b:document.createElement('canvas')};
-    OUTL.a.width=OUTL.b.width=W*R; OUTL.a.height=OUTL.b.height=H*R;
-    OUTL.ga=OUTL.a.getContext('2d'); OUTL.gb=OUTL.b.getContext('2d');
-  }
-  var ga=OUTL.ga, gb=OUTL.gb;
-  ga.setTransform(1,0,0,1,0,0); ga.globalAlpha=1; ga.clearRect(0,0,W*R,H*R);
-  ga.setTransform(R,0,0,R,(L-p.x)*R,(T-p.y)*R);
-  var main=ctx; ctx=ga; GUY_PASS='body';
-  try{ drawGuyRaw(p); } finally { ctx=main; GUY_PASS=null; }
-  gb.setTransform(1,0,0,1,0,0); gb.globalCompositeOperation='source-over';
-  gb.clearRect(0,0,W*R,H*R);
-  var o=OUTLINE_W*R;
-  for(var k=0;k<8;k++){ var an=k*Math.PI/4; gb.drawImage(OUTL.a, Math.cos(an)*o, Math.sin(an)*o); }
-  gb.globalCompositeOperation='source-in';
-  gb.fillStyle='#0a0c10'; gb.fillRect(0,0,W*R,H*R);
-  gb.globalCompositeOperation='source-over';
-  ctx.drawImage(OUTL.b, p.x-L, p.y-T, W, H);
-  ctx.drawImage(OUTL.a, p.x-L, p.y-T, W, H);
-  heroTag(p,lift);
-}
+var SKIP_FIELD=false;   // the 3D build keeps the field in its own canvas and only repaints what moved
+var GUY_PASS=null;   // 'marks' or 'body' to draw half a player; null draws all of him
+// The outline is baked into every body part once at load (outlinePart), so
+// a player draws in one pass. The per-frame outline pass it replaced cost
+// more than drawing the players and made every input feel late.
+function drawGuy(p){ drawGuyRaw(p); }
 function drawGuyRaw(p){
   var K=KITS[p.team];
   var ctrl=(p===G.controlled), carry=(p===G.carrier);
@@ -3455,9 +3518,14 @@ function drawGuyRaw(p){
     ctx.scale(Math.abs(spc)<0.14 ? (spc<0?-0.14:0.14) : spc, 1);
   }
   if(p.sq>0.01 && !(p.down>0||p.stun>0)) ctx.scale(1+p.sq, 1-p.sq*0.6);   // squash and stretch
+  if(p.cel>0 && p.celKind==='td') ctx.rotate(Math.sin(performance.now()/1000*8)*0.16);   // hips
   ctx.rotate(p.lean);
   // three-point stance before the snap
-  if(p.stance>0){ ctx.translate(0,3.4); ctx.scale(1,0.79); ctx.rotate(0.24); }
+  if(p.stance>0 && !kd){                 // his stance: lean over the hips and sink
+    var STg=stancePose(p);
+    var wsh=Math.sin(performance.now()/1000*1.3+(p.num||1)*1.1)*0.035;   // weight shifting
+    ctx.translate(0,STg.drop); ctx.translate(0,-16); ctx.rotate(STg.rot+wsh); ctx.translate(0,16);
+  }
   if(p.phase>0) ctx.globalAlpha=1-p.phase*0.62;
   if(kd){                            // on the turf, or climbing off it
     ctx.translate(0,kd.drop);
@@ -3955,7 +4023,20 @@ function logPlay(atX, label, scored){
          : sack?'SACK' : (c.passer&&!c.comp)?'PASS DEFENDED' : 'TACKLE');
     if(!star){ star = car || c.qb; act = c.passer?'INCOMPLETE':'NO GAIN'; }
   }
-  if(star) G.cardQ={p:star, act:act};                // shown after the banner, in postPlay
+  // The end-of-play checklist, top down. Whoever it lands on gets the card,
+  // and the kind of play decides how he celebrates.
+  var tackled = (label==='TACKLED' || label==='BIG HIT');
+  var firstDown = !scored && !c.pick && !c.kick && gained >= (c.toGo||99);
+  var dance = 'pump';
+  if(scored){ dance='td'; }
+  else if(sack){ dance='flex'; }
+  else if(firstDown && car && car.team===c.team){ star=car; act='FIRST DOWN'; }
+  else if(label==='OUT OF BOUNDS' && car && car.team===c.team){ star=car; act='OUT OF BOUNDS'; }
+  else if(tackled && gained<=5 && c.dStar){
+    star=c.dStar; act=c.dAct||'TACKLE'; dance='flex';
+    G.stopBanner=true;                                  // "DEFENSIVE STOP!"
+  }
+  if(star) G.cardQ={p:star, act:act, dance:dance};    // shown after the banner, in postPlay
 
   G.stats.log.push({no:c.no, team:c.team, down:c.down, toGo:c.toGo,
                     spot:yardLineLabel(c.los), play:c.play, yds:gained,
