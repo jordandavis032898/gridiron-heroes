@@ -138,6 +138,26 @@ the target plays the ball: he runs to the landing spot instead of finishing
 his route. Before that, a man caught mid-cut or coming back to a scrambling
 passer left the ball ten yards short of everyone.
 
+**3D demo (`demo3d.html`).** Generated, never hand-edited: `python
+tools/build_demo3d.py` rebuilds it from `index.html` with anchored patches
+(broadcast camera, row-by-row perspective ground, stands, dynamic camera
+that fits the play every frame, sideline out-of-bounds area, double-turn
+spin). Change gameplay in `index.html`, then rebuild. Live at
+`/gridiron-heroes/demo3d.html`; V toggles flat.
+
+**Rig joints.** Knees bend back (shin angle = thigh minus flex) and elbows
+bend forward (forearm = upper arm plus flex). They were both reversed
+once, which made every runner look like he was running backwards.
+
+**Impact.** `drawGuy` is a wrapper: ground marks, then the body drawn
+offscreen and stamped over a dilated black silhouette (the outline), then
+the name tag. A jump in `G.shake` during a step sets `G.hitStop`, which
+freezes the sim for a tenth of a second. A fresh stun launches the man
+(`vz`), and he lands and skids. Rocket passes trail fire.
+
+**Dropback.** `DROP_YDS` per call; the QB backpedals facing downfield
+(`backpedal`, stride runs in reverse) until the stick is touched.
+
 **Knockdowns.** `knockPose` turns `down`/`stun` time into a posed timeline on
 the rig: fall back, lie flat, sit up, one knee, stand. Game logic freezes a
 man until both reach zero, so the get-up finishes exactly as he can move.

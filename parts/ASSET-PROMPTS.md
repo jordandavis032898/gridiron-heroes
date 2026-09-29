@@ -87,3 +87,59 @@ plain stick.*
 Hand them back and I will key out the magenta, trim to the bone axis, and wire
 them in. I am doing the three-point stance in code with bone angles rather than
 as art, so it is not on this list.
+
+---
+
+# Batch 2: fix the stick-man look (September 2026)
+
+Six parts. Same rules as above: **solid magenta `#FF00FF` background**, crop
+tight to the part, flat vector, same palette, **side view**, navy home kit only
+(the code recolours navy to crimson for the away team). Exact pixel size does
+not matter; I trim and scale. The long axis must run edge to edge.
+
+## 5. `football-thigh.png` (vertical, roughly 100 x 160)
+
+Side view of a football player's thigh in padded game pants. Bone-white
+`#f1f1ec` pants, visibly thick and rounded from the built-in thigh pad, with
+one navy `#1f2d54` stripe and one gold `#c8a63c` stripe running down the outer
+seam. Hip at the top edge, knee at the bottom edge, knee slightly rounded where
+the knee pad sits. No skin showing. Vertical, filling the full height.
+
+## 6. `football-lower-leg.png` (vertical, roughly 60 x 160)
+
+Side view of a football player's lower leg from just below the knee to the
+ankle, wearing a tall navy `#1f2d54` sock with a thin gold `#c8a63c` band near
+the top, pulled up to the knee. Muscular calf shape under the sock. The top
+edge is where the white pant leg ends (a sliver of bone-white `#f1f1ec` pant
+cuff at the very top). No bare skin. Vertical, filling the full height.
+
+## 7. `football-upper-arm.png` (horizontal, roughly 160 x 60)
+
+Side view of a football player's upper arm: the navy `#1f2d54` jersey sleeve
+stretched over a rounded shoulder pad cap at the left end, one gold
+`#c8a63c` sleeve stripe, then a short band of bare arm skin `#c98f63` near the
+elbow at the right end. Thick and muscular, not a tube. Horizontal, shoulder
+at the left edge, elbow at the right edge.
+
+## 8. `football-forearm.png` (horizontal, roughly 160 x 36)
+
+Side view of a muscular forearm, skin `#c98f63`, with white athletic tape on
+the wrist and a closed black glove `#191b1f` fist at the right end. Thicker
+than a normal arm. Horizontal, elbow at the left edge, fist at the right edge.
+
+## 9. `football-torso.png` (vertical, roughly 110 x 160)
+
+Side view of a football player's torso wearing big shoulder pads under a navy
+`#1f2d54` jersey with gold `#c8a63c` trim. The pads should make the shoulders
+clearly wider and higher than the chest, the classic football silhouette.
+Numbers are not needed (the game draws them). Shoulders at the top edge, waist
+at the bottom edge, filling the full height.
+
+## 10. `football-helmet.png` (roughly 160 x 142)
+
+Same side-view navy helmet with the gold stripe as the current one, but the
+facemask must be solid near-black `#14161a` bars with **magenta showing
+through the gaps**, not a grey checkerboard. The current helmet has a
+checkerboard painted inside the facemask and it shows in game.
+
+Drop the files in `parts/` with these names (or anywhere, and tell me where).

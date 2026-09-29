@@ -137,14 +137,14 @@
 
   /* ---------- play card ---------- */
   #card{
-    position:absolute; left:14px; top:50%; z-index:7; width:190px;
-    transform:translate(-118%,-50%); opacity:0; pointer-events:none;
+    position:absolute; left:50%; top:46%; z-index:7; width:240px;
+    transform:translate(-50%,-50%) scale(.6); opacity:0; pointer-events:none;
     transition:transform .34s cubic-bezier(.2,1.3,.4,1), opacity .24s;
     background:linear-gradient(160deg,#1b262e,#101820);
     border:2px solid var(--gold); border-radius:6px; overflow:hidden;
     box-shadow:0 14px 40px rgba(0,0,0,.65);
   }
-  #card.in{transform:translate(0,-50%); opacity:1;}
+  #card.in{transform:translate(-50%,-50%) scale(1); opacity:1;}
   #card .pcTop{
     display:flex; align-items:center; gap:6px; padding:5px 8px;
     background:var(--gold); color:#14181c;
@@ -152,7 +152,7 @@
   }
   #card.away{border-color:var(--red);} #card.away .pcTop{background:var(--red); color:#fff;}
   #card .pcNum{margin-left:auto; font-family:'JetBrains Mono',monospace; font-size:13px;}
-  #card canvas{display:block; width:100%; height:114px; background:rgba(0,0,0,.25);}
+  #card canvas{display:block; width:100%; height:144px; background:rgba(0,0,0,.25);}
   #card .pcName{
     font-family:'Anton',sans-serif; font-size:17px; padding:7px 8px 1px;
     letter-spacing:.02em; color:var(--text);
@@ -233,6 +233,7 @@ var BASE_SPD=118, SPRINT=1.34, DEF_SPD=123;
 // nothing drifts out of step with anything else.
 var GAME_SPEED=0.70;
 var TACKLE_R=23, CATCH_R=17, BLOCK_R=21;
+var SIDE_OUT=3*14;   // how far past the sideline a man can run: the out of bounds area
 var RUSH_MOVES=['rip','swim','spin','bull'];
 var JUKE_MS=330, JUKE_COST=28, TRUCK_COST=50, GAME_SECONDS=180;
 var REDUCED = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -412,7 +413,7 @@ function makeW3(){
   // apron round the field
   g.fillStyle='#16311f'; g.fillRect(0,0,base.width,base.height);
   // the far stands: tiers of crowd climbing away from the field
-  var top=MT-70;
+  var top=MT-120;
   var sg=g.createLinearGradient(0,0,0,top);
   sg.addColorStop(0,'#0b0f16'); sg.addColorStop(1,'#1c2433');
   g.fillStyle=sg; g.fillRect(0,0,base.width,top);
@@ -437,6 +438,17 @@ function makeW3(){
   g.fillStyle='#12281a'; g.fillRect(0,MT+FH+40,base.width,MB-40);
   // the field itself
   g.drawImage(fieldCanvas, M, MT);
+  // the white border: out of bounds starts on the paint
+  var BW=YD*0.9;
+  g.fillStyle='#eef3e8';
+  g.fillRect(M-BW, MT-BW, FW+2*BW, BW);            // far sideline
+  g.fillRect(M-BW, MT+FH, FW+2*BW, BW);            // near sideline
+  g.fillRect(M-BW, MT-BW, BW, FH+2*BW);            // end lines
+  g.fillRect(M+FW, MT-BW, BW, FH+2*BW);
+  // coaching box dashes on the near side
+  g.strokeStyle='rgba(255,210,63,.55)'; g.lineWidth=2; g.setLineDash([10,8]);
+  g.beginPath(); g.moveTo(M+EZ+25*YD, MT+FH+BW+2.2*YD); g.lineTo(M+FW-EZ-25*YD, MT+FH+BW+2.2*YD); g.stroke();
+  g.setLineDash([]);
   return {cv:c, g:c.getContext('2d'), base:base, M:M, MT:MT};
 }
 // Everything that must stay on screen this frame.
@@ -793,10 +805,14 @@ function setupPlay(playId){
   for(var s2=0;s2<G.players.length;s2++){ G.players[s2].stance=1; G.players[s2].vx=0; G.players[s2].vy=0; }
 }
 
+// The drop, in yards, for each call. Quick game is three steps, intermediate
+// five, the deep shot seven. The run is a handoff, so no drop at all.
+var DROP_YDS = {short:3, outs:5, screen:5, draw:5, deep:7, run:0};
 function snapBall(){
   if(G.phase!=='presnap') return;
   G.phase='live'; G.snapT=G.gt;
   for(var i=0;i<G.players.length;i++) G.players[i].stance=0;
+  G.dropLeft = (DROP_YDS[G.play]||0)*YD;         // yards of drop still to take
   burst(G.ball.x,G.ball.y,'#f1f1ec');
   say('HIKE!',480);
 }
@@ -814,6 +830,13 @@ var GUEST_HERO = null;
 function sideHero(side){
   if(side==='H') return HERO;
   return NET.on ? (GUEST_HERO || HEROES[1]) : null;
+}
+// One frame of the drop: straight back, quick feet, facing the way he throws.
+function dropBack(qb, fwd, dt){
+  var v=BASE_SPD*0.95;
+  qb.vx=-fwd*v; qb.vy=0;
+  qb.backpedal=0.12; qb.dropFace=fwd;
+  G.dropLeft=Math.max(0, G.dropLeft - v*dt);
 }
 function nearestDef(){
   var best=null,bd=Infinity,me=G.offense==='H'?'A':'H';
@@ -958,6 +981,7 @@ function releaseThrow(best){
             dur:Math.max(0.14,dist/speed),
             arc: rocket ? 4 : Math.max(7, Math.min(56, (dist/YD)*1.65)),
             sure: rocket||perfect,
+            fire: rocket,
             homing: perfect,
             deep: dist > 22*YD};
   G.windupWasRocket=false;
@@ -1929,7 +1953,7 @@ function deadTick(dt){
     var q=G.players[i];
     q.vx*=damp; q.vy*=damp;
     q.x+=q.vx*dt; q.y+=q.vy*dt;
-    q.y=Math.max(8,Math.min(FH-8,q.y)); q.x=Math.max(6,Math.min(FW-6,q.x));
+    q.y=Math.max(-SIDE_OUT,Math.min(FH+SIDE_OUT,q.y)); q.x=Math.max(6,Math.min(FW-6,q.x));
     var sp=Math.hypot(q.vx,q.vy);
     q.run += (q.down>0||q.stun>0 ? 0 : Math.max(sp*0.075, 1.5))*dt;
     if(Math.abs(q.vx)>5) q.face=q.vx>0?1:-1;
@@ -2266,6 +2290,10 @@ function driveHuman(seat, IN, dt, now){
   var base = onO ? BASE_SPD : DEF_SPD;
   var mult=(sprinting?SPRINT:1)*(me.burst>0?1.7:1)*me.spd;
   if(diving){ me.vx*=0.988; me.vy*=0.988; }          // ride the dive out
+  else if(onO && me===G.carrier && me.role==='QB' && G.dropLeft>0 && !G.thrown){
+    if(a.x||a.y){ G.dropLeft=0; me.vx=a.x*base*mult; me.vy=a.y*base*mult; }   // you took over
+    else dropBack(me, fwd, dt);
+  }
   else if(!jk||me.z>0){ me.vx=a.x*base*mult; me.vy=a.y*base*mult; }
   else { me.vx*=0.90; me.vy*=0.90; }
 }
@@ -2300,7 +2328,7 @@ function step(dt){
       if(p.stun>0){ p.stun-=dt; p.vx*=0.8; p.vy*=0.8; }
       continue;
     }
-    if(p.stun>0){ p.stun-=dt; p.vx*=0.8; p.vy*=0.8; continue; }
+    if(p.stun>0){ p.stun-=dt; if(!(p.z>0.02)){ p.vx*=0.9; p.vy*=0.9; } continue; }   // no drag in the air; a skid on landing
     if(p.down>0){ p.vx*=0.8; p.vy*=0.8; continue; }
     if(G.loose){ aim(p,G.ball.x,G.ball.y,BASE_SPD*1.06*p.spd); continue; }
     var offTeam=G.offense;
@@ -2326,7 +2354,9 @@ function step(dt){
             burst(th.x,th.y,'#ffd23f'); G.shake=REDUCED?0:9;
           }
         }
-        if(p.role==='QB' && since<1.5 && thd>30 && !G.windup){
+        if(p.role==='QB' && G.dropLeft>0 && !G.windup && thd>30){
+          dropBack(p, d, dt);
+        } else if(p.role==='QB' && since<1.5 && thd>30 && !G.windup){
           // stay in the pocket: drift back and slide off the rush
           var slide=th?Math.sign(p.y-th.y)||1:1;
           p.vx=-d*BASE_SPD*0.34; p.vy=slide*BASE_SPD*0.30;
@@ -2556,13 +2586,26 @@ function step(dt){
   for(var j=0;j<G.players.length;j++){
     var q=G.players[j];
     q.x+=q.vx*dt; q.y+=q.vy*dt;
-    q.y=Math.max(8,Math.min(FH-8,q.y)); q.x=Math.max(6,Math.min(FW-6,q.x));
+    q.y=Math.max(-SIDE_OUT,Math.min(FH+SIDE_OUT,q.y)); q.x=Math.max(6,Math.min(FW-6,q.x));
     var sp=Math.hypot(q.vx,q.vy);
-    q.run += Math.max(sp*0.075, 2.1)*dt;    // idle still animates
-    if(Math.abs(q.vx)>5) q.face = q.vx>0?1:-1;
-    q.lean += ((sp>6? Math.min(0.34, sp*0.0016) :0) - q.lean)*Math.min(1,dt*9);
+    q.run += (q.backpedal>0?-1:1)*Math.max(sp*0.075, 2.1)*dt;    // idle still animates; backpedal runs it backwards
+    if(q.backpedal>0){
+      // backpedalling: eyes downfield, weight back, never turn his back
+      q.backpedal-=dt; q.face=q.dropFace||q.face;
+      q.lean += (-0.10 - q.lean)*Math.min(1,dt*9);
+    } else {
+      if(Math.abs(q.vx)>5) q.face = q.vx>0?1:-1;
+      q.lean += ((sp>6? Math.min(0.34, sp*0.0016) :0) - q.lean)*Math.min(1,dt*9);
+    }
     if(q.spin>0){ q.spin=Math.max(0,q.spin-dt*2.1); if(Math.random()<dt*45) ghost(q); }
-    if(q.z>0)    q.z=Math.max(0,q.z-dt*1.7);
+    // a fresh stun is a hit: put him in the air rather than just tipping him over
+    if(q.stun > (q._pst||0)+0.5 && !(q.vz>0) && q.z<=0.01 && !REDUCED) q.vz=3.0;
+    q._pst=q.stun;
+    if(q.vz){
+      q.vz-=9*dt; q.z=Math.max(0,q.z+q.vz*dt);
+      if(q.z<=0){ q.vz=0; burst(q.x,q.y,'#cfd8cf'); }   // lands in a puff of turf
+    }
+    else if(q.z>0) q.z=Math.max(0,q.z-dt*1.7);
     if(q.arm>0)  q.arm=Math.max(0,q.arm-dt*1.9);
     if(q.throwArm>0 && !G.windup) q.throwArm=Math.max(0,q.throwArm-dt*2.3);
     if(q.phase>0) q.phase=Math.max(0,q.phase-dt*1.1);
@@ -2606,7 +2649,7 @@ function step(dt){
   }
   for(var i3=0;i3<G.players.length;i3++){
     var pp3=G.players[i3];
-    pp3.y=Math.max(8,Math.min(FH-8,pp3.y));
+    pp3.y=Math.max(-SIDE_OUT,Math.min(FH+SIDE_OUT,pp3.y));
     pp3.x=Math.max(6,Math.min(FW-6,pp3.x));
   }
 
@@ -2643,6 +2686,11 @@ function step(dt){
     G.ball.x=t.x+(t.tx-t.x)*k; G.ball.y=t.y+(t.ty-t.y)*k;
     t.h=Math.sin(k*Math.PI)*(t.arc||0);          // height above the turf
     (t.trail=t.trail||[]).push({x:G.ball.x,y:G.ball.y-t.h});
+    if(t.fire && !REDUCED){
+      for(var fi=0;fi<3;fi++) G.fx.push({x:G.ball.x+(Math.random()-0.5)*5, y:G.ball.y-t.h+(Math.random()-0.5)*5,
+        vx:(Math.random()-0.5)*30, vy:-12-Math.random()*16, life:0.34, max:0.34,
+        r:2+Math.random()*2.4, c:['#ff5a1f','#ff9a2a','#ffd23f'][fi]});
+    }
     if(t.trail.length>18) t.trail.shift();
     if(k>=1){
       var r=t.target, cov=nearestOf(r,G.offense==='H'?'A':'H');
@@ -2802,7 +2850,7 @@ function step(dt){
       if(G.freeT>0.7) G.carrier.hp=Math.min(100, G.carrier.hp + 7*dt);
     }
     // sideline: getting out stops the clock, which is the whole point
-    if(G.carrier.y<=9 || G.carrier.y>=FH-9){
+    if(G.carrier.y<=0 || G.carrier.y>=FH){          // over the white line
       burst(G.carrier.x,G.carrier.y,'#eef3e8');
       say('OUT OF BOUNDS',950);
       endPlay(G.carrier.x,'OUT OF BOUNDS'); return;
@@ -3006,8 +3054,15 @@ function draw(){
   if(!isFinite(cam.y)) cam.y=FH/2;
 
   var halfW=VW/scale/2, halfH=VH/scale/2;
-  cam.x = (FW>halfW*2) ? Math.max(halfW,Math.min(FW-halfW,cam.x)) : FW/2;
-  cam.y = (FH>halfH*2) ? Math.max(halfH,Math.min(FH-halfH,cam.y)) : FH/2;
+  if(VIEW3D){
+    // The 3D camera frames the play itself (camFit). The flat view's limits
+    // pinned it near midfield, so a return toward either end zone ran off
+    // the screen while the camera zoomed out after it.
+    cam.x=Math.max(0,Math.min(FW,cam.x)); cam.y=Math.max(0,Math.min(FH,cam.y));
+  } else {
+    cam.x = (FW>halfW*2) ? Math.max(halfW,Math.min(FW-halfW,cam.x)) : FW/2;
+    cam.y = (FH>halfH*2) ? Math.max(halfH,Math.min(FH-halfH,cam.y)) : FH/2;
+  }
 
   var sx=0,sy=0;
   if(G.shake>0.3){ sx=(Math.random()-0.5)*G.shake; sy=(Math.random()-0.5)*G.shake; G.shake*=0.86; }
@@ -3272,7 +3327,7 @@ function drawSprite(p){
   // Torso carries the figure; the helmet must read smaller than the shoulders.
   var HIP=-16, SHO=-28.5;
   var TH=9.6, WTH=5.6, SHN=7.6, WSHN=3.2, CL=4.5, HCL=2.2;
-  var UA=7, HUA=3.2, FA=6.5, HFA=2.2;
+  var UA=7, HUA=4.16, FA=6.5, HFA=3.5;         // thicker arms for the padded sleeve and glove art
   var sp=Math.hypot(p.vx,p.vy), moving=sp>8 && p.down<=0 && p.stun<=0, ph=p.run;
   var gait=Math.min(1.25, 0.55+sp/150);       // stride opens up with speed
 
@@ -3280,10 +3335,10 @@ function drawSprite(p){
   // recovery and straightens again just before the foot plants.
   function leg(phase){
     var thigh=Math.sin(phase)*0.95*gait;
-    var tuck=Math.max(0,-Math.sin(phase-0.7));
-    return {t:thigh, s:thigh+0.22+tuck*1.5};
+    var tuck=Math.max(0,Math.cos(phase-0.3));     // swinging through: fold the knee
+    return {t:thigh, s:thigh-0.20-tuck*1.7};
   }
-  var LF,LB,bob,AF,AB,EF=-0.88,EB=-0.88, KD=p._pose;
+  var LF,LB,bob,AF,AB,EF=0.45,EB=0.45, KD=p._pose;
   if(KD){
     // knocked down, or getting back up: see knockPose
     LF={t:KD.lt, s:KD.ls};
@@ -3293,14 +3348,15 @@ function drawSprite(p){
     LF=leg(ph); LB=leg(ph+Math.PI);
     bob=-Math.abs(Math.sin(ph))*2.2;                 // rises twice per stride
     var armSwing=1.05*gait;
+    EF=1.2; EB=1.2;                                   // elbows at ninety, pumping
     AF=-Math.sin(ph)*armSwing; AB=-Math.sin(ph+Math.PI)*armSwing;
   } else {
     // idle: weight shifting foot to foot, chest rising, hands never still.
     // Linemen in a stance settle; skill players bounce on their toes.
     var amp = (p.role==='C'||p.role==='OL') ? 0.45 : 1.0;
     var w=Math.sin(ph*1.7), w2=Math.sin(ph*1.7+2.1), br=Math.sin(ph*2.6);
-    LF={t: 0.17+w*0.10*amp,  s: 0.33+w*0.07*amp};
-    LB={t:-0.17+w2*0.10*amp, s:-0.02+w2*0.07*amp};
+    LF={t: 0.17+w*0.10*amp,  s: 0.03+w*0.07*amp};
+    LB={t:-0.17+w2*0.10*amp, s:-0.31+w2*0.07*amp};
     bob = br*0.85*amp - 0.4;
     AF = -0.15+Math.sin(ph*1.7+0.9)*0.22*amp;
     AB =  0.15+Math.sin(ph*1.7+2.6)*0.22*amp;
@@ -3372,10 +3428,10 @@ function drawSprite(p){
 // goes over backwards from the way he was facing. rot turns the body about
 // the hip; drop lowers the hip toward the turf. Leg and arm angles are the
 // same bone angles drawSprite uses, so the whole rig moves, not a stiff cutout.
-var KD_STAND={rot:0,    drop:0,   lt:0.17, ls:0.33, bt:-0.17, bs:-0.02, af:-0.15, ef:-0.88, ab:0.15,  eb:-0.88};
+var KD_STAND={rot:0,    drop:0,   lt:0.17, ls:0.03, bt:-0.17, bs:-0.31, af:-0.15, ef:0.45,  ab:0.15,  eb:0.45};
 var KD_LIE  ={rot:-1.45,drop:10.5,lt:-0.15,ls:0.0,  bt:0.45,  bs:-0.55, af:-2.3,  ef:0.4,   ab:-2.9,  eb:0.2};
-var KD_SIT  ={rot:-0.2, drop:13,  lt:1.3,  ls:1.2,  bt:0.9,   bs:-0.5,  af:0.2,   ef:-0.5,  ab:-0.8,  eb:0};
-var KD_KNEEL={rot:0.35, drop:5.5, lt:1.8,  ls:0.4,  bt:0.25,  bs:-1.15, af:1.25,  ef:-0.3,  ab:0.65,  eb:-0.4};
+var KD_SIT  ={rot:-0.2, drop:13,  lt:1.3,  ls:1.2,  bt:0.9,   bs:-0.5,  af:0.2,   ef:0.5,   ab:-0.8,  eb:0};
+var KD_KNEEL={rot:0.35, drop:5.5, lt:1.8,  ls:0.4,  bt:0.25,  bs:-1.15, af:1.25,  ef:0.4,   ab:0.65,  eb:0.5};
 var KD_FALL=0.25, KD_GETUP=0.75;
 function kdMix(a,b,t){
   t=t*t*(3-2*t);
@@ -3416,7 +3472,34 @@ function breakWrap(t,car){
   t.vx=bx/bm*90; t.vy=by/bm*90;
 }
 
+var GUY_PASS=null, OUTL=null, OUTLINE_W=0.85;   // outline thickness, world units
 function drawGuy(p){
+  if(!SPR.ready){ drawGuyRaw(p); return; }
+  var lift=p.z*15 + (p.cel>0?Math.abs(Math.sin(p.cel*9))*10:0);
+  GUY_PASS='marks'; drawGuyRaw(p);
+  var R=4, L=38, T=76, W=76, H=94;              // offscreen box round the man, world units
+  if(!OUTL){
+    OUTL={a:document.createElement('canvas'), b:document.createElement('canvas')};
+    OUTL.a.width=OUTL.b.width=W*R; OUTL.a.height=OUTL.b.height=H*R;
+    OUTL.ga=OUTL.a.getContext('2d'); OUTL.gb=OUTL.b.getContext('2d');
+  }
+  var ga=OUTL.ga, gb=OUTL.gb;
+  ga.setTransform(1,0,0,1,0,0); ga.globalAlpha=1; ga.clearRect(0,0,W*R,H*R);
+  ga.setTransform(R,0,0,R,(L-p.x)*R,(T-p.y)*R);
+  var main=ctx; ctx=ga; GUY_PASS='body';
+  try{ drawGuyRaw(p); } finally { ctx=main; GUY_PASS=null; }
+  gb.setTransform(1,0,0,1,0,0); gb.globalCompositeOperation='source-over';
+  gb.clearRect(0,0,W*R,H*R);
+  var o=OUTLINE_W*R;
+  for(var k=0;k<8;k++){ var an=k*Math.PI/4; gb.drawImage(OUTL.a, Math.cos(an)*o, Math.sin(an)*o); }
+  gb.globalCompositeOperation='source-in';
+  gb.fillStyle='#0a0c10'; gb.fillRect(0,0,W*R,H*R);
+  gb.globalCompositeOperation='source-over';
+  ctx.drawImage(OUTL.b, p.x-L, p.y-T, W, H);
+  ctx.drawImage(OUTL.a, p.x-L, p.y-T, W, H);
+  heroTag(p,lift);
+}
+function drawGuyRaw(p){
   var K=KITS[p.team];
   var ctrl=(p===G.controlled), carry=(p===G.carrier);
   var lift=p.z*15 + (p.cel>0?Math.abs(Math.sin(p.cel*9))*10:0);
@@ -3428,6 +3511,7 @@ function drawGuy(p){
   var sh=1-Math.min(0.6,p.z*0.6);
   var kd=p._pose=knockPose(p);
   var lay=kd?kd.flat:0;
+  if(GUY_PASS!=='body'){
   ctx.fillStyle='rgba(0,0,0,'+(0.38*sh)+')';
   ctx.beginPath();
   ctx.ellipse(p.x, p.y+lay*5, (8.5+lay*8)*sh, (3.4+lay*1.2)*sh,
@@ -3460,6 +3544,8 @@ function drawGuy(p){
       roundRect(bx2,by2,bw*(hpv/100),2.4,1.2); ctx.fill();
     }
   }
+  }
+  if(GUY_PASS==='marks') return;
 
   if(p.spin>0) swirl(p,lift,false);
   ctx.save();
@@ -3609,6 +3695,7 @@ function drawGuy(p){
 }
 
 function heroTag(p,lift){
+  if(GUY_PASS==='body') return;               // drawn on top of the outline instead
   // Labelling all sixteen turns to mush the moment two players overlap.
   var ctrl=(p===G.controlled), carry=(p===G.carrier);
   if(!ctrl && !carry && !p.hero) return;
@@ -4631,9 +4718,16 @@ function frame(ts){
     // one bad frame must never stop the loop
     try{
       if(G.phase==='kick') kickTick(dt);
-    if(G.phase==='dead') deadTick(dt);
+    if(G.phase==='dead'){ if(G.hitStop>0) G.hitStop-=dt; else deadTick(dt); }
     if(G.phase==='presnap') presnap(dt);
-      if(G.phase==='live') step(dt);
+      if(G.phase==='live'){
+        if(G.hitStop>0) G.hitStop-=dt;             // frozen on the impact
+        else {
+          var sh0=G.shake; step(dt);
+          // a hard hit is whatever just kicked the screen shake: hold that frame
+          if(G.shake>sh0+5 && !REDUCED) G.hitStop=Math.min(0.13, 0.05+(G.shake-sh0)*0.005);
+        }
+      }
       if(G.phase==='playcall'){
         if(G.showingStats){ /* reading the book */ }
         else if(G.hostPick) waitTick();
