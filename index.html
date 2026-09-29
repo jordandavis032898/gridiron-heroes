@@ -1447,8 +1447,15 @@ function step(dt){
         }
       } else if(p.route&&p.route!=='block'){
         var tp=routePoint(p,since);
-        if(since>2.6 && G.carrier && G.carrier.role==='QB'){
-          // scramble drill: come back and give him a target
+        // Scramble drill. This used to fire on a timer: at 2.6 seconds every
+        // receiver abandoned his route and ran back at the quarterback. Since
+        // a deep ball needs longer than that to develop, the passer was
+        // always throwing to a man who had just turned round, which read as a
+        // badly underthrown pass. It now waits for him to actually break the
+        // pocket, and a streak keeps streaking regardless.
+        var qbOut = G.carrier && G.carrier.role==='QB' &&
+                    ((G.carrier.x-G.los)*d > -3*YD);
+        if(qbOut && since>1.6 && p.route!=='go'){
           tp={x:G.carrier.x+d*9*YD, y:p.y*0.7+G.carrier.y*0.3};
         }
         aim(p,tp.x,tp.y,BASE_SPD*1.02*p.spd);
