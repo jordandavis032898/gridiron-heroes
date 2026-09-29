@@ -998,6 +998,7 @@ function cpuAbilities(dt,now){
 // ---- the CPU quarterback: drop, read the field, throw or scramble -------
 function cpuQB(now){
   if(G.offense==='H') return;
+  if(NET.on) return;          // the Rivals offence is the guest, a person
   if(!G.carrier||G.carrier.role!=='QB'||G.thrown||G.windup||G.loose) return;
   var qb=G.carrier, d=dir(), since=(now-G.snapT)/1000;
   var rush=nearestOf(qb,'H');
@@ -2751,10 +2752,14 @@ if(window.matchMedia&&window.matchMedia('(pointer: coarse)').matches){
   // tap the field to hike, then to throw
   cv.addEventListener('touchstart',function(e){
     if(!G) return;
-    if(G.phase==='presnap'){ snapBall(); return; }
+    if(G.phase==='presnap'){
+      if(NET.on && !NET.host) netSend({t:'hike'}); else snapBall();
+      return;
+    }
     if(G.phase!=='live') return;
     var t=e.changedTouches[0], w=screenToWorld(t.clientX,t.clientY);
-    throwAt(w.x,w.y);
+    if(NET.on && !NET.host){ netSend({t:'thr', x:Math.round(w.x), y:Math.round(w.y)}); return; }
+    throwAt(w.x,w.y,'H');
   },{passive:true});
 }
 
