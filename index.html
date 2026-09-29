@@ -290,12 +290,12 @@ var PLAYS = {
   H:[{id:'short', name:'QUICK SLANT', desc:'Receivers cut inside fast. Safe, 6 to 10 yards.'},
      {id:'deep',  name:'GO ROUTE',    desc:'Both streak downfield. Risky, big payoff.'},
      {id:'outs',  name:'OUT ROUTES',  desc:'Break for the sideline. Stops the clock if he gets out.'},
-     {id:'run',   name:'POWER RUN',   desc:'Hand it to the back. Blockers lead the way.'},
+     {id:'run',   name:'POWER RUN',   desc:'Hand it to the back. Receivers lead the way.'},
      {id:'draw',  name:'DRAW',        desc:'Sell the pass, then give it late. Beats a blitz.'},
-     {id:'screen',name:'SCREEN',      desc:'Let them come, slip the back out behind them.'}],
+     {id:'screen',name:'SCREEN',      desc:'Let them come, slip the back out with blockers.'}],
   A:[{id:'blitz', name:'ALL-OUT BLITZ',desc:'Everyone rushes. Kill it behind the line.'},
      {id:'zone',  name:'ZONE COVER',   desc:'Sit back, take the pass away.'},
-     {id:'spy',   name:'CONTAIN',      desc:'Two rush, three hold the middle.'},
+     {id:'spy',   name:'CONTAIN',      desc:'Two rush. Everyone else walls off the middle.'},
      {id:'press', name:'MAN PRESS',    desc:'Jam them at the line. No free release.'},
      {id:'prevent',name:'PREVENT',     desc:'Everyone drops. Nothing gets behind you.'}]
 };
@@ -435,15 +435,15 @@ function setupPlay(playId){
   var off = youOnO ? G.play : G.aiPlay;
   if(off==='deep'){ w1.route='go'; w2.route='go'; te.route='slant'; rb.route='block'; }
   else if(off==='outs'){ w1.route='out'; w2.route='out'; te.route='curl'; rb.route='wheel'; }
-  else if(off==='run'){ w1.route='block'; w2.route='block'; te.route='block'; rb.route='mesh'; }
+  else if(off==='run'){ w1.route='lead'; w2.route='lead'; te.route='block'; rb.route='mesh'; }
   else if(off==='draw'){ w1.route='go'; w2.route='curl'; te.route='block'; rb.route='mesh'; }
-  else if(off==='screen'){ w1.route='block'; w2.route='block'; te.route='block'; rb.route='screen'; }
+  else if(off==='screen'){ w1.route='lead'; w2.route='lead'; te.route='block'; rb.route='screen'; }
   else { w1.route='slant'; w2.route='slant'; te.route='flat'; rb.route='flat'; }
   c.route='block'; o1.route='block'; o2.route='block';
   // ---- DEFENSE: DE, DE, DE, LB, LB, CB, CB, S
   var dplay = youOnO ? G.aiPlay : G.play;
   var lbRush = (dplay==='blitz');
-  var deCount = (dplay==='zone'||dplay==='prevent') ? 2 : 3;
+  var deCount = (dplay==='zone'||dplay==='prevent'||dplay==='spy') ? 2 : 3;
   var spec=[
     {r:'RUSH', x:5, y:-6,   pos:'DE'},
     {r:'RUSH', x:5, y:0,    pos:'DE'},
@@ -939,7 +939,10 @@ function routePoint(p,since){
     }
     return {x:tx, y:p.y+Math.sin(since*1.6)*1.4*YD};
   }
-  if(p.route==='slant') return {x:p.x+9*YD*d,  y:mid+(p.y<mid?5:-5)*YD};
+  if(p.route==='slant'){
+    if(since<0.45) return {x:p.x+6*YD*d, y:p.y};        // stem, then break in
+    return {x:p.x+5*YD*d, y:mid+(p.y<mid?6:-6)*YD};
+  }
   if(p.route==='flat')  return {x:p.x+5*YD*d,  y:p.y+(p.y<mid?-9:9)*YD};
 
   // break for the sideline once he has the depth
@@ -1531,6 +1534,19 @@ function step(dt){
           var lane2=runLane(p,d);
           var spd2=BASE_SPD*1.30*(p.spd||1);
           p.vx=lane2.x*spd2; p.vy=lane2.y*spd2;
+        }
+      } else if(p.route==='lead'){
+        // Lead blocking: get out in front of whoever has the ball and go hit
+        // the man closest to him. Not pass protection, which is what these
+        // two used to do from fourteen yards outside.
+        var car=G.carrier, dTeam=(offTeam==='H'?'A':'H');
+        if(car){
+          var mark=nearestOf(car,dTeam);
+          if(mark && Math.hypot(mark.x-car.x,mark.y-car.y)<30*YD){
+            aim(p, mark.x, mark.y, BASE_SPD*1.36*p.spd);
+          } else {
+            aim(p, car.x+d*7*YD, car.y, BASE_SPD*1.24*p.spd);
+          }
         }
       } else if(p.route&&p.route!=='block'){
         var tp=routePoint(p,since);
