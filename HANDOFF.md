@@ -134,6 +134,15 @@ and he is through and the blocker is left flat-footed (`beat`); lose it and
 the block holds longer. A spin is drawn as a turn (width through zero), not a
 cartwheel.
 
+**Line collisions.** Blockers are solid (`LINE_COL`): a rusher who is not
+locked up with that blocker is pushed to the edge of him and slides round
+the side nearer the ball, which bends the rush into a pocket. Locked pairs
+(`locked`, `lockDir`) face each other, lean in, hands on chests.
+
+**Feel.** Squash and stretch from velocity jolts (`sq`). Late in a pass the
+landing spot drifts onto a receiver who is already close (magnet), and the
+target raises his hands (`catchT`). No hit-stop, by request.
+
 **Passing.** The throw leads the target off his velocity at release, then
 the target plays the ball: he runs to the landing spot instead of finishing
 his route. Before that, a man caught mid-cut or coming back to a scrambling
