@@ -644,7 +644,12 @@ var stage=document.getElementById('stage');
 // A touch screen (phone or tablet, and the iPhone app, which shows this page):
 // on-screen stick, hold-to-aim passing, swipe tackles, the ability buttons
 // floating on the right, and a camera framed for a small screen.
-var TOUCH_UI=!!(window.matchMedia && window.matchMedia('(pointer: coarse)').matches);
+// Every screen plays the phone's game: its camera, tuning and buttons
+// (TOUCH_UI), with a mouse doing what a finger does. TOUCH_IN is only whether
+// this screen is actually touched: the thumb stick, and keyboard focus on a
+// computer.
+var TOUCH_IN=!!(window.matchMedia && window.matchMedia('(pointer: coarse)').matches);
+var TOUCH_UI=true;
 // A read-only peek at what the game is doing, for the iPhone app's test reports.
 window.__hm=function(){
   if(!G) return 'no game';
@@ -770,67 +775,22 @@ function screenToWorld(cx,cy){
   var r=cv.getBoundingClientRect();
   return { x: cam.x + (cx-r.left-VW/2)/scale, y: cam.y + (cy-r.top-VH/2)/scale };
 }
+// The mouse is a finger now (see the touch section): this only tracks the
+// cursor, which is where a pass aims while you hold on a receiver.
 stage.addEventListener('pointermove',function(e){
   if(e.pointerType==='touch') return;           // fingers have their own handling (touch section)
-  // measure the flick before anything else moves the cursor record
-  if(G && G.phase==='live'){
-    var r0=cv.getBoundingClientRect();
-    var w0=screenToWorld(e.clientX,e.clientY);
-    var tn=performance.now(), gap=tn-SWIPE.t;
-    if(gap>4 && gap<110){
-      var sx=(w0.x-SWIPE.x)/(gap/1000), sy=(w0.y-SWIPE.y)/(gap/1000);
-      if(!G.drag && Math.hypot(sx,sy) > 620){
-        if(NET.on && !NET.host) netSend({t:'dive', x:+sx.toFixed(0), y:+sy.toFixed(0)});
-        else swipeTackle(sx,sy,'H');
-      }
-    }
-    SWIPE.x=w0.x; SWIPE.y=w0.y; SWIPE.t=tn;
-  }
   var w=screenToWorld(e.clientX,e.clientY);
   G && (G.mouse.x=w.x, G.mouse.y=w.y, G.mouse.on=true, G.mouse.cx=e.clientX, G.mouse.cy=e.clientY);
 });
 stage.addEventListener('pointerleave',function(){ G && (G.mouse.on=false); });
 
-// release the drag: dive along it
-function endDrag(e){
-  if(e && e.pointerType==='touch') return;
-  if(e && e.button===2){ if(G) G.artHold=false; return; }
-  if(!G||!G.drag) return;
-  var d0=G.drag; G.drag=null;
-  if(G.phase!=='live'||iHaveBall()) return;
-  var w=screenToWorld(e.clientX,e.clientY);
-  var dx=w.x-d0.x, dy=w.y-d0.y;
-  if(Math.hypot(dx,dy) < 10) return;          // that was a click, not a drag
-  if(NET.on && !NET.host) netSend({t:'dive', x:Math.round(dx*9), y:Math.round(dy*9)});
-  else swipeTackle(dx,dy,'H');
-}
-stage.addEventListener('pointerup',endDrag);
-stage.addEventListener('pointercancel',function(){ if(G) G.drag=null; });
+// the right button shows the play art while it is held
+stage.addEventListener('pointerup',function(e){ if(e.pointerType!=='touch' && e.button===2 && G) G.artHold=false; });
 stage.addEventListener('contextmenu',function(e){ e.preventDefault(); });
 stage.addEventListener('pointerdown',function(e){
-  if(e.pointerType==='touch') return;           // a thumb on the stick is not a throw
+  if(e.pointerType==='touch' || e.button!==2) return;
   e.preventDefault();
-  if(!G) return;
-  if(e.button===2){ G.artHold=true; return; }   // right button: play art while held
-  if(G.phase==='kickset'){ G.kickClick=true; return; }
-  if(G.phase==='live' && !iHaveBall()){
-    var wd=screenToWorld(e.clientX,e.clientY);
-    G.drag={x:wd.x,y:wd.y,t:performance.now()};
-    return;                                   // on defence the button tackles
-  }
-  if(NET.on && !NET.host){
-    // the guest aims in its own camera, then posts field coordinates
-    if(G.phase!=='live') return;
-    var wg=screenToWorld(e.clientX,e.clientY);
-    netSend({t:'thr', x:Math.round(wg.x), y:Math.round(wg.y)});
-    return;
-  }
-  if(G.phase==='presnap'){ say('HIT SPACE TO HIKE FIRST',800); return; }
-  if(G.phase!=='live'){ G.lastThrow='not live ('+G.phase+')'; return; }
-  var hit=pickOnScreen(e.clientX,e.clientY);
-  if(hit){ G.lockMan=hit; G.lockT=5; throwAt(hit.x,hit.y,'H'); return; }
-  var w=screenToWorld(e.clientX,e.clientY);
-  throwAt(w.x,w.y,'H');
+  if(G) G.artHold=true;
 });
 
 // ================================================================ setup
@@ -6323,29 +6283,20 @@ function controlsCard(){
     var svg=icon.charAt(0)==='<', ic = svg ? '<svg viewBox="0 0 24 24">'+icon+'</svg>' : '<kbd>'+icon+'</kbd>';
     return '<div class="cr"><div class="ci'+(svg?'':' k')+'">'+ic+'</div><div><b>'+key+'</b><span>'+what+'</span></div></div>';
   }
-  var off, def;
-  if(TOUCH_UI){
-    off = row(IC.stick,'Stick','Run with your left thumb.')+
-          row(IC.aim,'Hold on a receiver','Aim a pass, then lift to throw. Hold longer for a better ball.')+
-          row(IC.tap,'Tap','Punch. Breaks a grab and knocks a rusher back.')+
-          row(IC.swipe,'Swipe','Spin away from a tackler.')+
-          row(IC.star,'Move buttons','Your heroes\u2019 special moves.');
-    def = row(IC.stick,'Stick','Run with your left thumb.')+
-          row(IC.tap,'Tap','Punch the ball carrier, or swat a pass in the air.')+
-          row(IC.swipe,'Swipe','Slide tackle. Reaches up to 9 yards.')+
-          row(IC.sw,'Switch','Take the defender best placed to make the play. It pulses when your man is out of it.');
-  } else {
-    off = row('WASD','Move','Or the arrow keys.')+
-          row('Mouse','Pass','Hold the cursor on a receiver and click to throw, or press 4 to 7.')+
-          row('F','Punch','Breaks a grab and knocks a rusher back.')+
-          row('J','Juke','Cut away from a tackler.')+
-          row('Q R T','Special moves','Your heroes\u2019 moves. K for the hero special.');
-    def = row('WASD','Move','Or the arrow keys.')+
-          row('K','Punch','Hit the ball carrier, or swat a pass in the air.')+
-          row('J','Dive','Launch at the ball carrier.')+
-          row('E','Switch','Take the defender best placed to make the play (or Tab).')+
-          row('Space','Hike','Snap the ball when you are ready.');
-  }
+  // one game on every screen; a computer's mouse does what a thumb does
+  var T=TOUCH_IN;
+  var stickK=T?'Stick':'WASD', stickW=T?'Run with your left thumb.':'Run. The arrow keys work too.';
+  var tap=T?'Tap':'Click', swipe=T?'Swipe':'Drag';
+  var off = row(IC.stick,stickK,stickW)+
+            row(IC.aim,'Hold on a receiver', T?'Aim a pass, then lift to throw. Hold longer for a better ball.'
+                                               :'Press and hold on him, then let go to throw. Hold longer for a better ball.')+
+            row(IC.tap,tap,'Punch. Breaks a grab and knocks a rusher back.')+
+            row(IC.swipe,swipe,'Spin away from a tackler.')+
+            row(IC.star,'Move buttons','Your heroes\u2019 special moves.'+(T?'':' Or Q, R and T.'));
+  var def = row(IC.stick,stickK,stickW)+
+            row(IC.tap,tap,'Punch the ball carrier, or swat a pass in the air.')+
+            row(IC.swipe,swipe,'Slide tackle. Reaches up to 9 yards.')+
+            row(IC.sw,'Switch','Take the defender best placed to make the play. It pulses when your man is out of it.'+(T?'':' Or E.'));
   stage.insertAdjacentHTML('beforeend',
     '<div class="overlay show" id="ctrlCard" role="dialog" aria-label="Controls"><div class="cc">'+
       '<h2>HOW TO PLAY</h2><p class="sub">One touch, one job</p>'+
@@ -6357,7 +6308,7 @@ function controlsCard(){
   go.addEventListener('click', close);
   go.addEventListener('touchend', function(ev){ ev.preventDefault(); close(); }, {passive:false});
   card.addEventListener('touchstart', function(ev){ ev.stopPropagation(); }, {passive:true});
-  if(!TOUCH_UI) go.focus();
+  if(!TOUCH_IN) go.focus();
 }
 function showPlaycall(){
   var onO=iHaveBall(), list=callSheet();
@@ -7226,8 +7177,15 @@ window.addEventListener('keydown',function(e){
 });
 
 // ================================================================ touch
+// a button pressed by a thumb or clicked with a mouse (a touch cancels the
+// click that would follow it, so it never fires twice)
+function onPress(el, fn){
+  if(!el) return;
+  el.addEventListener('touchstart',function(ev){ ev.preventDefault(); ev.stopPropagation(); fn(); },{passive:false});
+  el.addEventListener('click',function(ev){ ev.preventDefault(); ev.stopPropagation(); if(el.blur) el.blur(); fn(); });
+}
 if(TOUCH_UI){
-  elTouch.classList.add('on');
+  if(TOUCH_IN) elTouch.classList.add('on');       // the thumb stick; a computer runs on WASD
   var stick=document.getElementById('stick'), nub=document.getElementById('nub');
   var sid=null,cx=0,cy=0;
   function sStart(e){ var t=e.changedTouches[0]; sid=t.identifier;
@@ -7263,12 +7221,11 @@ if(TOUCH_UI){
   if(!document.getElementById('bSwitch')){
     stage.insertAdjacentHTML('beforeend',
       '<button id="bSwitch" type="button"><svg viewBox="0 0 24 24"><path d="M4 8h13l-3.5-3.5M20 16H7l3.5 3.5"/></svg><b>SWITCH</b></button>');
-    document.getElementById('bSwitch').addEventListener('touchstart',function(ev){
-      ev.preventDefault(); ev.stopPropagation();
+    onPress(document.getElementById('bSwitch'),function(){
       if(!G || iHaveBall()) return;
       if(G.phase==='presnap'){ if(!(NET.on && !NET.host)) switchPlayer(mySide()); return; }
       touchSwitch=true;
-    },{passive:false});
+    });
   }
   // one of your own men under the finger, judged by where his body is drawn
   function pickMine(cx,cy){
@@ -7296,7 +7253,7 @@ if(TOUCH_UI){
     return G.phase==='live' && iHaveBall() && G.carrier && G.carrier.role==='QB' &&
            !G.thrown && !pastTheLine(G.carrier);
   }
-  cv.addEventListener('touchstart',function(e){
+  function ftStartEv(e){
     if(!G) return;
     e.preventDefault();
     var t=e.changedTouches[0];
@@ -7318,8 +7275,9 @@ if(TOUCH_UI){
     else if(!iHaveBall()) FT.mode='tackle';         // swipe tackles, tap punches or switches
     else if(G.thrown){ FT.mode=null; }                // your pass is in the air: a tap does not switch you
     else FT.mode='spin';                             // carrying it: swipe to spin
-  },{passive:false});
-  window.addEventListener('touchmove',function(e){
+  }
+  cv.addEventListener('touchstart',ftStartEv,{passive:false});
+  function ftMoveEv(e){
     if(FT.id===null || !G) return;
     for(var i=0;i<e.changedTouches.length;i++){
       var t=e.changedTouches[i];
@@ -7347,7 +7305,8 @@ if(TOUCH_UI){
         }
       }
     }
-  },{passive:false});
+  }
+  window.addEventListener('touchmove',ftMoveEv,{passive:false});
   function ftEnd(e){
     if(FT.id===null) return;
     for(var i=0;i<e.changedTouches.length;i++){
@@ -7384,6 +7343,19 @@ if(TOUCH_UI){
   }
   window.addEventListener('touchend',ftEnd);
   window.addEventListener('touchcancel',ftEnd);
+  // A mouse is a finger: press, drag and let go on the field do exactly what a
+  // thumb does on the phone (tap to punch, swipe to tackle or spin, hold on a
+  // receiver and let go to throw, tap before the snap to hike).
+  function asTouch(e){ return {preventDefault:function(){ e.preventDefault(); },
+                               changedTouches:[{identifier:'mouse', clientX:e.clientX, clientY:e.clientY}]}; }
+  cv.addEventListener('pointerdown',function(e){
+    if(e.pointerType==='touch' || e.button!==0) return;
+    try{ cv.setPointerCapture(e.pointerId); }catch(er){}
+    ftStartEv(asTouch(e));
+  });
+  cv.addEventListener('pointermove',function(e){ if(e.pointerType!=='touch' && FT.id==='mouse') ftMoveEv(asTouch(e)); });
+  cv.addEventListener('pointerup',function(e){ if(e.pointerType!=='touch' && e.button===0) ftEnd(asTouch(e)); });
+  cv.addEventListener('pointercancel',function(e){ if(e.pointerType!=='touch') ftEnd(asTouch(e)); });
   // the move buttons sit along the bottom, see-through, right of the stick
   var lg=document.getElementById('legend');
   if(lg && lg.parentNode!==stage){ stage.appendChild(lg); resize(); }
@@ -7392,16 +7364,16 @@ if(TOUCH_UI){
     lg.insertAdjacentHTML('afterbegin',
       '<button class="ab" id="ab4" type="button"><span class="ring"><svg viewBox="0 0 24 24"></svg><span class="key"></span></span><span class="cap">Special</span></button>'+
       '<button class="ab" id="ab5" type="button"><span class="ring"><svg viewBox="0 0 24 24"></svg><span class="key"></span></span><span class="cap">Pitch</span></button>');
-    document.getElementById('ab4').addEventListener('touchstart',function(ev){ ev.preventDefault(); ev.stopPropagation();
-      if(G && G.phase!=='live'){ hint('MOVES WORK AFTER THE SNAP'); return; } touchMove=true; },{passive:false});
-    document.getElementById('ab5').addEventListener('touchstart',function(ev){ ev.preventDefault(); ev.stopPropagation(); touchQ=true; },{passive:false});
+    onPress(document.getElementById('ab4'),function(){
+      if(G && G.phase!=='live'){ hint('MOVES WORK AFTER THE SNAP'); return; } touchMove=true; });
+    onPress(document.getElementById('ab5'),function(){ touchQ=true; });
   }
   if(!document.getElementById('preBar')){
     stage.insertAdjacentHTML('beforeend',
       '<div id="preBar"><button type="button" id="pbArt">PLAY ART</button>'+
       '<button type="button" id="pbAud">AUDIBLE</button><button type="button" id="pbTO">TIMEOUT</button>'+
       '<button type="button" id="pbMenu">MENU</button></div>');
-    var pb=function(id,fn){ document.getElementById(id).addEventListener('touchstart',function(ev){ ev.preventDefault(); ev.stopPropagation(); fn(); },{passive:false}); };
+    var pb=function(id,fn){ onPress(document.getElementById(id), fn); };
     pb('pbArt',function(){ if(!G) return; G.artUntil = playArtOn() ? 0 : performance.now()+4000; });
     pb('pbAud',function(){ if(!G) return; if(G.audibleOpen) closeAudible(); else openAudible(); });
     pb('pbTO', function(){ callTimeout(); });
@@ -7416,12 +7388,10 @@ if(TOUCH_UI){
 ].forEach(function(pair){
   var e=document.getElementById('ab'+pair[0]);
   if(!e) return;
-  if(TOUCH_UI) e.addEventListener('touchstart',function(ev){
-    ev.preventDefault(); ev.stopPropagation();
+  onPress(e,function(){
     if(G && G.phase!=='live'){ hint('MOVES WORK AFTER THE SNAP'); return; }
     pair[1]();
-  },{passive:false});
-  else e.addEventListener('click',function(ev){ ev.preventDefault(); pair[1](); });
+  });
 });
 
 
@@ -8133,7 +8103,7 @@ function frontMenu(which){
       PICK_THEN='solo'; showHeroPick();
     });
   });
-  var first=m.querySelector('.fb'); if(first && !TOUCH_UI) first.focus();
+  var first=m.querySelector('.fb'); if(first && !TOUCH_IN) first.focus();
 }
 // each team card shows one of their men in his colours
 function drawTeamMan(cv, t){
@@ -8290,7 +8260,7 @@ function askQuit(){
   document.getElementById('qStay').addEventListener('click',function(){ G.paused=false; elOv.classList.remove('show'); });
   document.getElementById('qLeave').addEventListener('click',quitToMenu);
   document.getElementById('qCtrl').addEventListener('click',controlsCard);
-  if(!TOUCH_UI) document.getElementById('qStay').focus();
+  if(!TOUCH_IN) document.getElementById('qStay').focus();
 }
 function quitToMenu(){
   if(G && G.audibleOpen) closeAudible();
