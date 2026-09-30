@@ -1486,7 +1486,7 @@ function releaseThrow(best){
     var reach = Math.hypot(tx-G.ball.x, ty-G.ball.y);  // how far it has to go
     var lock = (best===G.lockMan) ? Math.min(1, G.lockT/1.05) : 0;
     var miss = (1-lock)*(1-lock);                      // falls away quickly
-    if(side==='A' && !NET.on) miss*=FOE.miss;          // how wild their passer is depends on the team
+    if(qb.team==='A' && !NET.on) miss*=FOE.miss;        // how wild their passer is depends on the team
     if(miss>0.01){
       var spread = (3.0 + Math.min(3.4, reach/(14*YD))) * YD * miss;
       var ma=Math.random()*Math.PI*2, mr=Math.sqrt(Math.random())*spread;
@@ -2132,6 +2132,12 @@ function flash(x,y,c,r){
   G.fx.push({flash:true,x:x,y:y,c:c||'rgba(255,255,255,0.9)',r:r||22,
              rot:Math.random()*6.28,life:0.26,max:0.26});
 }
+// a number that floats up off a man: how much fight a hit took out of him
+function dmgText(p,txt,c){
+  if(REDUCED||!p) return;
+  G.dmgSide=-(G.dmgSide||1);                          // alternate sides so a run of numbers does not stack
+  G.fx.push({dmg:true,x:p.x+G.dmgSide*(8+Math.random()*6),y:p.y,txt:txt,c:c||'#ffffff',vx:0,vy:0,life:0.85,max:0.85});
+}
 // turf torn up: brown, heavy, falls back down
 function dust(x,y,n,spread){
   n=n||10; spread=spread||1;
@@ -2457,23 +2463,32 @@ function recoverBall(p){
 // ---- defensive brawling --------------------------------------------------
 function bigHit(me,M){
   M=M||G;
+  if(M.hitCd>0 && TOUCH_UI){ M.punchBuf=performance.now(); return; }   // tapped a beat early: it goes off when ready
   if(!G.carrier||M.power<45||M.hitCd>0) return;
-  var dd=Math.hypot(G.carrier.x-me.x,G.carrier.y-me.y);
-  M.hitCd=0.8; M.power-=45; me.arm=0.5;
-  if(dd>(TOUCH_UI?40:28)){ say('WHIFF',420); return; }
-  var c=G.carrier;
-  G.shake=REDUCED?0:18;
-  burst(c.x,c.y,'#ffd23f'); burst(c.x,c.y,'#ffffff');
-  if(Math.random() < 0.055/Math.max(0.8,c.pwr||1)){
+  M.punchBuf=0;
+  var c=G.carrier, dd=Math.hypot(c.x-me.x,c.y-me.y);
+  // A punch takes a tenth of his fight and staggers him. On a phone the fist
+  // throws a shock that reaches about eight yards, so you do not have to be
+  // on top of him; right on top of him it lands the same.
+  var reach=TOUCH_UI ? 8*YD : 28;
+  M.hitCd=TOUCH_UI ? 0.25 : 0.8; M.power-=45; me.arm=0.5;
+  if(dd>reach){
+    if(TOUCH_UI){ M.hitCd=0.2; if(me===G.controlled) hint('TOO FAR TO PUNCH',700); }
+    else say('WHIFF',420);
+    return;
+  }
+  G.shake=REDUCED?0:9;
+  if(dd>TACKLE_R) G.fx.push({streak:true,x:me.x,y:me.y-16,x2:c.x,y2:c.y-16,c:'rgba(255,210,63,.95)',w:3.2,life:0.2,max:0.2});
+  burst(c.x,c.y,'#ffd23f');
+  if(Math.random() < 0.04/Math.max(0.8,c.pwr||1)){
     fumble(c,(c.x-me.x)*3.2,(c.y-me.y)*3.2);
     say('FUMBLE!',1200); credit(me,'FORCED FUMBLE');
   } else {
-    c.hp-=(TOUCH_UI && me===G.controlled) ? 200 : 72; c.vx*=0.2; c.vy*=0.2;   // on a phone your punch that lands puts him down
-    c.vz=Math.max(c.vz||0,3.6); c.z=Math.max(c.z,0.05);
-    flash(c.x,c.y-18,'rgba(255,255,255,1)',38);
-    shock(c.x,c.y,'rgba(255,210,63,.9)',4,40,0.32);
-    spokes(c.x,c.y-18,'rgba(255,210,63,.95)',10,10,40);
-    say('BIG HIT!',700); credit(me,'BIG HIT');
+    c.hp-=10; c.vx*=0.35; c.vy*=0.35;                // he staggers
+    flash(c.x,c.y-18,'rgba(255,255,255,1)',26);
+    shock(c.x,c.y,'rgba(255,210,63,.9)',4,30,0.28);
+    dmgText(c,'-10','#ffd23f');
+    credit(me,'BIG HIT');
     if(c.hp<=0){ c.down=1.6; endPlay(c.x,'BIG HIT'); }
   }
 }
@@ -3162,6 +3177,7 @@ function driveHuman(seat, IN, dt, now){
     // ---- you are on defense: brawler controls
     if(IN.b3) groundPound(me,M);
     if(IN.b2){ if(G.thrown && !G.thrown.tip) swatAt(me); else bigHit(me,M); }
+    else if(M.punchBuf && M.hitCd<=0 && !G.thrown){ if(now-M.punchBuf<450) bigHit(me,M); else M.punchBuf=0; }
     if(IN.b1 && M.power>=26 && M.jukeCd<=0){
       M.power-=26; M.jukeCd=1.05; M.diveUntil=now+400;
       var dv=(a.x||a.y)?a:{x:fwd,y:0};
@@ -3235,8 +3251,8 @@ function driveHuman(seat, IN, dt, now){
         // he is slippery for a beat (a juke, a fresh handoff): stay on him
         // instead of sailing past, and the tackle lands when it wears off
         me.vx=hc.vx+hx*4; me.vy=hc.vy+hy*4;
-      } else if(hm<11*YD){
-        var sp=Math.max(Math.hypot(me.vx,me.vy), BASE_SPD*2.7);
+      } else if(hm<20*YD){
+        var sp=Math.max(Math.hypot(me.vx,me.vy), BASE_SPD*2.7, (G.diveFly||0)*0.85);
         var k=Math.min(1,dt*12);
         me.vx+=(hx/hm*sp-me.vx)*k; me.vy+=(hy/hm*sp-me.vy)*k;
       }
@@ -3299,7 +3315,7 @@ function step(dt){
         var thd=th?Math.hypot(th.x-p.x,th.y-p.y):999;
         // AI ball carriers evade: a juke, a spin, or a stiff arm under pressure
         if(p.aiCd>0) p.aiCd-=dt;
-        else if(thd<30 && p.role!=='QB' && Math.random()<0.035){
+        else if(thd<30 && p.role!=='QB' && Math.random()<(heldByYou() ? 0.004*FOE.abil : 0.035)){   // in your grip he rarely wriggles free
           var pick=Math.random();
           p.aiCd=1.3;
           if(pick<0.4){
@@ -3820,7 +3836,7 @@ function step(dt){
       for(var wc=0;wc<G.players.length;wc++) G.players[wc].wrapT=0;
       G.wrapCar=car;
     }
-    var grabbers=0, lastT=null;
+    var grabbers=0, lastT=null, hw=0;   // hw: your own tackles on him
     for(var m2=0;m2<G.players.length;m2++){
       var t2=G.players[m2];
       if(t2.team!==defTeam) continue;
@@ -3828,7 +3844,9 @@ function step(dt){
 
       if(t2.wrapT>0){
         // already hanging on. A juke or spin shakes him, and so does a back
-        // who keeps his legs churning long enough.
+        // who keeps his legs churning long enough. Your own tackle does not
+        // run out: it holds until he is down, unless he spins or jukes free.
+        if(t2.humanWrap) t2.stun=0;
         if(jking || t2.stun>0){ breakWrap(t2,car); continue; }
         t2.wrapT-=dt;
         if(t2.wrapT<=0){
@@ -3836,25 +3854,26 @@ function step(dt){
           if(G.controlled===car||G.controlled2===car) say('BROKE THE TACKLE!',700);
           continue;
         }
-        grabbers++; lastT=t2;
+        grabbers++; lastT=t2; if(t2.humanWrap) hw++;
         continue;
       }
-      // A touch-screen swipe tackle: when the charge or the dive gets to him,
-      // he goes down right there. Wrapping him up left it to chance, and a
-      // juke or a spin shook it off, which read as the swipe doing nothing.
+      // A touch-screen swipe tackle: when the dive gets to him you hit him
+      // (a quarter of his fight) and grab on. Then it is damage over time:
+      // you drag him down to a crawl and drain him until he is on the turf.
       if(TOUCH_UI && t2===G.controlled && !(t2.stun>0) && ((G.touchDive && tnow<G.diveUntil) || G.tchase>0)){
         var ttd=Math.hypot(t2.x-car.x,t2.y-car.y);
         if(ttd < TACKLE_R+14){
-          car.hp=0; car.down=1.5; car.vz=Math.max(car.vz||0,2.8); car.z=Math.max(car.z,0.05);
-          car.vx*=0.2; car.vy*=0.2; t2.vx=car.vx; t2.vy=car.vy; t2.arm=0.5; t2.down=0.6;
+          car.iFrames=0;                               // a dodge left over from before does not slip it
+          var th=25/res; car.hp-=th; car.vx*=0.3; car.vy*=0.3;
+          t2.wrapT=99; t2.humanWrap=true; t2.wrapA=Math.atan2(t2.y-car.y,t2.x-car.x);
+          t2.z=0; t2.vz=0; t2.arm=0.5;
           flash(car.x,car.y-16,'rgba(255,255,255,1)',34);
           shock(car.x,car.y,'rgba(255,210,63,.9)',4,36,0.3);
           spokes(car.x,car.y-16,'rgba(255,210,63,.9)',8,8,32);
-          G.shake=REDUCED?0:12; G.tchase=0; G.touchDive=false;
-          credit(t2, car.role==='QB' ? 'SACK' : 'TACKLE');
-          if(G.cur) G.cur.tackler=t2;
-          if(car.role==='QB' && (car.x-G.los)*dir()<0) G.wasSack=true;
-          endPlay(car.x,'TACKLED'); return;
+          dmgText(car,'-'+Math.round(th),'#ffffff');
+          G.shake=REDUCED?0:12; G.tchase=0; G.touchDive=false; G.dotAcc=0;
+          grabbers++; hw++; lastT=t2;
+          continue;
         }
       }
       if(jking || t2.stun>0 || t2.down>0 || t2.tackleCd>0) continue;
@@ -3893,8 +3912,14 @@ function step(dt){
       grabbers++; lastT=t2;
     }
     if(grabbers>0){
-      car.hp -= (58*grabbers/res)*dt;
+      var drain=((58*grabbers + 30*hw)/res)*dt;         // your own tackle drains him faster
+      car.hp -= drain;
       var drag=Math.max(0.18, 1-grabbers*0.42);       // dragged down as they hang on
+      if(hw){
+        drag=Math.min(drag,0.3);                       // you slow him to a crawl
+        G.dotAcc=(G.dotAcc||0)+drain;                  // and the numbers tick off him
+        if(G.dotAcc>=14){ dmgText(car,'-'+Math.round(G.dotAcc),'#ff8a94'); G.dotAcc=0; }
+      }
       car.vx*=drag; car.vy*=drag;
       car.wrapped=0.25; G.freeT=0;
       // the men on him are dragged along with him, arms round him
@@ -4379,6 +4404,13 @@ function draw(){
       var bl=Math.hypot(e.x2-e.x,e.y2-e.y), ba=Math.atan2(e.y2-e.y,e.x2-e.x);
       addSprite(fxTint(FXI.bolt,solidOf(e.c)),(e.x+e.x2)/2,(e.y+e.y2)/2,
                 bl,bl*0.5*(128/256),k2,ba,1);
+    } else if(e.dmg){
+      ctx.save(); ctx.globalAlpha=Math.min(1,k2*1.8);
+      ctx.font='700 15px "Anton", Impact, sans-serif'; ctx.textAlign='center'; ctx.textBaseline='middle';
+      var dy2=e.y-52-(1-k2)*20;
+      ctx.lineWidth=3.5; ctx.strokeStyle='rgba(0,0,0,.85)'; ctx.strokeText(e.txt,e.x,dy2);
+      ctx.fillStyle=e.c; ctx.fillText(e.txt,e.x,dy2);
+      ctx.restore();
     } else if(e.flash){
       var fr=e.r*(0.45+(1-k2)*1.5);
       if(!addSprite(fxTint(FXI.impact,solidOf(e.c)),e.x,e.y,fr*2.6,fr*2.6,k2,e.rot,1)){
@@ -4831,8 +4863,13 @@ function knockPose(p){
 }
 
 // A tackler who loses his grip ends up on the grass.
+// is the ball carrier in your tackle right now (see the tackle loop)
+function heldByYou(){
+  for(var i=0;i<G.players.length;i++){ var q=G.players[i]; if(q.humanWrap && q.wrapT>0) return true; }
+  return false;
+}
 function breakWrap(t,car){
-  t.wrapT=0; t.tackleCd=1.1; t.arm=0;
+  t.wrapT=0; t.tackleCd=1.1; t.arm=0; t.humanWrap=false;
   t.down=Math.max(t.down||0,0.85);
   var bx=t.x-car.x, by=t.y-car.y, bm=Math.hypot(bx,by)||1;
   t.vx=bx/bm*90; t.vy=by/bm*90;
@@ -4882,11 +4919,11 @@ function drawGuyRaw(p){
     // footing bar: how much fight he has left before he goes down
     var hpv=Math.max(0,Math.min(100,p.hp===undefined?100:p.hp));
     if(hpv<100){
-      var bw=22, bx2=p.x-bw/2, by2=p.y-48-lift;
-      ctx.fillStyle='rgba(8,12,16,.72)';
-      roundRect(bx2-1,by2-1,bw+2,4.4,1.4); ctx.fill();
+      var bw=TOUCH_UI?32:22, bh=TOUCH_UI?4:2.4, bx2=p.x-bw/2, by2=p.y-48-lift;
+      ctx.fillStyle='rgba(8,12,16,.78)';
+      roundRect(bx2-1.2,by2-1.2,bw+2.4,bh+2.4,1.6); ctx.fill();
       ctx.fillStyle = hpv>55?'#4fd18b' : (hpv>25?'#ffd23f':'#e0384e');
-      roundRect(bx2,by2,bw*(hpv/100),2.4,1.2); ctx.fill();
+      roundRect(bx2,by2,bw*(hpv/100),bh,1.2); ctx.fill();
     }
   }
   }
@@ -6688,7 +6725,8 @@ if(TOUCH_UI){
             var lx=tc.x+tc.vx*0.2-tm.x, ly=tc.y+tc.vy*0.2-tm.y, lm=Math.hypot(lx,ly)||1;
             var sm=Math.hypot(dx,dy)||1;
             var cosA=(dx*lx+dy*ly)/(sm*lm), raw=Math.hypot(tc.x-tm.x,tc.y-tm.y);
-            if(raw<4*YD || (raw<10*YD && cosA > -0.3)){ dx=lx; dy=ly; near=true; }   // right on him: any swipe; in the open, anything not away from him
+            if(raw<4*YD || (raw<18*YD && cosA > -0.3)){ dx=lx; dy=ly; near=true; }   // right on him: any swipe; in the open, anything not away from him
+            else if(raw>=18*YD) hint('TOO FAR TO TACKLE',700);
           }
           if(Math.hypot(dx,dy)>0.5){
             if(NET.on && !NET.host) netSend({t:'dive', x:Math.round(dx*9), y:Math.round(dy*9)});
@@ -6699,11 +6737,15 @@ if(TOUCH_UI){
                 // A flying tackle: off his feet, fast enough to cover the gap,
                 // steered onto the ball carrier all the way in.
                 var dm3=Math.hypot(dx,dy)||1, rawd=Math.hypot(tc.x-me3.x,tc.y-me3.y);
-                var fly=Math.max(BASE_SPD*2.7, rawd/0.26);
+                // further out it is a longer leap, but still well under a second
+                var ft=Math.min(0.55, 0.26+Math.max(0,rawd/YD-4)*0.021);
+                var fly=Math.max(BASE_SPD*2.7, rawd/ft);
                 me3.vx=dx/dm3*fly; me3.vy=dy/dm3*fly; me3.z=Math.max(me3.z||0,0.55);
+                me3.vz=Math.max(0,(4.5*ft*ft-0.55)/ft);       // stays in the air the whole way
+                G.diveFly=fly;
               }
               G.diveCd=Math.min(G.diveCd,0.45);             // back up for another quickly
-              G.touchDive=near; G.diveUntil=performance.now()+(near?480:340);
+              G.touchDive=near; G.diveUntil=performance.now()+(near?Math.min(1150,420+raw/YD*42):340);
             }
           }
           FT.done=true;
