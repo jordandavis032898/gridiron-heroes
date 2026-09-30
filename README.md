@@ -16,7 +16,7 @@ then open http://localhost:8000
 
 ## It is already online
 
-https://jordandavis032898.github.io/gridiron-heroes/
+https://jordandavis032898.github.io/hail-mythery/
 
 Push to `main` and GitHub Pages redeploys it in about a minute.
 Two-player instructions are in MULTIPLAYER.md.

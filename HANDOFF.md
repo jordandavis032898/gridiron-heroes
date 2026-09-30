@@ -2,9 +2,10 @@
 
 Renamed from Gridiron Heroes on 30 September 2026: "gridiron" means football, so
 the old name meant the same as the registered trademark Football Heroes (Run
-Games LLC), and other football games have used "Gridiron Heroes". The repo,
-folder and URL keep the old name; the multiplayer room prefix
-(`gridiron-heroes-v1-`) is internal and was left alone.
+Games LLC), and other football games have used "Gridiron Heroes". The repo and
+URL were renamed too (the old github.io/gridiron-heroes link no longer works;
+github.com links redirect). The local folder keeps the old name, and the
+multiplayer room prefix (`gridiron-heroes-v1-`) is internal and was left alone.
 
 Everything a new session needs to pick this up. Read this before touching
 `game.html`.
@@ -17,8 +18,8 @@ Arcade American football in the browser. Seven on seven, four downs, a three
 minute clock, signature moves. One player against the computer, or two
 players online.
 
-- **Live:** https://jordandavis032898.github.io/gridiron-heroes/
-- **Repo:** https://github.com/jordandavis032898/gridiron-heroes (public, which
+- **Live:** https://jordandavis032898.github.io/hail-mythery/
+- **Repo:** https://github.com/jordandavis032898/hail-mythery (public, which
   free GitHub Pages requires, so the source is readable by anyone)
 - **Local:** `C:\Users\jorda\Desktop\gridiron-heroes`
 
@@ -42,7 +43,7 @@ Deploying is `git push origin main`. GitHub Pages republishes in about 60 to
 90 seconds. There is no other deploy step. Verify with:
 
 ```bash
-curl -s https://jordandavis032898.github.io/gridiron-heroes/ | grep -c "<some string you just added>"
+curl -s https://jordandavis032898.github.io/hail-mythery/ | grep -c "<some string you just added>"
 ```
 
 ---

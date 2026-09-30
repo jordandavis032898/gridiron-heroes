@@ -1,6 +1,6 @@
 # Two-player online
 
-Live at https://jordandavis032898.github.io/gridiron-heroes/
+Live at https://jordandavis032898.github.io/hail-mythery/
 
 There is nothing to set up. No account, no API key, no config line to edit.
 
