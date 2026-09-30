@@ -1076,13 +1076,12 @@ function bestDefender(side){
   }
   return best;
 }
-// hand control to another man, with a flash and a streak from the old one so
-// your eye follows the change
+// hand control to another man, with a flash of his ring so your eye finds
+// him (a streak from the old man used to go with it: just clutter)
 function switchTo(q){
   var old=G.controlled;
   if(!q || q===old) return;
   G.controlled=q; G.switchFlash=0.5; G.switchLockUntil=G.gt+0.9; G.swCarryUntil=G.gt+0.3*(GAME_SPEED||1);
-  if(old && !REDUCED) streak(old.x,old.y-10,q.x,q.y-10,'rgba(255,210,63,.75)',2.2,0.3);
 }
 function nearestOf(p,team,seeAll){
   var best=null,bd=Infinity;
