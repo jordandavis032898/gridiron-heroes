@@ -2563,6 +2563,21 @@ function presnap(dt){
     var tgt=(p.team===G.offense?0.07:-0.07)+Math.sin(p.run*0.9+p.num)*0.05;
     p.lean += (tgt-p.lean)*Math.min(1,dt*5);
   }
+  // On defence you can walk your man around before the snap (the stick),
+  // anywhere on your side of the ball, never across the line.
+  var pm=G.controlled;
+  if(pm && !NET.on && G.offense!==mySide() && pm.team===mySide()){
+    var pa=axis();
+    if(pa.x||pa.y){
+      var psp=DEF_SPD*0.75, pd=dir();
+      pm.x+=pa.x*psp*dt; pm.y+=pa.y*psp*dt;
+      var lineX=G.los+pd*1.1*YD;
+      if((pm.x-lineX)*pd<0) pm.x=lineX;                  // your side of the ball only
+      pm.y=Math.max(8,Math.min(FH-8,pm.y));
+      pm.run+=dt*9; if(Math.abs(pa.x)>0.2) pm.face=pa.x>0?1:-1;
+      pm.stance=0;
+    }
+  }
   if(G.autoSnapAt!==null && (15-G.playClock) >= G.autoSnapAt){ snapBall(); return; }
   if(NET.on && NET.host &&
      (!G.controlled2 || G.controlled2.team!=='A' || G.players.indexOf(G.controlled2)<0)){
@@ -2748,9 +2763,9 @@ function driveHuman(seat, IN, dt, now){
         // he is slippery for a beat (a juke, a fresh handoff): stay on him
         // instead of sailing past, and the tackle lands when it wears off
         me.vx=hc.vx+hx*4; me.vy=hc.vy+hy*4;
-      } else if(hm<5*YD){
+      } else if(hm<11*YD){
         var sp=Math.max(Math.hypot(me.vx,me.vy), BASE_SPD*2.7);
-        var k=Math.min(1,dt*9);
+        var k=Math.min(1,dt*12);
         me.vx+=(hx/hm*sp-me.vx)*k; me.vy+=(hy/hm*sp-me.vy)*k;
       }
     }
@@ -6145,14 +6160,22 @@ if(TOUCH_UI){
             var lx=tc.x+tc.vx*0.2-tm.x, ly=tc.y+tc.vy*0.2-tm.y, lm=Math.hypot(lx,ly)||1;
             var sm=Math.hypot(dx,dy)||1;
             var cosA=(dx*lx+dy*ly)/(sm*lm), raw=Math.hypot(tc.x-tm.x,tc.y-tm.y);
-            if(raw<3*YD || (lm<5.5*YD && cosA > -0.2)){ dx=lx; dy=ly; near=true; }   // right on him: any swipe is at him
+            if(raw<4*YD || (raw<10*YD && cosA > -0.3)){ dx=lx; dy=ly; near=true; }   // right on him: any swipe; in the open, anything not away from him
           }
           if(Math.hypot(dx,dy)>0.5){
             if(NET.on && !NET.host) netSend({t:'dive', x:Math.round(dx*9), y:Math.round(dy*9)});
             else if(swipeTackle(dx,dy,'H')!==false){
-              var me3=G.controlled;                        // a tackle is a short lunge, a few yards, not a run
-              if(me3 && !near){ me3.vx*=0.42; me3.vy*=0.42; }
-              G.touchDive=near; G.diveUntil=performance.now()+(near?420:340);
+              var me3=G.controlled;
+              if(me3 && !near){ me3.vx*=0.42; me3.vy*=0.42; }   // nobody in range: a short lunge at the air
+              if(me3 && near){
+                // A flying tackle: off his feet, fast enough to cover the gap,
+                // steered onto the ball carrier all the way in.
+                var dm3=Math.hypot(dx,dy)||1, rawd=Math.hypot(tc.x-me3.x,tc.y-me3.y);
+                var fly=Math.max(BASE_SPD*2.7, rawd/0.26);
+                me3.vx=dx/dm3*fly; me3.vy=dy/dm3*fly; me3.z=Math.max(me3.z||0,0.55);
+              }
+              G.diveCd=Math.min(G.diveCd,0.45);             // back up for another quickly
+              G.touchDive=near; G.diveUntil=performance.now()+(near?480:340);
             }
           }
           FT.done=true;
