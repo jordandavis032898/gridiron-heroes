@@ -1191,7 +1191,7 @@ function setupPlay(playId){
   // The back used to start the play already holding it. Now the passer takes
   // the snap and gives it to him at the mesh point, and you can beat the
   // timer by handing off yourself.
-  G.handoffAt = youOnO ? null : ((off==='run') ? 0.30 : (off==='draw' ? 0.85 : null));   // on your plays you hand it off
+  G.handoffAt = (off==='run') ? 0.30 : (off==='draw' ? 0.85 : null);   // a run play is a handoff; on anything else it is your call (tap the back)
   G.controlled = youOnO ? G.carrier : (startLB() || nearestDef());
   if(NET.on && NET.host) G.controlled2 = pickRemoteMan(false);
   G.jukeUntil=0;
@@ -1216,8 +1216,6 @@ function snapBall(){
     if(qq.team===G.offense && qq.role==='QB'){ G.qbSpot={x:qq.x,y:qq.y}; break; }
   }         // yards of drop still to take
   burst(G.ball.x,G.ball.y,'#f1f1ec');
-  var myRun = G.offense==='H' && !NET.on && (G.play==='run'||G.play==='draw');
-  if(myRun) hint(TOUCH_UI ? 'TAP YOUR BACK TO HAND IT OFF' : 'PRESS 3 TO HAND IT OFF', 1800);
 }
 // Both sides get one. Without this the guest drove a stock Rival at spd 1.00
 // against a hero at up to 1.30 with a signature move, and simply could not
@@ -1613,7 +1611,17 @@ function fireAbility(seat, IN, slot){
   }
   else if(id==='stiffarm'){
     var v=foeNear(58);                          // an arm's length and a lunge
-    if(!v){ (mine && hint('NOBODY IN REACH')); return; }   // nothing to put down, no charge
+    // a swipe tackle already in the air cannot be stiff-armed away
+    if(v && v===G.controlled && G.touchDive && performance.now()<G.diveUntil && !mine) return;
+    if(!v){                                      // nobody there: the arm still shoots out, and it is spent
+      me.arm=0.6; me.wrapped=0;
+      var ax2=me.x+(me.face||1)*16, ay2=me.y-18;
+      streak(me.x+(me.face||1)*4,ay2, ax2+(me.face||1)*10,ay2,'rgba(255,255,255,.85)',2.4,0.2);
+      flash(ax2,ay2,'rgba(255,210,63,.9)',18);
+      shock(ax2,ay2+14,'rgba(255,210,63,.7)',2,20,0.24);
+      tell('STIFF ARM!',600);
+      abSpend(me,id); return;
+    }
     me.wrapped=0;
     v.stun=1.3; v.down=Math.max(v.down,1.0); v.wrapped=0;
     launch(v, me.x, me.y, 230, 5.4);
@@ -2336,7 +2344,7 @@ function bigHit(me,M){
   if(!G.carrier||M.power<45||M.hitCd>0) return;
   var dd=Math.hypot(G.carrier.x-me.x,G.carrier.y-me.y);
   M.hitCd=0.8; M.power-=45; me.arm=0.5;
-  if(dd>28){ say('WHIFF',420); return; }
+  if(dd>(TOUCH_UI?40:28)){ say('WHIFF',420); return; }
   var c=G.carrier;
   G.shake=REDUCED?0:18;
   burst(c.x,c.y,'#ffd23f'); burst(c.x,c.y,'#ffffff');
@@ -2344,7 +2352,7 @@ function bigHit(me,M){
     fumble(c,(c.x-me.x)*3.2,(c.y-me.y)*3.2);
     say('FUMBLE!',1200); credit(me,'FORCED FUMBLE');
   } else {
-    c.hp-=72; c.vx*=0.2; c.vy*=0.2;
+    c.hp-=(TOUCH_UI && me===G.controlled) ? 200 : 72; c.vx*=0.2; c.vy*=0.2;   // on a phone your punch that lands puts him down
     c.vz=Math.max(c.vz||0,3.6); c.z=Math.max(c.z,0.05);
     flash(c.x,c.y-18,'rgba(255,255,255,1)',38);
     shock(c.x,c.y,'rgba(255,210,63,.9)',4,40,0.32);
@@ -2432,7 +2440,23 @@ function routePoint(p,since){
   // the mesh point: run at the passer and take the ball off him
   if(p.route==='mesh'){
     var mq=G.carrier;
-    return mq ? {x:mq.x+1.6*YD*d, y:mq.y} : {x:p.x, y:p.y};
+    // The exchange is only on for a moment. No handoff by then and he carries
+    // out his job: he leads up the hole and blocks, instead of standing glued
+    // to the quarterback waiting for a ball that is not coming.
+    var meshT = (G.offense==='H' && !NET.on) ? 1.2 : 1.05;
+    if(!mq || mq.role!=='QB' || since>meshT){
+      // no handoff: he stays home and blocks the nearest rusher nobody has
+      p.route='block';
+      var foeT=(p.team==='H')?'A':'H', best=null, bd=1e9;
+      for(var bi=0;bi<G.players.length;bi++){ var bq=G.players[bi];
+        if(bq.team!==foeT || bq.stun>0) continue;
+        var taken=false; for(var bj=0;bj<G.players.length;bj++) if(G.players[bj].assign===bq){ taken=true; break; }
+        if(taken) continue;
+        var bdd=Math.hypot(bq.x-(mq?mq.x:p.x),bq.y-(mq?mq.y:p.y)); if(bdd<bd){ bd=bdd; best=bq; } }
+      p.assign=best;
+      return {x:p.x, y:p.y};
+    }
+    return {x:mq.x+1.6*YD*d, y:mq.y+(p.y>=mq.y?1:-1)*0.8*YD};   // at his hip, not on top of him
   }
   // slip out behind the rush, then turn upfield
   if(p.route==='screen'){
@@ -2440,6 +2464,24 @@ function routePoint(p,since){
     return {x:p.x+20*YD*d, y:p.y};
   }
   return null;
+}
+// A back left in to block does it with his head up: he picks up whoever is
+// coming free at the quarterback, and once nobody is (or he has held his man
+// a couple of seconds) he slips out into the flat as the checkdown.
+function rbProtect(p, since, dt){
+  if(p.route!=='block' || !G.carrier || G.carrier.role!=='QB' || G.thrown || pastTheLine(G.carrier)) return;
+  var qb=G.carrier, threat=null, td=6.5*YD, foeT=(p.team==='H')?'A':'H';
+  for(var i=0;i<G.players.length;i++){
+    var q=G.players[i];
+    if(q.team!==foeT || q.stun>0 || q.down>0) continue;
+    if(q.eBlk && q.eBlk!==p && (q.engaged||0)>0 && (q.engaged||0)<=(q.shedAt||2.5)) continue;   // a lineman has him
+    var dq=Math.hypot(q.x-qb.x,q.y-qb.y);
+    if(dq<td){ td=dq; threat=q; }
+  }
+  p.protT=(p.protT||0)+dt;
+  if(threat){ p.assign=threat; p.quietT=0; }
+  else p.quietT=(p.quietT||0)+dt;
+  if(since>0.9 && (p.quietT>0.5 || p.protT>2.1)){ p.route='flat'; p.assign=null; }   // nobody to pick up: out he goes
 }
 // Full pursuit speed only once the ball is at or past the line. Applying it
 // to a pocket rush makes blocking mathematically impossible.
@@ -3107,6 +3149,7 @@ function step(dt){
   for(var i=0;i<G.players.length;i++){
     var p=G.players[i];
     if(p===G.controlled){ if(p.stun>0) p.stun-=dt; continue; }
+    if(p.role==='RB' && p.team===G.offense && p!==G.carrier && p!==G.controlled2) rbProtect(p, G.gt-G.snapT, dt);
     if(p===G.controlled2){
       // a human is driving this one; only run down his stun for him
       if(p.stun>0){ p.stun-=dt; p.vx*=0.8; p.vy*=0.8; }
@@ -3618,8 +3661,14 @@ function step(dt){
   } else if(G.carrier){ G.ball.x=G.carrier.x; G.ball.y=G.carrier.y; }
 
   if(G.offense==='A'){
-    if(!G.controlled||G.controlled.stun>0||G.controlled.team!=='H'){
-      var n2=nearestDef(); if(n2) G.controlled=n2;
+    if(!G.controlled||G.controlled.stun>0||G.controlled.down>0||G.controlled.team!=='H'){
+      // the nearest defender who is on his feet (it used to pick the man
+      // who had just been flattened, so you stayed stuck on the ground)
+      var n2=null, bd2=1e9;
+      for(var dn=0;dn<G.players.length;dn++){ var dq=G.players[dn];
+        if(dq.team!=='H' || dq.stun>0 || dq.down>0) continue;
+        var dd2=Math.hypot(dq.x-G.ball.x,dq.y-G.ball.y); if(dd2<bd2){ bd2=dd2; n2=dq; } }
+      if(n2 && n2!==G.controlled){ G.controlled=n2; G.switchFlash=0.5; }
     }
   }
   if(G.switchFlash>0) G.switchFlash-=dt;
@@ -6501,7 +6550,7 @@ if(TOUCH_UI){
         }
       } else if(FT.mode==='tackle' && !FT.done){
         var px=t.clientX-FT.x0, py=t.clientY-FT.y0;
-        if(Math.hypot(px,py)>30){                    // a slide, however slow (a resting finger is not one)
+        if(Math.hypot(px,py)>20){                    // a slide, however slow or short (a resting finger is not one)
           var a=screenToWorld(FT.x0,FT.y0), b=screenToWorld(t.clientX,t.clientY);
           var dx=b.x-a.x, dy=b.y-a.y;
           // A swipe is a tackle, done right where your man is: he leaves his
@@ -6513,7 +6562,8 @@ if(TOUCH_UI){
           if(tc && tm && tc.team!==tm.team){
             var lx=tc.x+tc.vx*0.2-tm.x, ly=tc.y+tc.vy*0.2-tm.y, lm=Math.hypot(lx,ly)||1;
             var sm=Math.hypot(dx,dy)||1;
-            if(lm<5*YD && (dx*lx+dy*ly)/(sm*lm) > 0.2){ dx=lx; dy=ly; near=true; }
+            var cosA=(dx*lx+dy*ly)/(sm*lm), raw=Math.hypot(tc.x-tm.x,tc.y-tm.y);
+            if(raw<3*YD || (lm<5.5*YD && cosA > -0.2)){ dx=lx; dy=ly; near=true; }   // right on him: any swipe is at him
           }
           if(Math.hypot(dx,dy)>0.5){
             if(NET.on && !NET.host) netSend({t:'dive', x:Math.round(dx*9), y:Math.round(dy*9)});
