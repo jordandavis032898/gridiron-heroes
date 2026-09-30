@@ -111,9 +111,11 @@ to bottom, horizontal parts left to right.
   film design (no bolted flat-headed monster, no caped movie count, no Disney
   Pan). Peter Pan also has a UK royalty right. Batman, Spider-Man and the
   like need a licence, so they are out.
-- Each one carries `stars` (card frame: 5 gold, 4 silver, 3 or fewer
-  bronze), `sig` (the move in the card's black bar) and `card` (the picture's
-  file name).
+- Each one carries `player` (the football name on top of the card, e.g.
+  Brom Van Brunt), `title` (the card's nickname in the black bar, e.g. The
+  Dusk Rider), `sig` (his move, along the bottom), `stars` (card frame: 5
+  gold, 4 silver, 3 or fewer bronze) and `card` (the picture's file name).
+  The character's real name (`name`) is what shows on the field.
 - Card pictures are 4:3 action scenes: the character mid-move, not wearing a
   uniform, with red-jersey players around him. Prompts are in
   `parts/CARD-PROMPTS.md`. Originals (1200 x 900 PNG) live in
@@ -125,6 +127,13 @@ to bottom, horizontal parts left to right.
 - **Never run `parts/_make_kit.py`.** It is not ours and it rewrites every
   part image. `parts/_alt/` holds rejected script-made parts. Neither is
   published.
+
+**Field goal flight.** A kick at the posts flies on real physics
+(`aimAtPosts`/`fgFlight`): steady speed forward, up then down under gravity.
+It is judged the moment it crosses the goal line and keeps flying until it
+lands about 9 yards behind. While it is up, `frame()` keeps calling `step()`
+(the kick is marked `live`), so rushers and blockers play on. A made kick ends
+with the kicking team mobbing the kicker.
 
 ---
 

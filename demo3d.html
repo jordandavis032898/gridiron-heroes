@@ -347,27 +347,28 @@ function heroById(id){ for (var i=0;i<HEROES.length;i++) if (HEROES[i].id===id) 
 // before 1929, so the names and the characters as originally written are free
 // to use. Keep the art to the originals: no film designs (no flat-topped
 // monster with neck bolts, no caped count from the movies, no cartoon Pan).
-// stars = card rating, sig = the signature line on his card, card = the
+// player = the football name on top of his card, title = the card's own
+// nickname in the black bar under it, stars = card rating, sig = his move, card = the
 // portrait file in parts/cards/ (the drawn player stands in until it exists).
 var SUPPORT = {
-  QB:{name:'King Arthur',        num:1,  skin:'#e0b48e', stars:5, sig:'Excalibur Rail-Gun', card:'king-arthur'},
-  WR1:{name:'Sun Wukong',        num:18, skin:'#c98f63', stars:5, sig:'Meteor Juke',        card:'sun-wukong'},
-  WR2:{name:'Peter Pan',         num:14, skin:'#e6bd97', stars:4, sig:'Glide Route',        card:'peter-pan'},
-  TE:{name:'Robin Hood',         num:87, skin:'#d8a87e', stars:4, sig:'Bullseye Hands',     card:'robin-hood'},
-  RB:{name:'The Headless Horseman', num:29, skin:'#7a5035', stars:5, sig:'Pumpkin Bomb',    card:'headless-horseman'},
-  C:{name:'The Golem',           num:55, skin:'#a08060', stars:4, sig:'Clay Wall',          card:'golem'},
-  OL1:{name:'The Minotaur',      num:71, skin:'#8a5c3b', stars:4, sig:'Sonic Boom Shove',   card:'minotaur'},
-  OL2:{name:'The Cyclops',       num:66, skin:'#c98f63', stars:4, sig:'One-Eye Slam',       card:'cyclops'}
+  QB:{name:'King Arthur', player:'Art Pendragon', title:'Crown Cannon',        num:1,  skin:'#e0b48e', stars:5, sig:'Excalibur Rail-Gun', card:'king-arthur'},
+  WR1:{name:'Sun Wukong', player:'Sonny Wu', title:'Cloud Runner',        num:18, skin:'#c98f63', stars:5, sig:'Meteor Juke',        card:'sun-wukong'},
+  WR2:{name:'Peter Pan', player:'Pete Darling', title:'Lost Boy',         num:14, skin:'#e6bd97', stars:4, sig:'Glide Route',        card:'peter-pan'},
+  TE:{name:'Robin Hood', player:'Robbie Locksley', title:'Outlaw Catch',         num:87, skin:'#d8a87e', stars:4, sig:'Bullseye Hands',     card:'robin-hood'},
+  RB:{name:'The Headless Horseman', player:'Brom Van Brunt', title:'The Dusk Rider', num:29, skin:'#7a5035', stars:5, sig:'Pumpkin Bomb',    card:'headless-horseman'},
+  C:{name:'The Golem', player:'Yossi Clay', title:'Clay Colossus',           num:55, skin:'#a08060', stars:4, sig:'Clay Wall',          card:'golem'},
+  OL1:{name:'The Minotaur', player:'Tor Asterion', title:'Bull Rush',      num:71, skin:'#8a5c3b', stars:4, sig:'Sonic Boom Shove',   card:'minotaur'},
+  OL2:{name:'The Cyclops', player:'Big Poly', title:'One-Eye Titan',       num:66, skin:'#c98f63', stars:4, sig:'One-Eye Slam',       card:'cyclops'}
 };
 var DEFENDERS = [
-  {name:'Anubis',                num:93, skin:'#6b4630', stars:4, sig:'Shadow Hunt',        card:'anubis'},           // DE
-  {name:"Frankenstein's Monster",num:91, skin:'#9aa58a', stars:4, sig:'Stitched Fury',      card:'frankenstein-monster'},  // DE (inside)
-  {name:'Fenrir',                num:97, skin:'#a9744c', stars:4, sig:'Chain Breaker',      card:'fenrir'},           // DE
-  {name:'Beowulf',               num:54, skin:'#d8a87e', stars:5, sig:'Grendel Grip',       card:'beowulf'},          // LB
-  {name:'The Werewolf',          num:52, skin:'#7a5035', stars:4, sig:'Full Moon Burst',    card:'werewolf'},         // LB
-  {name:'Dracula',               num:2,  skin:'#e6e0d8', stars:5, sig:'Bat Blink',          card:'dracula'},          // CB
-  {name:'The Invisible Man',     num:24, skin:'#e6bd97', stars:4, sig:"Now You Don't",      card:'invisible-man'},    // CB
-  {name:'Zeus',                  num:31, skin:'#c98f63', stars:5, sig:'Lightning Strike',   card:'zeus'}              // S
+  {name:'Anubis', player:'Anpu Sands', title:'Tomb Walker',                num:93, skin:'#6b4630', stars:4, sig:'Shadow Hunt',        card:'anubis'},           // DE
+  {name:"Frankenstein's Monster", player:'Adam Stitch', title:'The Reanimator',num:91, skin:'#9aa58a', stars:4, sig:'Stitched Fury',      card:'frankenstein-monster'},  // DE (inside)
+  {name:'Fenrir', player:'Fen Lokison', title:'Frost Fang',                num:97, skin:'#a9744c', stars:4, sig:'Chain Breaker',      card:'fenrir'},           // DE
+  {name:'Beowulf', player:'Bo Geatson', title:'Iron Grip',               num:54, skin:'#d8a87e', stars:5, sig:'Grendel Grip',       card:'beowulf'},          // LB
+  {name:'The Werewolf', player:'Luke Lycan', title:'Moon Howler',          num:52, skin:'#7a5035', stars:4, sig:'Full Moon Burst',    card:'werewolf'},         // LB
+  {name:'Dracula', player:'Drake Carfax', title:'Bat Cloud',               num:2,  skin:'#e6e0d8', stars:5, sig:'Bat Blink',          card:'dracula'},          // CB
+  {name:'The Invisible Man', player:'Ghost Griffin', title:'Vanishing Act',     num:24, skin:'#e6bd97', stars:4, sig:"Now You Don't",      card:'invisible-man'},    // CB
+  {name:'Zeus', player:'Zeke Olympus', title:'Sky Hammer',                  num:31, skin:'#c98f63', stars:5, sig:'Lightning Strike',   card:'zeus'}              // S
 ];
 
 var PLAYS = {
@@ -917,6 +918,7 @@ function mk(team,role,x,y,info){
   var p={team:team,role:role,x:x,y:y,vx:0,vy:0,route:null,stun:0,
          num:info&&info.num||0, name:info&&info.name||'', skin:info&&info.skin||'#c98f63',
          stars:info&&info.stars||3, sig:info&&info.sig||'', card:info&&info.card||'',
+         player:info&&info.player||'', title:info&&info.title||'',
          spd:1,pwr:1,agi:1, run:0, lean:0, spin:0, z:0, arm:0, hero:false, cel:0,
          face:(team==='H'?1:-1), burst:0, aiCd:0, iFrames:0, phase:0, throwArm:0, stance:0, assign:null, blockIdx:0, engaged:0, shedAt:1.6, shed:false, lane:0, cover:null, spy:false, brk:1, zy:0, zdepth:10, pos:'', hp:100, wrapped:0, down:0};
   G.players.push(p); return p;
@@ -2410,6 +2412,7 @@ function startKick(kind){
     k.x1 = goalX(d); k.hf=0.75; k.arc=110;
     k.y1 = FH/2 + (k.good ? (Math.random()-0.5)*5*YD : (Math.random()<0.5?-1:1)*(10+Math.random()*7)*YD);
     k.arc = 58;
+    aimAtPosts(k, k.x1, k.y1);
   } else {
     var net = 36 + Math.random()*17;
     k.x1 = G.los + net*YD*d;
@@ -2427,9 +2430,47 @@ function startKick(kind){
   say(kind==='pat' ? 'EXTRA POINT' : kind==='fg' ? (k.dist + ' YARD ATTEMPT') : 'PUNT IS AWAY', 1100);
 }
 
+// A kick at the posts flies like a ball: steady speed forward, up and then
+// down under gravity. It is judged the moment it crosses the goal line and
+// keeps going, through the uprights or past them, until it comes down behind.
+function aimAtPosts(k, xp, yp){
+  var tp=1.5, ta=tp*0.62, H=130;                    // at the posts it is still well over the bar
+  k.phys=true; k.xp=xp; k.dir=(xp>k.x0)?1:-1;
+  k.vx=(xp-k.x0)/tp; k.vy=(yp-k.y0)/tp;
+  k.g=2*H/(ta*ta); k.vz=k.g*ta;
+}
+function fgFlight(k){
+  var t=k.t;
+  G.ball.x=k.x0+k.vx*t; G.ball.y=k.y0+k.vy*t;
+  k.h=Math.max(0, k.vz*t-0.5*k.g*t*t);
+  (k.trail = k.trail || []).push({x:G.ball.x, y:G.ball.y - k.h});
+  if(k.trail.length > 26) k.trail.shift();
+  if(!k.judged && (G.ball.x-k.xp)*k.dir>=0){
+    k.judged=true;
+    if(k.good){
+      var pts=(k.kind==='pat')?1:3;
+      if(G.offense==='H') G.scoreH += pts; else G.scoreA += pts;
+      say(k.kind==='pat' ? 'EXTRA POINT IS GOOD!' : 'IT IS GOOD!', 1700);
+      for(var i=0;i<26;i++) confetti(k.xp, FH/2);
+      G.shake = REDUCED?0:12;
+    } else {
+      say('NO GOOD', 1500);
+    }
+    if(G.cur) logPlay(k.xp, k.good?'GOOD':'NO GOOD', false);
+  }
+  if(t>0.2 && k.h<=0){                              // down behind the end line
+    burst(G.ball.x, G.ball.y, '#eef3e8');
+    if(k.good && k.kicker){                        // the kicking team mobs the kicker
+      G.scoringTeam=G.offense; G.celebrate=1.6; G.celAt={x:k.kicker.x, y:k.kicker.y};
+    }
+    afterKick(k.kind, k.good);
+  }
+}
+
 function kickTick(dt){
   var k = G.kick; if(!k) return;
   k.t += dt;
+  if(k.phys){ fgFlight(k); return; }
   var p = Math.min(1, k.t / k.dur);
   G.ball.x = k.x0 + (k.x1-k.x0)*p;
   G.ball.y = k.y0 + (k.y1-k.y0)*p;
@@ -4589,8 +4630,7 @@ function showCard(p, action){
   var POS={QB:'QB',WR:'WR',TE:'TE',RB:'RB',C:'C',OL:'OL',RUSH:'DL',COV:'DB',BL:'OL'};
   document.getElementById('pcPos').textContent=POS[p.role]||p.role;
   document.getElementById('pcNum').textContent='#'+p.num;
-  document.getElementById('pcName').textContent=(p.name||'PLAYER').toUpperCase();
-  document.getElementById('pcAct').textContent=action;
+  document.getElementById('pcName').textContent=(p.player||p.name||'PLAYER').toUpperCase();
   cardEl.classList.toggle('away', p.team!=='H');
   var st=Math.max(1,Math.min(5,p.stars||3)), stars='';
   for(var si=0;si<5;si++) stars+=(si<st?'\u2605':'\u2606');
@@ -4598,7 +4638,8 @@ function showCard(p, action){
   cardEl.classList.remove('gold','silver','bronze','five');
   cardEl.classList.add(st>=5 ? 'gold' : st===4 ? 'silver' : 'bronze');   // the frame is the rating
   var sig=p.sig || (p.hero && HERO ? HERO.moveName : '') || 'Game Changer';
-  document.getElementById('pcSig').textContent=sig;
+  document.getElementById('pcSig').textContent=p.title || (p.player ? p.name : sig);   // the card's nickname
+  document.getElementById('pcAct').textContent=p.player ? sig.toUpperCase() : '';
 
   // portrait: the real rig, posed mid-stride, so it is a person not a helmet
   var cc=document.getElementById('pcArt'), x=cc.getContext('2d');
@@ -5339,12 +5380,14 @@ function launchFieldGoal(){
   var k={kind:fk.kind, t:0, dist:fk.dist, good:good, arc:110, hf:0.75};   // still climbing over the bar
   k.x0=fk.holder.x; k.y0=fk.holder.y;
   var posts=goalX(d);
+  k.y1=mid+(fk.aim/Math.max(0.05,fk.tol))*2.8*YD;  // inside the uprights while |aim| is inside the zone
   if(fk.pow<fk.req){                                // short: it dies in front of the posts
     k.x1=k.x0+d*reach; k.arc=40; k.dur=1.3; k.short=true; k.hf=1;
   } else {
     k.x1=posts; k.dur=1.5;
+    aimAtPosts(k, posts, k.y1);                     // and on through them
   }
-  k.y1=mid+(fk.aim/Math.max(0.05,fk.tol))*2.8*YD;  // inside the uprights while |aim| is inside the zone
+  k.live=true; k.kicker=fk.kicker;                  // the players play on while it is in the air
   G.kick=k; G.phase='kick'; G.ball.held=false; G.carrier=null;
 }
 // What follows a kick: after a touchdown's try, or a made field goal, the
@@ -6039,7 +6082,10 @@ function frame(ts){
   if(G){
     // one bad frame must never stop the loop
     try{
-      if(G.phase==='kick') kickTick(dt);
+      if(G.phase==='kick'){
+        var kk=G.kick; kickTick(dt);
+        if(kk && kk.live && G.phase==='kick') step(dt);   // rush, block and chase on while the ball is up
+      }
     if(G.phase==='dead') deadTick(dt);
     if(G.phase==='presnap') presnap(dt);
       if(G.phase==='live') step(dt);
