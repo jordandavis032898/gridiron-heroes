@@ -58,6 +58,39 @@
   #stage{touch-action:none;}
 
   .overlay{position:absolute; inset:0; display:none; align-items:center; justify-content:center; padding:16px; z-index:5; overflow-y:auto;}
+  /* the controls card: once on your first game, and from the pause menu */
+  #ctrlCard{z-index:12; background:rgba(6,10,16,.74);}
+  #ctrlCard .cc{width:100%; max-width:760px; margin:auto; padding:16px 18px 14px; border-radius:6px;
+    background:linear-gradient(180deg,#1b2b4c 0%,#111d35 100%); border:1px solid rgba(255,210,63,.5);
+    box-shadow:0 14px 44px rgba(0,0,0,.6);}
+  #ctrlCard h2{font-family:'Anton',Impact,sans-serif; font-size:26px; margin:0; letter-spacing:.04em; color:var(--gold); line-height:1.05;}
+  #ctrlCard .sub{font-size:12px; color:#9fb0cf; margin:2px 0 12px; letter-spacing:.08em; text-transform:uppercase; font-weight:600;}
+  #ctrlCard .cols{display:grid; grid-template-columns:1fr 1fr; gap:10px 22px;}
+  #ctrlCard h3{margin:0 0 4px; padding-bottom:4px; border-bottom:1px solid rgba(255,255,255,.14);
+    font:700 12px 'Barlow Condensed',sans-serif; letter-spacing:.16em; color:#ffffff; text-transform:uppercase;}
+  #ctrlCard .cr{display:flex; gap:10px; align-items:center; margin:7px 0;}
+  #ctrlCard .ci{flex:0 0 36px; height:36px; border-radius:50%; border:2px solid var(--gold); background:rgba(255,210,63,.10);
+    display:flex; align-items:center; justify-content:center;}
+  #ctrlCard .ci svg{width:20px; height:20px; stroke:#ffd23f; fill:none; stroke-width:2.2; stroke-linecap:round; stroke-linejoin:round;}
+  #ctrlCard .ci.k{flex:0 0 64px; border-radius:18px;}
+  #ctrlCard .ci kbd{font-size:11px; padding:0; border:0; background:none; color:#ffd23f; white-space:nowrap; font-weight:700;}
+  #ctrlCard .cr b{display:block; font:700 13px 'Barlow Condensed',sans-serif; letter-spacing:.08em; color:#ffffff; text-transform:uppercase;}
+  #ctrlCard .cr span{display:block; font-size:12.5px; color:#c9d4e6; line-height:1.3;}
+  #ctrlCard .go{display:block; width:100%; margin-top:12px; padding:10px 0; border:0; border-radius:4px; cursor:pointer;
+    background:var(--gold); color:#111a2c; font-family:'Anton',Impact,sans-serif; font-size:18px; letter-spacing:.08em;}
+  #ctrlCard .go:focus-visible{outline:2px solid #ffffff; outline-offset:2px;}
+  html.touchui #ctrlCard{padding:4px 10px; align-items:flex-start;}
+  html.touchui #ctrlCard .cc{padding:8px 14px 8px; max-width:720px;}
+  html.touchui #ctrlCard h2{font-size:19px; display:inline-block; margin-right:10px;}
+  html.touchui #ctrlCard .sub{display:inline-block; margin:0 0 4px; font-size:10px;}
+  html.touchui #ctrlCard h3{font-size:11px; margin-bottom:1px; padding-bottom:2px;}
+  html.touchui #ctrlCard .cr{margin:3px 0; gap:8px;}
+  html.touchui #ctrlCard .ci{flex-basis:26px; height:26px; border-width:1.6px;}
+  html.touchui #ctrlCard .ci svg{width:15px; height:15px;}
+  html.touchui #ctrlCard .cr b{font-size:11.5px;}
+  html.touchui #ctrlCard .cr span{font-size:10.5px; line-height:1.18;}
+  html.touchui #ctrlCard .go{margin-top:6px; padding:6px 0; font-size:15px;}
+  @media (max-width:520px){ #ctrlCard .cols{grid-template-columns:1fr;} }
   .overlay.show{display:flex;}
   .sheet{
     background:rgba(12,17,20,.95); border:1px solid var(--line); border-radius:4px;
@@ -6660,6 +6693,62 @@ function bar(lbl,v){
   return '<div class="stat"><div class="sl">'+lbl+'</div><div class="sb"><i style="width:'+pct+'%"></i></div></div>';
 }
 
+// ---- the controls card ------------------------------------------------------
+// The controls changed a lot (a tap punches, a swipe tackles or spins, SWITCH
+// changes your man), so the first game on a device opens with this card over
+// the first play call. The pause menu has it too.
+var CTRL_KEY='hm_controls_v1';
+function ctrlSeen(){ try{ return localStorage.getItem(CTRL_KEY)==='1'; }catch(e){ return true; } }
+function controlsCard(){
+  var old=document.getElementById('ctrlCard'); if(old) old.parentNode.removeChild(old);
+  var IC={
+    stick:'<circle cx="12" cy="12" r="9"/><circle cx="14.6" cy="9.4" r="3.8" fill="#ffd23f"/>',
+    tap:'<circle cx="12" cy="15" r="2.8" fill="#ffd23f"/><path d="M7.2 10.6a6.6 6.6 0 0 1 9.6 0M4.4 7.4a10.6 10.6 0 0 1 15.2 0"/>',
+    swipe:'<path d="M3 12h15M13.5 7l5 5-5 5"/><path d="M3 7.5h5M3 16.5h5"/>',
+    aim:'<circle cx="12" cy="12" r="7.5"/><circle cx="12" cy="12" r="2.4" fill="#ffd23f"/><path d="M12 1.5v4M12 18.5v4M1.5 12h4M18.5 12h4"/>',
+    sw:'<path d="M4 8h13l-3.5-3.5M20 16H7l3.5 3.5"/>',
+    star:'<path d="M12 3l2.4 5.6L20 10l-4.3 3.9 1.2 5.9L12 17l-4.9 2.8 1.2-5.9L4 10l5.6-1.4z"/>'
+  };
+  function row(icon, key, what){
+    var svg=icon.charAt(0)==='<', ic = svg ? '<svg viewBox="0 0 24 24">'+icon+'</svg>' : '<kbd>'+icon+'</kbd>';
+    return '<div class="cr"><div class="ci'+(svg?'':' k')+'">'+ic+'</div><div><b>'+key+'</b><span>'+what+'</span></div></div>';
+  }
+  var off, def;
+  if(TOUCH_UI){
+    off = row(IC.stick,'Stick','Run with your left thumb.')+
+          row(IC.aim,'Hold on a receiver','Aim a pass, then lift to throw. Hold longer for a better ball.')+
+          row(IC.tap,'Tap','Punch. Breaks a grab and knocks a rusher back.')+
+          row(IC.swipe,'Swipe','Spin away from a tackler.')+
+          row(IC.star,'Move buttons','Your heroes\u2019 special moves.');
+    def = row(IC.stick,'Stick','Run with your left thumb.')+
+          row(IC.tap,'Tap','Punch the ball carrier, or swat a pass in the air.')+
+          row(IC.swipe,'Swipe','Slide tackle. Reaches up to 9 yards.')+
+          row(IC.sw,'Switch','Take the defender best placed to make the play. It pulses when your man is out of it.');
+  } else {
+    off = row('WASD','Move','Or the arrow keys.')+
+          row('Mouse','Pass','Hold the cursor on a receiver and click to throw, or press 4 to 7.')+
+          row('F','Punch','Breaks a grab and knocks a rusher back.')+
+          row('J','Juke','Cut away from a tackler.')+
+          row('Q R T','Special moves','Your heroes\u2019 moves. K for the hero special.');
+    def = row('WASD','Move','Or the arrow keys.')+
+          row('K','Punch','Hit the ball carrier, or swat a pass in the air.')+
+          row('J','Dive','Launch at the ball carrier.')+
+          row('E','Switch','Take the defender best placed to make the play (or Tab).')+
+          row('Space','Hike','Snap the ball when you are ready.');
+  }
+  stage.insertAdjacentHTML('beforeend',
+    '<div class="overlay show" id="ctrlCard" role="dialog" aria-label="Controls"><div class="cc">'+
+      '<h2>HOW TO PLAY</h2><p class="sub">One touch, one job</p>'+
+      '<div class="cols"><div><h3>With the ball</h3>'+off+'</div><div><h3>On defense</h3>'+def+'</div></div>'+
+      '<button class="go" id="ctrlGo" type="button">LET\u2019S PLAY</button>'+
+    '</div></div>');
+  var card=document.getElementById('ctrlCard'), go=document.getElementById('ctrlGo');
+  function close(){ try{ localStorage.setItem(CTRL_KEY,'1'); }catch(e){} if(card.parentNode) card.parentNode.removeChild(card); }
+  go.addEventListener('click', close);
+  go.addEventListener('touchend', function(ev){ ev.preventDefault(); close(); }, {passive:false});
+  card.addEventListener('touchstart', function(ev){ ev.stopPropagation(); }, {passive:true});
+  if(!TOUCH_UI) go.focus();
+}
 function showPlaycall(){
   var onO=iHaveBall(), list=callSheet();
   var html='<h2>'+(onO?'Call your play':'Call your defense')+'</h2>'+
@@ -6699,6 +6788,7 @@ function showPlaycall(){
   var tb=document.getElementById('toSheet');
   if(tb) tb.addEventListener('click',function(){ callTimeout(); });
   var f=elSheet.querySelector('.card'); if(f) f.focus();
+  if(!ctrlSeen() && !document.getElementById('ctrlCard')) controlsCard();
 }
 // ---- the playbook chalkboard ----------------------------------------------
 // Each card draws its play from the same formation and route shapes the
@@ -8428,10 +8518,12 @@ function askQuit(){
     '<button class="card" id="qStay" type="button"><div class="k">RESUME</div><div class="t">Keep playing</div>'+
       '<div class="d">Back to the line.</div></button>'+
     '<button class="card" id="qLeave" type="button"><div class="k">QUIT</div><div class="t">Main menu</div>'+
-      '<div class="d">'+(G.training?'End the practice.':'This game will not count.')+'</div></button></div>';
+      '<div class="d">'+(G.training?'End the practice.':'This game will not count.')+'</div></button></div>'+
+    '<button class="card" id="qCtrl" type="button" style="width:100%;margin-top:8px"><div class="k">CONTROLS</div><div class="t">How to play</div></button>';
   elOv.classList.add('show');
   document.getElementById('qStay').addEventListener('click',function(){ G.paused=false; elOv.classList.remove('show'); });
   document.getElementById('qLeave').addEventListener('click',quitToMenu);
+  document.getElementById('qCtrl').addEventListener('click',controlsCard);
   if(!TOUCH_UI) document.getElementById('qStay').focus();
 }
 function quitToMenu(){
