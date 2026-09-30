@@ -1511,6 +1511,17 @@ function superSpotTick(){
   } else if(sp.style.opacity!=='0'){ sp.style.transition='opacity .2s'; sp.style.opacity='0'; }
 }
 
+// A move used with nothing to hit still goes off (you asked for it, you get
+// it) and it is spent, like a whiff.
+function whiffMove(me, id, col, mine){
+  var hx=me.x+(me.face||1)*14, hy=me.y-20;
+  me.arm=0.6; me.wrapped=0;
+  streak(me.x+(me.face||1)*4,hy, hx+(me.face||1)*12,hy, 'rgba(255,255,255,.85)', 2.4, 0.2);
+  flash(hx,hy,col||'rgba(255,210,63,.9)',18);
+  shock(hx,hy+14,col||'rgba(255,210,63,.7)',2,22,0.24);
+  if(mine||!NET.on) say(String(ABIL[id]?ABIL[id].name:id).toUpperCase()+'!',600);
+  abSpend(me,id);
+}
 function fireAbility(seat, IN, slot){
   var me=seat.man;
   function why(t){ if(seat.local) hint(t,1000); }   // only for the person pressing it, never the computer
@@ -1557,7 +1568,7 @@ function fireAbility(seat, IN, slot){
 
   // ---- quarterback ---------------------------------------------------
   if(id==='rocket'){
-    if(me!==G.carrier || G.thrown){ why('ONLY BEFORE YOU THROW'); return; }
+    if(me!==G.carrier || G.thrown){ whiffMove(me,id,'rgba(255,140,43,.95)',mine); return; }
     G.rocketArmed=true; me.arm=0.5;
     var rhx=me.x+(me.face||1)*9, rhy=me.y-25;
     flash(rhx,rhy,'rgba(255,210,63,.95)',26);
@@ -1569,7 +1580,7 @@ function fireAbility(seat, IN, slot){
     tell('ROCKET ARMED',700);
   }
   else if(id==='perfect'){
-    if(me!==G.carrier || G.thrown){ why('ONLY BEFORE YOU THROW'); return; }
+    if(me!==G.carrier || G.thrown){ whiffMove(me,id,'rgba(127,216,255,.95)',mine); return; }
     G.perfectArmed=true; me.arm=0.5;
     flash(me.x,me.y-24,'rgba(127,216,255,.9)',22);
     shock(me.x,me.y,'rgba(127,216,255,.9)',4,30,0.38);
@@ -1668,7 +1679,7 @@ function fireAbility(seat, IN, slot){
     // The ball carrier if he is in reach, otherwise the nearest man; he lunges
     // the last few yards to get there.
     var v2 = (G.carrier && G.carrier.team===foeTeam && Math.hypot(G.carrier.x-me.x,G.carrier.y-me.y)<84) ? G.carrier : foeNear(76);
-    if(!v2){ (mine && hint('NOBODY IN REACH')); return; }
+    if(!v2){ whiffMove(me,id,'rgba(255,255,255,.9)',mine); return; }
     lunge(me, v2, 14);
     v2.stun=1.7; v2.down=Math.max(v2.down,1.3); v2.wrapped=0;
     launch(v2, me.x, me.y, 200, 6.2); v2.spin=1;
@@ -1722,9 +1733,9 @@ function fireAbility(seat, IN, slot){
     if(n3) credit(me,'SLAM');
   }
   else if(id==='fumblegen'){
-    if(!G.carrier || G.carrier.team===me.team){ (mine && hint('NOBODY TO STRIP')); return; }
+    if(!G.carrier || G.carrier.team===me.team){ whiffMove(me,id,'rgba(255,210,63,.95)',mine); return; }
     var fd=Math.hypot(G.carrier.x-me.x, G.carrier.y-me.y);
-    if(fd>90){ (mine && hint('GET CLOSER')); return; }    // nothing to strip, no charge
+    if(fd>90){ whiffMove(me,id,'rgba(255,210,63,.95)',mine); return; }   // too far to strip: a swipe at the air
     var vic=G.carrier;
     lunge(me, vic, 12);
     fumble(vic,(vic.x-me.x)*3.6,(vic.y-me.y)*3.6);
@@ -1744,12 +1755,24 @@ function fireAbility(seat, IN, slot){
 
   // ---- the secondary ---------------------------------------------------
   else if(id==='aagun'){
-    // Nothing in the air yet: it arms, and fires the moment they throw.
-    if(!G.thrown || G.thrown.lat || G.thrown.kickoff){
-      G.aaArmed=me;
-      flash(me.x,me.y-32,'rgba(255,60,60,.95)',16);
-      if(mine) hint('ANTI-AIR ARMED: FIRES WHEN THEY THROW',1400);
-    } else laserShot(me);
+    // A pass in the air: shot out of the sky, play dead. Nothing thrown yet:
+    // the beam hits whoever has the ball, about a fifth of his strength.
+    if(G.thrown && !G.thrown.lat && !G.thrown.kickoff) laserShot(me);
+    else {
+      var zc=G.carrier, ex3=me.x+(me.face||1)*2, ey3=me.y-33;
+      if(zc && zc.team!==me.team){
+        G.fx.push({laser:true,x:ex3,y:ey3,x2:zc.x,y2:zc.y-20,life:0.45,max:0.45});
+        flash(ex3,ey3,'rgba(255,60,60,1)',14);
+        flash(zc.x,zc.y-20,'rgba(255,120,80,1)',26);
+        shock(zc.x,zc.y-10,'rgba(255,120,80,.85)',3,26,0.28);
+        zc.hp=(zc.hp===undefined?100:zc.hp)-20; zc.vx*=0.6; zc.vy*=0.6;
+        G.shake=REDUCED?0:8;
+        tell('ZAPPED!',600); credit(me,'BIG HIT');
+      } else {
+        G.fx.push({laser:true,x:ex3,y:ey3,x2:ex3+(me.face||1)*120,y2:ey3-60,life:0.4,max:0.4});   // a shot at nothing
+        flash(ex3,ey3,'rgba(255,60,60,1)',14);
+      }
+    }
   }
   else return;
 
@@ -1775,19 +1798,10 @@ function laserShot(me){
                  r:1.6+Math.random()*1.6,life:0.7,max:0.7,c:(lz%3?'#7a4a28':'#ffb070')});
     }
     G.shake=REDUCED?0:12;
-    var roll=Math.random();
-    if(roll<0.24){
-      G.thrown=null;
-      G.offense=me.team; G.newSeries=true;
-      G.carrier=me; G.ball.held=true; G.ball.x=me.x; G.ball.y=me.y;
-      me.iFrames=0.4; me.hp=100;
-      if(me.team==='H') G.controlled=me; else if(NET.on) G.controlled2=me;
-      tell('SHOT IT DOWN - INTERCEPTED!',1400); credit(me,'INTERCEPTION');
-    } else {
-      G.thrown=null;
-      tell('SHOT OUT OF THE SKY!',1100); credit(me,'PASS DEFENDED');
-      endPlay(G.los,'INCOMPLETE');
-    }
+    // shot out of the sky: the play is dead
+    G.thrown=null;
+    tell('SHOT OUT OF THE SKY!',1100); credit(me,'PASS DEFENDED');
+    endPlay(G.los,'INCOMPLETE');
   }
 }
 
@@ -1894,7 +1908,7 @@ function fireSpecial(seat,IN){
 
   } else if(m==='rocket'){
     // flat uninterceptable bullet to whoever is most open
-    if(me.role!=='QB'||G.carrier!==me||G.thrown||G.windup){ M.power+=HRO.cost; M.specialDue=0; return; }
+    if(me.role!=='QB'||G.carrier!==me||G.thrown||G.windup){ flash(me.x,me.y-20,'rgba(255,140,43,.95)',26); shock(me.x,me.y,'rgba(255,140,43,.8)',3,30,0.3); return; }
     var best=null,bs=-1e9;
     for(var j=0;j<G.players.length;j++){
       var r=G.players[j];
@@ -1904,7 +1918,7 @@ function fireSpecial(seat,IN){
       var sc=op*1.2+(r.x-G.los)*d/YD*1.4;
       if(sc>bs){bs=sc;best=r;}
     }
-    if(!best){ M.power+=HRO.cost; M.specialDue=0; return; }
+    if(!best){ flash(me.x,me.y-20,'rgba(255,140,43,.95)',26); return; }
     M.moveCd=1.4;
     G.windup={target:best,t:0,dur:0.14,qb:me,rocket:true};
     say('ROCKET!',700);
