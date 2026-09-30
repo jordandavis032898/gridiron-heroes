@@ -306,8 +306,12 @@ function blit3D(P){
   var sbh=Math.min(104*Math.max(0.55,sbq.s), band*0.82), sbs=sbh/104, sbw=sbh*2.9, sbx=sbq.x-sbw/2;
   var sby=Math.max(topBand+2, sbq.y-190*sbq.s);
   if(sby+sbh>wallY-4) sby=wallY-4-sbh;
-  if(band>34 && sby>=topBand-2){
-    ctx.fillStyle='#1a2130'; ctx.fillRect(sbq.x-6*sbs, sby+sbh, 12*sbs, sbq.y-sby-sbh);
+  var pinned=TOUCH_UI;
+  if(pinned){                                       // a phone: one place, one size, top centre, under the pre-snap bar
+    sbh=Math.min(54, band*0.8); sbs=sbh/104; sbw=sbh*2.9; sbx=VW/2-sbw/2; sby=topBand+46;
+  }
+  if(band>34 && sby>=topBand-2 && (!pinned || sby+sbh<wallY)){
+    if(!pinned){ ctx.fillStyle='#1a2130'; ctx.fillRect(sbq.x-6*sbs, sby+sbh, 12*sbs, sbq.y-sby-sbh); }
     ctx.fillStyle='#0b0f16'; ctx.fillRect(sbx-6*sbs, sby-6*sbs, sbw+12*sbs, sbh+12*sbs);
     ctx.fillStyle='#05070b'; ctx.fillRect(sbx, sby, sbw, sbh);
     ctx.textAlign='center'; ctx.textBaseline='middle';
@@ -332,9 +336,10 @@ var CAM3={z:0.86, actUntil:0, ax:0, ay:0, prevShake:0, prevSpin:0};
 function camMood(now){
   if(CAM3.actUntil>now) return TOUCH_UI?1.25:1.55;
   if(G && G.phase==='heroIntro') return 1.9;        // close on the star as he walks out
-  if(G && G.broadcast && G.broadcast.until>now) return 1.85;   // in on the man who made the play
+  if(G && G.broadcast && G.broadcast.until>now) return TOUCH_UI ? 1.3 : 1.85;   // in on the man who made the play
   if(G && playArtOn()) return 0.7;                   // pull back to read the play
   if(!G || G.phase!=='live') return TOUCH_UI ? 0.5 : 0.86;   // between plays on a phone: a wide stadium shot
+  if(TOUCH_UI) return 1.0;                           // a phone holds one zoom through the play
   if(G.thrown) return 0.92;
   var c=G.carrier;
   if(!c) return 1.0;
@@ -352,14 +357,14 @@ function camDirect(){
     // no punch-in while the quarterback still has it behind the line: a hit on
     // him zoomed in and pushed the receivers off the screen mid-throw
     var passing3 = c && c.role==='QB' && !G.thrown && !pastTheLine(c);
-    if(!passing3 && (G.shake > CAM3.prevShake+2 || (sp>0.85 && CAM3.prevSpin<=0.85))){
+    if(!TOUCH_UI && !passing3 && (G.shake > CAM3.prevShake+2 || (sp>0.85 && CAM3.prevSpin<=0.85))){   // no punch-ins on a phone
       CAM3.actUntil=now+620; CAM3.ax=G.ball.x; CAM3.ay=G.ball.y;
     }
     CAM3.prevSpin=sp;
   }
   CAM3.prevShake=G?G.shake:0;
   var zt=camMood(now), act=CAM3.actUntil>now;
-  CAM3.z += (zt-CAM3.z)*(act?0.2:0.05);
+  CAM3.z += (zt-CAM3.z)*(act?0.2:(TOUCH_UI?0.03:0.05));   // a phone eases between zooms
   return act;
 }
 

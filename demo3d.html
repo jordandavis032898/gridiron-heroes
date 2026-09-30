@@ -266,6 +266,12 @@
   html.touchui #stage:has(.overlay.show) #meters,
   html.touchui #stage:has(.overlay.show) #legend{visibility:hidden;}
   html.touchui #kmeter{bottom:auto; top:40px; width:min(360px,60vw);}
+  #hint{position:absolute; left:50%; bottom:70px; transform:translate(-50%,6px); z-index:9; pointer-events:none;
+    font-family:'Anton',sans-serif; font-size:14px; letter-spacing:.05em; color:#ffd23f; white-space:nowrap;
+    background:rgba(8,12,16,.78); border:1px solid rgba(255,210,63,.5); border-radius:14px; padding:4px 12px;
+    opacity:0; transition:opacity .2s, transform .2s;}
+  #hint.on{opacity:1; transform:translate(-50%,0);}
+  html.touchui #hint{bottom:calc(96px + env(safe-area-inset-bottom,0px));}
   /* a receiver off the edge of the screen: tap the tab to throw to him */
   #edgeMk{position:absolute; inset:0; pointer-events:none; z-index:6;}
   .emk{position:absolute; width:46px; height:46px; margin:-23px 0 0 -23px; border-radius:50%;
@@ -886,8 +892,12 @@ function blit3D(P){
   var sbh=Math.min(104*Math.max(0.55,sbq.s), band*0.82), sbs=sbh/104, sbw=sbh*2.9, sbx=sbq.x-sbw/2;
   var sby=Math.max(topBand+2, sbq.y-190*sbq.s);
   if(sby+sbh>wallY-4) sby=wallY-4-sbh;
-  if(band>34 && sby>=topBand-2){
-    ctx.fillStyle='#1a2130'; ctx.fillRect(sbq.x-6*sbs, sby+sbh, 12*sbs, sbq.y-sby-sbh);
+  var pinned=TOUCH_UI;
+  if(pinned){                                       // a phone: one place, one size, top centre, under the pre-snap bar
+    sbh=Math.min(54, band*0.8); sbs=sbh/104; sbw=sbh*2.9; sbx=VW/2-sbw/2; sby=topBand+46;
+  }
+  if(band>34 && sby>=topBand-2 && (!pinned || sby+sbh<wallY)){
+    if(!pinned){ ctx.fillStyle='#1a2130'; ctx.fillRect(sbq.x-6*sbs, sby+sbh, 12*sbs, sbq.y-sby-sbh); }
     ctx.fillStyle='#0b0f16'; ctx.fillRect(sbx-6*sbs, sby-6*sbs, sbw+12*sbs, sbh+12*sbs);
     ctx.fillStyle='#05070b'; ctx.fillRect(sbx, sby, sbw, sbh);
     ctx.textAlign='center'; ctx.textBaseline='middle';
@@ -912,9 +922,10 @@ var CAM3={z:0.86, actUntil:0, ax:0, ay:0, prevShake:0, prevSpin:0};
 function camMood(now){
   if(CAM3.actUntil>now) return TOUCH_UI?1.25:1.55;
   if(G && G.phase==='heroIntro') return 1.9;        // close on the star as he walks out
-  if(G && G.broadcast && G.broadcast.until>now) return 1.85;   // in on the man who made the play
+  if(G && G.broadcast && G.broadcast.until>now) return TOUCH_UI ? 1.3 : 1.85;   // in on the man who made the play
   if(G && playArtOn()) return 0.7;                   // pull back to read the play
   if(!G || G.phase!=='live') return TOUCH_UI ? 0.5 : 0.86;   // between plays on a phone: a wide stadium shot
+  if(TOUCH_UI) return 1.0;                           // a phone holds one zoom through the play
   if(G.thrown) return 0.92;
   var c=G.carrier;
   if(!c) return 1.0;
@@ -932,14 +943,14 @@ function camDirect(){
     // no punch-in while the quarterback still has it behind the line: a hit on
     // him zoomed in and pushed the receivers off the screen mid-throw
     var passing3 = c && c.role==='QB' && !G.thrown && !pastTheLine(c);
-    if(!passing3 && (G.shake > CAM3.prevShake+2 || (sp>0.85 && CAM3.prevSpin<=0.85))){
+    if(!TOUCH_UI && !passing3 && (G.shake > CAM3.prevShake+2 || (sp>0.85 && CAM3.prevSpin<=0.85))){   // no punch-ins on a phone
       CAM3.actUntil=now+620; CAM3.ax=G.ball.x; CAM3.ay=G.ball.y;
     }
     CAM3.prevSpin=sp;
   }
   CAM3.prevShake=G?G.shake:0;
   var zt=camMood(now), act=CAM3.actUntil>now;
-  CAM3.z += (zt-CAM3.z)*(act?0.2:0.05);
+  CAM3.z += (zt-CAM3.z)*(act?0.2:(TOUCH_UI?0.03:0.05));   // a phone eases between zooms
   return act;
 }
 
@@ -1039,7 +1050,7 @@ function mk(team,role,x,y,info){
 
 function setupPlay(playId){
   G.playNo=(G.playNo|0)+1;
-  G.aaArmed=null;
+  G.aaArmed=null; G.puntK=null; G.tchase=0;
   G.controlled2=null;
   openPlay(playId);
   G.play=playId; G.players=[]; G.thrown=null; G.fx=[]; G.snapT=G.gt;
@@ -1172,7 +1183,7 @@ function setupPlay(playId){
   // The back used to start the play already holding it. Now the passer takes
   // the snap and gives it to him at the mesh point, and you can beat the
   // timer by handing off yourself.
-  G.handoffAt = (off==='run') ? 0.30 : (off==='draw' ? 0.85 : null);
+  G.handoffAt = youOnO ? null : ((off==='run') ? 0.30 : (off==='draw' ? 0.85 : null));   // on your plays you hand it off
   G.controlled = youOnO ? G.carrier : (startLB() || nearestDef());
   if(NET.on && NET.host) G.controlled2 = pickRemoteMan(false);
   G.jukeUntil=0;
@@ -1197,7 +1208,8 @@ function snapBall(){
     if(qq.team===G.offense && qq.role==='QB'){ G.qbSpot={x:qq.x,y:qq.y}; break; }
   }         // yards of drop still to take
   burst(G.ball.x,G.ball.y,'#f1f1ec');
-  say('HIKE!',480);
+  var myRun = G.offense==='H' && !NET.on && (G.play==='run'||G.play==='draw');
+  if(myRun) hint(TOUCH_UI ? 'TAP YOUR BACK TO HAND IT OFF' : 'PRESS 3 TO HAND IT OFF', 1800);
 }
 // Both sides get one. Without this the guest drove a stock Rival at spd 1.00
 // against a hero at up to 1.30 with a signature move, and simply could not
@@ -1495,9 +1507,13 @@ function superSpotTick(){
 
 function fireAbility(seat, IN, slot){
   var me=seat.man;
-  if(!me || G.phase!=='live' || me.stun>0) return;
+  function why(t){ if(seat.local) hint(t,1000); }   // only for the person pressing it, never the computer
+  if(!me) return;
+  if(G.phase!=='live'){ why('AFTER THE SNAP'); return; }
+  if(me.stun>0 || me.down>0){ why('GET UP FIRST'); return; }
   var kit=kitFor(me), id=kit[slot];
-  if(!id || !abReady(me,id)) return;
+  if(!id) return;
+  if(!abReady(me,id)){ var lf=abLeft(me,id); why(ABIL[id].name.toUpperCase()+': READY IN '+lf+(lf===1?' PLAY':' PLAYS')); return; }
 
   var d=dir(), mine=seat.local;
   var foeTeam=(me.team==='H')?'A':'H';
@@ -1535,7 +1551,7 @@ function fireAbility(seat, IN, slot){
 
   // ---- quarterback ---------------------------------------------------
   if(id==='rocket'){
-    if(me!==G.carrier){ return; }
+    if(me!==G.carrier || G.thrown){ why('ONLY BEFORE YOU THROW'); return; }
     G.rocketArmed=true; me.arm=0.5;
     var rhx=me.x+(me.face||1)*9, rhy=me.y-25;
     flash(rhx,rhy,'rgba(255,210,63,.95)',26);
@@ -1547,7 +1563,7 @@ function fireAbility(seat, IN, slot){
     tell('ROCKET ARMED',700);
   }
   else if(id==='perfect'){
-    if(me!==G.carrier){ return; }
+    if(me!==G.carrier || G.thrown){ why('ONLY BEFORE YOU THROW'); return; }
     G.perfectArmed=true; me.arm=0.5;
     flash(me.x,me.y-24,'rgba(127,216,255,.9)',22);
     shock(me.x,me.y,'rgba(127,216,255,.9)',4,30,0.38);
@@ -1589,7 +1605,7 @@ function fireAbility(seat, IN, slot){
   }
   else if(id==='stiffarm'){
     var v=foeNear(58);                          // an arm's length and a lunge
-    if(!v){ tell('NOBODY IN REACH',500); return; }   // nothing to put down, no charge
+    if(!v){ (mine && hint('NOBODY IN REACH')); return; }   // nothing to put down, no charge
     me.wrapped=0;
     v.stun=1.3; v.down=Math.max(v.down,1.0); v.wrapped=0;
     launch(v, me.x, me.y, 230, 5.4);
@@ -1636,7 +1652,7 @@ function fireAbility(seat, IN, slot){
     // The ball carrier if he is in reach, otherwise the nearest man; he lunges
     // the last few yards to get there.
     var v2 = (G.carrier && G.carrier.team===foeTeam && Math.hypot(G.carrier.x-me.x,G.carrier.y-me.y)<84) ? G.carrier : foeNear(76);
-    if(!v2){ tell('NOBODY IN REACH',500); return; }
+    if(!v2){ (mine && hint('NOBODY IN REACH')); return; }
     lunge(me, v2, 14);
     v2.stun=1.7; v2.down=Math.max(v2.down,1.3); v2.wrapped=0;
     launch(v2, me.x, me.y, 200, 6.2); v2.spin=1;
@@ -1690,9 +1706,9 @@ function fireAbility(seat, IN, slot){
     if(n3) credit(me,'SLAM');
   }
   else if(id==='fumblegen'){
-    if(!G.carrier || G.carrier.team===me.team){ tell('NOBODY TO STRIP',500); return; }
+    if(!G.carrier || G.carrier.team===me.team){ (mine && hint('NOBODY TO STRIP')); return; }
     var fd=Math.hypot(G.carrier.x-me.x, G.carrier.y-me.y);
-    if(fd>90){ tell('GET CLOSER',500); return; }    // nothing to strip, no charge
+    if(fd>90){ (mine && hint('GET CLOSER')); return; }    // nothing to strip, no charge
     var vic=G.carrier;
     lunge(me, vic, 12);
     fumble(vic,(vic.x-me.x)*3.6,(vic.y-me.y)*3.6);
@@ -1716,7 +1732,7 @@ function fireAbility(seat, IN, slot){
     if(!G.thrown || G.thrown.lat || G.thrown.kickoff){
       G.aaArmed=me;
       flash(me.x,me.y-32,'rgba(255,60,60,.95)',16);
-      tell('ANTI-AIR ARMED',800);
+      if(mine) hint('ANTI-AIR ARMED: FIRES WHEN THEY THROW',1400);
     } else laserShot(me);
   }
   else return;
@@ -1792,7 +1808,7 @@ function fireSpecial(seat,IN){
   var HRO=seat.hero, m=HRO.move;
   // Like every other move it comes back after a few plays, not a second and a half.
   var left=(M.specialDue||0)-G.playNo;
-  if(left>0){ if(seat.local!==false && (seat.side==='H'||!NET.on)) say(HRO.moveName.toUpperCase()+': '+left+(left===1?' PLAY':' PLAYS'),700); return; }
+  if(left>0){ if(seat.local!==false && (seat.side==='H'||!NET.on)) hint(HRO.moveName.toUpperCase()+': READY IN '+left+(left===1?' PLAY':' PLAYS'),1000); return; }
   if(M.power<HRO.cost) return;
   M.power-=HRO.cost;
   M.specialDue=G.playNo+SPECIAL_CD+1;
@@ -2814,7 +2830,7 @@ function drawKick(){
     }
   }
   ctx.fillStyle='rgba(0,0,0,.28)';
-  ctx.beginPath(); ctx.ellipse(G.ball.x, G.ball.y, 6-k.h*0.04, 2.6-k.h*0.02, 0, 0, Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.ellipse(G.ball.x, G.ball.y, Math.max(1.2,6-k.h*0.035), Math.max(0.6,2.6-k.h*0.015), 0, 0, Math.PI*2); ctx.fill();
   ctx.save();
   ctx.translate(G.ball.x, G.ball.y - (k.h||0));
   ctx.rotate(k.t*13);
@@ -3005,6 +3021,24 @@ function driveHuman(seat, IN, dt, now){
   var base = onO ? BASE_SPD : DEF_SPD;
   var mult=(sprinting?SPRINT:1)*(me.burst>0?1.7:1)*me.spd;
   if(!diving && seat.local) G.touchDive=false;       // a dive that is over no longer homes
+  // A slide on a touch screen from further off: he charges the ball carrier,
+  // leading him, and leaves his feet once he is close enough to get there.
+  if(seat.local && G.tchase && !diving){
+    var hc2=G.carrier;
+    if(!hc2 || hc2.team===me.team || now>G.tchase || G.phase!=='live' || onO) G.tchase=0;
+    else {
+      var lx2=hc2.x+hc2.vx*0.22-me.x, ly2=hc2.y+hc2.vy*0.22-me.y, lm2=Math.hypot(lx2,ly2)||1;
+      if(lm2 < 3.2*YD){
+        G.tchase=0;
+        if(swipeTackle(lx2,ly2,'H')!==false){ G.touchDive=true; G.diveUntil=now+640; }
+      } else {
+        var cs=DEF_SPD*1.75*(me.spd||1);
+        me.vx+=(lx2/lm2*cs-me.vx)*0.3; me.vy+=(ly2/lm2*cs-me.vy)*0.3;
+        if(Math.random()<dt*18) speedLines(me,'rgba(255,255,255,.55)');
+        return;
+      }
+    }
+  }
   if(diving){
     me.vx*=0.988; me.vy*=0.988;                       // ride the dive out
     // A swipe tackle on a touch screen homes in: the dive bends toward the
@@ -3016,7 +3050,7 @@ function driveHuman(seat, IN, dt, now){
         // he is slippery for a beat (a juke, a fresh handoff): stay on him
         // instead of sailing past, and the tackle lands when it wears off
         me.vx=hc.vx+hx*4; me.vy=hc.vy+hy*4;
-      } else if(hm<9*YD){
+      } else if(hm<18*YD){
         var sp=Math.max(Math.hypot(me.vx,me.vy), BASE_SPD*2.7);
         var k=Math.min(1,dt*9);
         me.vx+=(hx/hm*sp-me.vx)*k; me.vy+=(hy/hm*sp-me.vy)*k;
@@ -3040,6 +3074,7 @@ function step(dt){
   G.gt+=dt;
   var d=dir(), now=performance.now(), since=G.gt-G.snapT;
   if(G.fgKick && fgKickTick(dt)) return;
+  if(G.puntK && puntTick(dt)) return;
   G.clock-=dt;
   if(G.clock<=0){ G.clock=0; gameOver(); return; }
   if(G.handoffAt!=null && since>G.handoffAt && G.carrier && G.carrier.role==='QB'){
@@ -3497,7 +3532,7 @@ function step(dt){
     }
     if(t.trail.length>18) t.trail.shift();
     if(k>=1){
-      if(t.kickoff && t.tb){ G.thrown=null; kickoffTouchback(); return; }
+      if(t.kickoff && t.tb){ G.thrown=null; kickoffTouchback(t.punt?20:25); return; }
       if(t.tip){ resolveTip(); return; }              // nobody's ball: first to it
       var r=t.target, cov=nearestOf(r,G.offense==='H'?'A':'H');
       var covd=cov?Math.hypot(cov.x-r.x,cov.y-r.y):999;
@@ -3776,6 +3811,16 @@ var callTimer=null;
 // Only these get words on the screen. Every hit and move used to shout its
 // own name in the middle of the field, which was noise.
 var SAY_OK=/BLOCKED|TOUCHBACK|KICKOFF|YARD ATTEMPT|EXTRA POINT|STAR PLAYER|DEFENSIVE STOP|FUMBLE|INTERCEPT|PICKED OFF|FIRST DOWN|SACK|TOUCHDOWN|TURNOVER|SAFETY|IT IS GOOD|NO GOOD|HIKE FIRST|WAITING|OTHER PLAYER|YOU ARE THE|THEY ARE IN|LIBRARY|PLAY IN/;
+// A small note just above the move buttons: why a move did not go, what to
+// do next. The big callout is kept for the moments that matter (the filter).
+var hintTimer=null;
+function hint(text,ms){
+  var el=document.getElementById('hint');
+  if(!el){ el=document.createElement('div'); el.id='hint'; stage.appendChild(el); }
+  el.textContent=String(text); el.classList.add('on');
+  if(hintTimer) clearTimeout(hintTimer);
+  hintTimer=setTimeout(function(){ el.classList.remove('on'); }, ms||900);
+}
 function say(text,ms){
   if(!SAY_OK.test(String(text))) return;
   elCall.textContent=text; elCall.style.transition=''; elCall.style.opacity='1';
@@ -4463,10 +4508,15 @@ function snapPos(){
   var d=dir(), bx=c.x+d*8, by=c.y;
   var fk=G.fgKick, pre=(G.phase==='presnap' || G.phase==='kickset');
   if(pre) return {x:bx, y:by, h:1.5, flat:true};
-  var to = fk ? fk.holder : G.carrier;
+  var pk=G.puntK;
+  var to = fk ? fk.holder : (pk ? pk.punter : G.carrier);
   if(!to || G.phase!=='live') return null;
   var k=(G.gt-G.snapT)/SNAP_DUR;
-  if(k>=1) return fk ? {x:to.x+d*4, y:to.y, h:3, flat:true} : null;   // held on the tee till the kick
+  if(k>=1){
+    if(fk) return {x:to.x+d*4, y:to.y, h:3, flat:true};              // held on the tee till the kick
+    if(pk) return {x:to.x+d*5, y:to.y, h:17, flat:true};             // in the punter's hands
+    return null;
+  }
   if(k<0) k=0;
   return {x:bx+(to.x+d*4-bx)*k, y:by+(to.y-by)*k, h:1.5+Math.sin(k*Math.PI)*9+k*9, k:k};
 }
@@ -4837,7 +4887,7 @@ function drawBall(){
   if(hh>0.5){
     ctx.fillStyle='rgba(0,0,0,'+(0.30-Math.min(0.2,hh/140)).toFixed(3)+')';
     ctx.beginPath();
-    ctx.ellipse(G.ball.x,G.ball.y,5.5-hh*0.05,2.4-hh*0.02,0,0,Math.PI*2);
+    ctx.ellipse(G.ball.x,G.ball.y,Math.max(1.2,5.5-hh*0.035),Math.max(0.6,2.4-hh*0.014),0,0,Math.PI*2);   // never a negative size on a sky-high kick
     ctx.fill();
   }
 
@@ -5053,7 +5103,7 @@ function touchExtras(onD, live){
   // neither circle shows: just that man's own moves.
   var me=G.controlled;
   var showSpecial = !onD && !!(me && me.hero);
-  var showPitch = !onD && !!(me && me===G.carrier && me.role==='QB' && !G.thrown && !pastTheLine(me));
+  var showPitch = false;                           // a handoff is a tap on your back; the quarterback keeps just his moves
   var e4=ab(4), e5=ab(5);
   if(e4) e4.style.display = showSpecial ? '' : 'none';
   if(e5) e5.style.display = showPitch ? '' : 'none';
@@ -5632,7 +5682,7 @@ function kickMeter(kind, cpu, targets, done){
       tol:targets?targets.tol:0.35, req:targets?targets.req:0, spread:targets?targets.spread:0.26};
   var el=document.getElementById('kmeter');
   if(!el){ el=document.createElement('div'); el.id='kmeter'; stage.appendChild(el); }
-  el.innerHTML='<div class="kt">'+(kind==='kickoff'?'KICKOFF':kind==='pat'?'EXTRA POINT':'FIELD GOAL')+
+  el.innerHTML='<div class="kt">'+(kind==='kickoff'?'KICKOFF':kind==='pat'?'EXTRA POINT':kind==='punt'?'PUNT':'FIELD GOAL')+
     (cpu?'':'<span> \u00b7 SPACE OR CLICK TO LOCK</span>')+'</div>'+
     '<div class="kl">AIM</div><div class="kbar aim"><i class="zone"></i><b class="nd"></b></div>'+
     '<div class="kl">POWER</div><div class="kbar pow"><i class="req"></i><b class="fill"></b></div>';
@@ -5807,13 +5857,119 @@ function launchKickoff(aim,pow){
     if(best) G.controlled=best;
   }
 }
-function kickoffTouchback(){
+function kickoffTouchback(yds){
   var d=dir(), rGoal=(d>0)?EZ:FW-EZ;
   G.kickReturn=false;
   logPlay(rGoal, 'TOUCHBACK', false);
   G.phase='dead'; G.carrier=null; G.thrown=null;
-  G.los=rGoal+d*25*YD; G.down=1; G.toGo=10; G.clockRunning=false;
+  G.los=rGoal+d*(yds||25)*YD; G.down=1; G.toGo=10; G.clockRunning=false;
   postPlay('TOUCHBACK');
+}
+
+// ---- punts, live ------------------------------------------------------------
+// A long snapper, a four-man line with two wings, two gunners split wide and
+// the punter fourteen yards back. The other side rushes six, puts a man on
+// each gunner, and has a returner deep. You kick on the meter; the snap goes
+// back, the punter drops it and boots it, and it is a live return: the
+// kicking team covers in lanes, the receiving team blocks for its man.
+function startPunt(kickTeam){
+  elOv.classList.remove('show');
+  if(typeof closeAudible==='function') closeAudible();
+  var recv=(kickTeam==='H')?'A':'H';
+  G.offense=kickTeam;
+  var d=dir(), mid=FH/2, los=G.los;
+  G.players=[]; G.fx=[]; G.thrown=null; G.loose=null; G.carrier=null; G.kick=null; G.fgKick=null; G.puntK=null;
+  G.playNo=(G.playNo|0)+1; openPlay('punt'); if(G.cur) G.cur.kick='punt';
+  G.play='punt'; G.clockRunning=false; G.handoffAt=null; G.aaArmed=null;
+  var blockers=[], rushers=[], gunners=[];
+  var snapper=mk(kickTeam,'C', los-d*1*YD, mid, SUPPORT.C); snapper.route='block'; blockers.push(snapper);
+  var ly=[-3.2,-1.6,1.6,3.2], lk=['OL1','OL2','OL1','OL2'];
+  for(var i=0;i<4;i++){ var b=mk(kickTeam,'OL', los-d*1*YD, mid+ly[i]*YD, SUPPORT[lk[i]]); b.route='block'; blockers.push(b); }
+  [-5,5].forEach(function(wy,wi){ var w=mk(kickTeam,'TE', los-d*2*YD, mid+wy*YD, SUPPORT[wi?'TE':'RB']); w.route='block'; blockers.push(w); });
+  [-15,15].forEach(function(gy,gi){ var g=mk(kickTeam,'WR', los-d*0.5*YD, mid+gy*YD, SUPPORT[gi?'WR2':'WR1']); g.route='go'; gunners.push(g); });
+  var punter=mk(kickTeam,'TE', los-d*14*YD, mid, {num:5, name:'Punter'}); punter.route='hold'; punter.pos='P';
+  for(var r=0;r<6;r++){
+    var ru=mk(recv,'RUSH', los+d*1*YD, mid+(-5+r*2)*YD, DEFENDERS[r%DEFENDERS.length]);
+    ru.pos='DE'; ru.shedAt=1.2+Math.random()*1.3; rushers.push(ru);
+  }
+  gunners.forEach(function(g,gi){ var j=mk(recv,'COV', g.x+d*2*YD, g.y, DEFENDERS[5+gi]); j.pos='CB'; j.cover=g; });
+  var heroRet=(recv==='H') && (HERO.pos==='Running Back'||HERO.pos==='Wide Receiver');
+  var ret=mk(recv,'COV', los+d*42*YD, mid, heroRet?HERO:SUPPORT.RB);
+  if(heroRet) applyHero(ret,HERO);
+  ret.pos='S'; ret.route='hold';                      // he waits deep; at the kick he becomes the returner
+  blockers.sort(function(a,b){return a.y-b.y;}); rushers.sort(function(a,b){return a.y-b.y;});
+  for(var a=0;a<Math.min(blockers.length,rushers.length);a++) blockers[a].assign=rushers[a];
+  for(var q=0;q<G.players.length;q++){ var pq=G.players[q]; pq.face=(pq.team===kickTeam)?d:-d; pq.stance=1; }
+  G.snapC=snapper; G.kickRet=ret; G.kicker=punter;
+  G.ball={x:snapper.x+d*8, y:mid, held:true};
+  G.controlled = (kickTeam==='H') ? gunners[0] : ret;
+  G.phase='kickset';
+  say('PUNT', 1000);
+  kickMeter('punt', kickTeam!=='H', {tol:0.4, req:0, spread:0.2}, function(aim,pow){
+    for(var i=0;i<G.players.length;i++) G.players[i].stance=0;
+    G.phase='live'; G.snapT=G.gt;
+    G.puntK={punter:punter, t:0, at:SNAP_DUR+0.8, aim:aim, pow:pow, blocked:null};
+    burst(snapper.x, mid, '#f1f1ec');
+    say('HIKE!',420);
+  });
+}
+// Runs inside step until the ball is kicked. True means it is away.
+function puntTick(dt){
+  var pk=G.puntK; pk.t+=dt;
+  var pu=pk.punter;
+  G.ball.x=pu.x; G.ball.y=pu.y;
+  if(pk.t>SNAP_DUR && !pk.blocked){                    // a rusher who gets there first can block it
+    for(var i=0;i<G.players.length;i++){
+      var q=G.players[i];
+      if(q.team===G.offense || q.stun>0 || q.down>0) continue;
+      if(Math.hypot(q.x-pu.x,q.y-pu.y) < 1.6*YD && Math.random()<0.3){ pk.blocked=q; q.z=0.5; q.arm=0.5; break; }
+    }
+  }
+  if(pk.blocked){
+    var bq=pk.blocked; G.puntK=null;
+    burst(pu.x,pu.y-10,'#ffffff'); G.shake=REDUCED?0:12;
+    credit(bq,'BLOCKED KICK'); say('PUNT BLOCKED!',1400);
+    G.ball.held=true; G.carrier=pu;
+    fumble(pu, (pu.x-bq.x)*4+(Math.random()-0.5)*60, (pu.y-bq.y)*4+(Math.random()-0.5)*60);
+    return true;
+  }
+  if(pk.t < pk.at) return false;
+  launchPunt();
+  return true;
+}
+function launchPunt(){
+  var pk=G.puntK; G.puntK=null;
+  var kickTeam=G.offense, recv=(kickTeam==='H')?'A':'H';
+  var dk=dir(), mid=FH/2, pu=pk.punter;
+  var tx=pu.x+dk*(36+pk.pow*22)*YD;
+  var ty=Math.max(5*YD, Math.min(FH-5*YD, mid+pk.aim*14*YD));
+  tx=Math.max(4, Math.min(FW-4, tx));
+  pu.arm=0.5; pu.vx=dk*BASE_SPD*0.6;
+  burst(pu.x, pu.y, '#f1f1ec'); dust(pu.x,pu.y,6,0.8);
+  // The kicking team covers in lanes; the receiving team blocks for its man.
+  G.offense=recv;
+  var d=dir(), rGoal=(d>0)?EZ:FW-EZ, ret=G.kickRet;
+  for(var i=0;i<G.players.length;i++){
+    var q=G.players[i]; q.stance=0; q.assign=null; q.cover=null; q.engaged=0;
+    if(q.team===kickTeam){ q.role='COV'; q.pos='KC'; q.route=null; q.lane=Math.max(-3,Math.min(3,Math.round((q.y-mid)/(4*YD))))*14; }
+    else if(q===ret){ q.role='RB'; q.pos=''; q.route='ret'; }
+    else { q.role='WR'; q.pos=''; q.route='lead'; }
+  }
+  var deep=(rGoal-tx)*d;                               // how far into the end zone it comes down
+  G.kickReturn=true; G.ball.held=false; G.carrier=null;
+  G.thrown={x:pu.x, y:pu.y, tx:tx, ty:ty, target:ret, t:0, dur:2.0+pk.pow*0.6, arc:125,
+            lat:true, kickoff:true, punt:true, tb:deep>1*YD, wob:0.06};
+  G.koSpot=G.los; G.los=rGoal+d*YD;
+  if(recv==='H') G.controlled=ret;
+  else {                                               // you are covering: take the man nearest the drop
+    var best=null, bd=1e9;
+    for(var j=0;j<G.players.length;j++){
+      var p=G.players[j]; if(p.team!=='H' || p===pu) continue;
+      var dd=Math.hypot(p.x-tx,p.y-ty); if(dd<bd){ bd=dd; best=p; }
+    }
+    if(best) G.controlled=best;
+  }
+  say('PUNT IS AWAY',800);
 }
 
 // ---- field goals and extra points, live -----------------------------------
@@ -6054,7 +6210,7 @@ function callAudible(id){
   closeAudible();
   if(!G || G.phase!=='presnap') return;
   if(id==='fg'){ startFieldGoal('fg'); return; }
-  if(id==='punt'){ startKick(id); return; }
+  if(id==='punt'){ startPunt(G.offense); return; }
   G.playNo=Math.max(0,(G.playNo|0)-1);        // the same down, a different call
   setupPlay(id);
   G.artUntil=performance.now()+1800;            // show them the new routes
@@ -6076,11 +6232,11 @@ function choose(id){
     return;
   }
   if(id==='fg'){ startFieldGoal('fg'); return; }
-  if(id==='punt'){ startKick(id); return; }
+  if(id==='punt'){ startPunt(G.offense); return; }
   G.aiPlay = (G.offense==='H') ? pickAiDefense() : pickAiOffense();
   // the computer calls its own kicks on fourth down
   if(G.offense==='A' && G.aiPlay==='fg'){ startFieldGoal('fg'); return; }
-  if(G.offense==='A' && G.aiPlay==='punt'){ startKick('punt'); return; }
+  if(G.offense==='A' && G.aiPlay==='punt'){ startPunt('A'); return; }
   setupPlay(id);
 }
 
@@ -6094,8 +6250,10 @@ function tryStartPlay(force){
   var mine = G.hostPick; G.hostPick = null; G.pickAt = 0;
 
   // a kick ends the down on its own, whoever called it
-  if(G.offense==='H' && (mine==='punt'||mine==='fg')){ startKick(mine); return; }
-  if(G.offense==='A' && (theirs==='punt'||theirs==='fg')){ startKick(theirs); return; }
+  if(G.offense==='H' && mine==='punt'){ startPunt('H'); return; }
+  if(G.offense==='A' && theirs==='punt'){ startPunt('A'); return; }
+  if(G.offense==='H' && mine==='fg'){ startKick(mine); return; }
+  if(G.offense==='A' && theirs==='fg'){ startKick(theirs); return; }
   // a kick called by the side without the ball is not a thing
   if(mine==='punt'||mine==='fg') mine='run';
   if(theirs==='punt'||theirs==='fg') theirs='blitz';
@@ -6276,7 +6434,10 @@ if(TOUCH_UI){
     }
     if(G.phase!=='live' || FT.id!==null) return;
     FT.id=t.identifier; FT.x0=t.clientX; FT.y0=t.clientY; FT.t0=performance.now(); FT.done=false;
-    if(canAim()){ FT.mode='aim'; ftAim(t); }
+    // A pass starts on a receiver (or his tab on the edge). A finger put down
+    // anywhere else is not a throw: a slide is a spin, a tap is nothing.
+    if(canAim() && pickOnScreen(t.clientX,t.clientY)){ FT.mode='aim'; ftAim(t); }
+    else if(canAim()) FT.mode='spin';
     else if(!iHaveBall()) FT.mode='tackle';         // swipe tackles, tap punches or switches
     else if(G.thrown){ takeControl(pickMine(t.clientX,t.clientY)); FT.mode=null; }
     else FT.mode='spin';                             // carrying it: swipe to spin
@@ -6290,33 +6451,34 @@ if(TOUCH_UI){
         if(canAim()) ftAim(t); else { FT.mode=null; G.mouse.on=false; }
       } else if(FT.mode==='spin' && !FT.done){
         var jx=t.clientX-FT.x0, jy=t.clientY-FT.y0;
-        if(Math.hypot(jx,jy)>26 && performance.now()-FT.t0<420){
+        if(Math.hypot(jx,jy)>30){
           var ja=screenToWorld(FT.x0,FT.y0), jb=screenToWorld(t.clientX,t.clientY);
           var wx=jb.x-ja.x, wy=jb.y-ja.y, wm=Math.hypot(wx,wy);
           if(wm>0.5) touchSpinDir={x:wx/wm, y:wy/wm};
           FT.done=true;
         }
       } else if(FT.mode==='tackle' && !FT.done){
-        var px=t.clientX-FT.x0, py=t.clientY-FT.y0, el=performance.now()-FT.t0;
-        if(Math.hypot(px,py)>26 && el<420){          // a swipe, not a resting finger
+        var px=t.clientX-FT.x0, py=t.clientY-FT.y0;
+        if(Math.hypot(px,py)>30){                    // a slide, however slow (a resting finger is not one)
           var a=screenToWorld(FT.x0,FT.y0), b=screenToWorld(t.clientX,t.clientY);
           var dx=b.x-a.x, dy=b.y-a.y;
           // Any swipe that is not pointed away from the ball carrier dives at
           // him, led by where he is going. Swiping exactly at a moving man on
           // a small screen is too hard, so a slide means "tackle him".
           var tc=G.carrier, tm=G.controlled;
-          // too far to reach him: a dive would only be a dash across the field
-          if(tc && tm && tc.team!==tm.team && Math.hypot(tc.x-tm.x,tc.y-tm.y)>9*YD){
-            say('TOO FAR',420); FT.done=true; continue;
-          }
           if(tc && tm && tc.team!==tm.team){
             var lx=tc.x+tc.vx*0.25-tm.x, ly=tc.y+tc.vy*0.25-tm.y, lm=Math.hypot(lx,ly)||1;
             var sm=Math.hypot(dx,dy)||1;
-            if(lm<14*YD && (dx*lx+dy*ly)/(sm*lm) > -0.3){ dx=lx; dy=ly; }
+            dx=lx; dy=ly;                              // a slide on defence means: go get him
           }
           if(Math.hypot(dx,dy)>0.5){
             if(NET.on && !NET.host) netSend({t:'dive', x:Math.round(dx*9), y:Math.round(dy*9)});
-            else if(swipeTackle(dx,dy,'H')!==false){ G.touchDive=true; G.diveUntil=performance.now()+640; }   // a touch dive carries further
+            else {
+              var far=tc && tm ? Math.hypot(tc.x-tm.x,tc.y-tm.y) : 0;
+              if(tc && tm && tc.team!==tm.team && far>3.2*YD){
+                G.tchase=performance.now()+1700;           // too far to dive: charge him, dive when close
+              } else if(swipeTackle(dx,dy,'H')!==false){ G.touchDive=true; G.diveUntil=performance.now()+640; }
+            }
           }
           FT.done=true;
         }
@@ -6332,7 +6494,11 @@ if(TOUCH_UI){
         ftAim(t);
         var tg=aimTarget();
         var tx=tg?tg.x:G.mouse.x, ty=tg?tg.y:G.mouse.y;
-        if(NET.on && !NET.host) netSend({t:'thr', x:Math.round(tx), y:Math.round(ty)});
+        var qbx=G.carrier;
+        // your back right beside you: hand it to him instead of throwing it
+        if(tg && (tg.role==='RB'||tg.role==='TE') && Math.hypot(tg.x-qbx.x,tg.y-qbx.y)<HANDOFF_R*1.4 &&
+           !(NET.on && !NET.host) && handoffTarget()===tg && handoff('H')){ /* handed off */ }
+        else if(NET.on && !NET.host) netSend({t:'thr', x:Math.round(tx), y:Math.round(ty)});
         else throwAt(tx,ty,'H');                     // the lock you built is what it is worth
       }
       if(FT.mode==='tackle' && !FT.done && G && G.phase==='live' &&
@@ -6353,7 +6519,8 @@ if(TOUCH_UI){
     lg.insertAdjacentHTML('afterbegin',
       '<button class="ab" id="ab4" type="button"><span class="ring"><svg viewBox="0 0 24 24"></svg><span class="key"></span></span><span class="cap">Special</span></button>'+
       '<button class="ab" id="ab5" type="button"><span class="ring"><svg viewBox="0 0 24 24"></svg><span class="key"></span></span><span class="cap">Pitch</span></button>');
-    document.getElementById('ab4').addEventListener('touchstart',function(ev){ ev.preventDefault(); ev.stopPropagation(); touchMove=true; },{passive:false});
+    document.getElementById('ab4').addEventListener('touchstart',function(ev){ ev.preventDefault(); ev.stopPropagation();
+      if(G && G.phase!=='live'){ hint('MOVES WORK AFTER THE SNAP'); return; } touchMove=true; },{passive:false});
     document.getElementById('ab5').addEventListener('touchstart',function(ev){ ev.preventDefault(); ev.stopPropagation(); touchQ=true; },{passive:false});
   }
   if(!document.getElementById('preBar')){
@@ -6374,7 +6541,11 @@ if(TOUCH_UI){
 ].forEach(function(pair){
   var e=document.getElementById('ab'+pair[0]);
   if(!e) return;
-  if(TOUCH_UI) e.addEventListener('touchstart',function(ev){ ev.preventDefault(); ev.stopPropagation(); pair[1](); },{passive:false});
+  if(TOUCH_UI) e.addEventListener('touchstart',function(ev){
+    ev.preventDefault(); ev.stopPropagation();
+    if(G && G.phase!=='live'){ hint('MOVES WORK AFTER THE SNAP'); return; }
+    pair[1]();
+  },{passive:false});
   else e.addEventListener('click',function(ev){ ev.preventDefault(); pair[1](); });
 });
 
