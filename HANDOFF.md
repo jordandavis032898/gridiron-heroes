@@ -216,6 +216,33 @@ moves stay quiet on purpose. J = juke/dive, K = special/big hit. Keyboard
 movement eases in over ~0.1s. Picks, fumbles and touchdowns set
 `G.broadcast`, which zooms the camera onto the playmaker while his card is up.
 
+**Game start.** Star intro (Space or the Skip button), then `startCoinToss`
+(1/2 or click; the winner receives), then `startKickoff`.
+
+**The kicking game.** One meter for every kick (`kickMeter`, `KM`): an aim
+needle then a power bar, Space/Enter/click to lock each; the CPU runs it on
+its own (aim spread grows with distance). Kickoffs are live plays: cover team
+from its 35 in lanes, returner deep with lead blockers, the ball is a
+`G.thrown` with `kickoff:true`; `G.los` is moved to the receiving goal after
+the kick so pursuit runs at full speed (it was jogging and every return
+scored). Deep in the end zone is a touchback. `startFieldGoal` (fg and pat)
+snaps a real unit against six rushers; `fgKickTick` gives the operation
+1.05s and a rusher at the hold can block it (rare). `launchFieldGoal` turns
+aim/power into good, wide or short; `afterKick` kicks off after a try or a
+made field goal. Goalposts (`drawGoalposts`, `goalX`) stand on both end
+lines; good kicks are still rising at the posts (`hf`). Delayed steps check
+they still belong to the same game (`g0`).
+
+**Playbook, play art, audibles.** Play cards draw each play from the same
+route shapes the players run (`pdRoute`, `drawPlayDiagram`). Before the snap,
+hold C or the right mouse button for play art on the turf (`drawPlayArt`),
+X for the audible bar (`callAudible` re-runs `setupPlay` on the same down).
+
+**Tips and swats.** A contested ball the defender wins can pop up
+(`tipBall`) and belongs to whoever gets under it (`resolveTip`). K on
+defence with the ball in the air swats (`swatAt`). Drag tackles lock onto
+the carrier when the drag points roughly at him.
+
 **Knockdowns.** `knockPose` turns `down`/`stun` time into a posed timeline on
 the rig: fall back, lie flat, sit up, one knee, stand. Game logic freezes a
 man until both reach zero, so the get-up finishes exactly as he can move.

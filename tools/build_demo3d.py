@@ -37,7 +37,7 @@ window.addEventListener('keydown',function(e){
 });
 var W3=null, MAIN3=null;
 function makeW3(){
-  var M=300, MT=640, MB=220;
+  var M=700, MT=640, MB=220;        // wide margins: the stadium carries on past both end zones
   var c=document.createElement('canvas');
   c.width=FW+2*M; c.height=MT+FH+MB;
   var base=document.createElement('canvas'); base.width=c.width; base.height=c.height;
@@ -332,6 +332,7 @@ function camMood(now){
   if(CAM3.actUntil>now) return 1.55;
   if(G && G.phase==='heroIntro') return 1.9;        // close on the star as he walks out
   if(G && G.broadcast && G.broadcast.until>now) return 1.85;   // in on the man who made the play
+  if(G && playArtOn()) return 0.7;                   // pull back to read the play
   if(!G || G.phase!=='live') return 0.86;
   if(G.thrown) return 0.92;
   var c=G.carrier;
@@ -389,6 +390,7 @@ subs.append(('''  ctx.setTransform(dpr,0,0,dpr,0,0);
   var P3 = VIEW3D ? setupProj(sx,sy) : null, realCtx3=ctx;
   if(P3){
     if(!W3) W3=makeW3();
+    G._p3=true;
     ctx=W3.g; ctx.setTransform(1,0,0,1,0,0);
     // Only the lines and the aim marker change on the ground. Repainting the
     // whole field and stands every frame was millions of pixels a frame, which
@@ -405,6 +407,7 @@ subs.append(('''  ctx.setTransform(dpr,0,0,dpr,0,0);
     SKIP_FIELD=true;
     ctx.save(); ctx.translate(W3.M, W3.MT);
   } else {
+    G._p3=false;
     ctx.save();
     ctx.translate(VW/2+sx,VH/2+sy); ctx.scale(scale,scale); ctx.translate(-cam.x,-cam.y);
   }
@@ -413,7 +416,7 @@ subs.append(('''  ctx.setTransform(dpr,0,0,dpr,0,0);
 subs.append(('''  // depth sort so players nearer the bottom overlap the ones behind them
   var order=G.players.slice().sort(function(a,b){ return a.y-b.y; });
   for(var i=0;i<order.length;i++) drawGuy(order[i]);
-''', '''  if(P3){ ctx.restore(); ctx=realCtx3; SKIP_FIELD=false; blit3D(P3); ctx.save(); }
+''', '''  if(P3){ ctx.restore(); ctx=realCtx3; SKIP_FIELD=false; blit3D(P3); drawGoalposts(); ctx.save(); }
 
   // depth sort so players nearer the bottom overlap the ones behind them
   var order=G.players.concat(P3?sidelineGuys(P3):[]).sort(function(a,b){ return a.y-b.y; });
