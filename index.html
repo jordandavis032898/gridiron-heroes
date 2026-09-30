@@ -341,7 +341,81 @@
   html.touchui .pc .card canvas.pd{margin:4px 0 0;}
   html.touchui .sheet .card .t{font-size:13px;}
   html.touchui #seeStats, html.touchui #toSheet{padding:6px 8px;}
+  html.touchui #stage:has(.overlay.show) #preBar{visibility:hidden;}
+
+  /* ---- boot: black, the studio credit, then the title and the menus ---- */
+  #splash{position:fixed; inset:0; z-index:80; background:#000; display:flex; flex-direction:column;
+    align-items:center; justify-content:center; gap:8px; transition:opacity .8s ease; text-align:center; padding:0 16px;}
+  #splash.out{opacity:0; pointer-events:none;}
+  #splash .by{font-family:'Barlow Condensed',sans-serif; font-weight:600; font-size:13px; letter-spacing:.55em;
+    color:#8fa3b0; opacity:0; padding-left:.55em;}
+  #splash .vcg{font-family:'Anton',Impact,sans-serif; font-size:clamp(22px,5.2vw,46px); letter-spacing:.14em;
+    color:#f1f1ec; opacity:0; padding-left:.14em;}
+  #splash .bar{width:64px; height:2px; background:#ffd23f; opacity:0; margin-top:4px;}
+  #splash.play .by{animation:spIn 2.7s .35s ease both;}
+  #splash.play .vcg{animation:spIn 2.7s .6s ease both;}
+  #splash.play .bar{animation:spBar 2.7s .75s ease both;}
+  @keyframes spIn{0%{opacity:0; transform:translateY(8px);} 22%{opacity:1; transform:none;} 80%{opacity:1;} 100%{opacity:0;}}
+  @keyframes spBar{0%{opacity:0; transform:scaleX(0);} 25%{opacity:1; transform:scaleX(1);} 80%{opacity:1;} 100%{opacity:0;}}
+
+  #front{position:fixed; inset:0; z-index:60; display:none; background:#04060b; overflow:hidden;}
+  #front.show{display:block;}
+  #frontCv{position:absolute; inset:0; width:100%; height:100%; display:block;}
+  #fTop{position:absolute; left:0; right:0; top:calc(3% + env(safe-area-inset-top,0px)); text-align:center; pointer-events:none;}
+  #fLogo{display:inline-block; font-family:'Anton',Impact,sans-serif; font-size:clamp(44px,10.5vw,124px); line-height:1;
+    letter-spacing:.035em; white-space:nowrap; padding:0 .1em;
+    background:linear-gradient(180deg,#fff7cf 0%,#ffd23f 42%,#e08a0c 100%); -webkit-background-clip:text; background-clip:text;
+    color:transparent; -webkit-text-stroke:1.5px #4a2a00;
+    filter:drop-shadow(0 3px 0 #3a2000) drop-shadow(0 10px 22px rgba(0,0,0,.75)); transform:skewX(-7deg);}
+  #fTag{font-family:'Barlow Condensed',sans-serif; font-weight:700; font-size:13px; letter-spacing:.32em; color:#c9d6de;
+    text-transform:uppercase; text-shadow:0 2px 6px #000; margin-top:2px;}
+  #front.on #fLogo{animation:logoIn .75s .2s cubic-bezier(.2,1.5,.45,1) both;}
+  #front.on #fTag{animation:fadeUp .5s .8s ease both;}
+  @keyframes logoIn{0%{opacity:0; transform:skewX(-7deg) scale(1.9);} 100%{opacity:1; transform:skewX(-7deg) scale(1);}}
+  @keyframes fadeUp{0%{opacity:0; transform:translateY(10px);} 100%{opacity:1; transform:none;}}
+  #fMenu{position:absolute; left:0; right:0; bottom:calc(5% + env(safe-area-inset-bottom,0px));
+    display:flex; flex-direction:column; align-items:center; gap:8px; padding:0 16px;}
+  #fMenu.in .fb, #fMenu.in .fhead{animation:fadeUp .32s ease both;}
+  #fMenu.in .fb:nth-child(2){animation-delay:.05s;} #fMenu.in .fb:nth-child(3){animation-delay:.1s;}
+  #fMenu.in .fb:nth-child(4){animation-delay:.15s;}
+  #fMenu.first .fb, #fMenu.first .fhead{animation-delay:1.05s !important;}
+  .fhead{display:flex; align-items:center; gap:12px; font-family:'JetBrains Mono',monospace; font-size:11px;
+    letter-spacing:.16em; color:#ffd23f; text-shadow:0 1px 4px #000;}
+  .fback{font-family:'Anton',sans-serif; font-size:13px; letter-spacing:.08em; color:#fff; cursor:pointer;
+    background:rgba(8,12,18,.7); border:1px solid rgba(255,255,255,.25); border-radius:16px; padding:5px 12px;}
+  .fback:hover,.fback:focus-visible{border-color:#ffd23f; color:#ffd23f; outline:none;}
+  .frow{display:flex; gap:10px; justify-content:center; align-items:stretch; flex-wrap:wrap; max-width:980px;}
+  .fb{min-width:220px; background:rgba(8,12,18,.8); border:1px solid rgba(255,255,255,.2); border-radius:6px;
+    padding:12px 20px; color:#f1f1ec; font-family:inherit; text-align:left; cursor:pointer;
+    display:flex; flex-direction:column; gap:2px; box-shadow:0 10px 30px rgba(0,0,0,.55);
+    transition:transform .12s, border-color .12s, background .12s;}
+  .fb:hover,.fb:focus-visible{border-color:#ffd23f; background:rgba(28,37,50,.94); transform:translateY(-2px); outline:none;}
+  .fb .k{font-family:'JetBrains Mono',monospace; font-size:10px; letter-spacing:.14em; color:#ffd23f; white-space:nowrap;}
+  .fb .t{font-family:'Anton',sans-serif; font-size:25px; letter-spacing:.03em; text-transform:uppercase; line-height:1.1;}
+  .fb .d{font-size:13.5px; color:#aebdc7; letter-spacing:.02em;}
+  .fb.team{min-width:0; width:205px; flex-direction:row; align-items:center; gap:10px; padding:10px 12px;
+    border-top:4px solid var(--tc);}
+  .fb.team .k{color:var(--tc);}
+  .fb.team canvas{width:52px; height:62px; flex:0 0 auto;}
+  .fb.team .tx{display:flex; flex-direction:column; gap:2px; min-width:0;}
+  .fb.team .t{font-size:19px;}
+  .fb.team .d{font-size:12px; line-height:1.3;}
+  #fCredit{position:absolute; right:calc(12px + env(safe-area-inset-right,0px)); bottom:calc(6px + env(safe-area-inset-bottom,0px));
+    font-family:'Barlow Condensed',sans-serif; font-weight:600; font-size:10px; letter-spacing:.2em;
+    text-transform:uppercase; color:rgba(255,255,255,.34); pointer-events:none;}
+  html.touchui #fLogo{font-size:clamp(40px,9vw,90px);}
+  html.touchui .fb{min-width:170px; padding:8px 14px;}
+  html.touchui .fb .t{font-size:19px;}
+  html.touchui .fb .d{font-size:11.5px;}
+  html.touchui .fb.team{min-width:0; width:160px; padding:6px 8px; gap:6px;}
+  html.touchui .frow.teams, html.touchui .frow{gap:8px;}
+  html.touchui .fb.team canvas{width:38px; height:46px;}
+  html.touchui .fb.team .t{font-size:15px;}
+  html.touchui .fb.team .d{display:none;}
+  @media (max-height:430px){ #fTag{display:none;} #fMenu{gap:5px; bottom:calc(24px + env(safe-area-inset-bottom,0px));} }
 </style>
+
+<div id="splash"><div class="by">A GAME BY</div><div class="vcg">VULCAN CONSULTING GROUP</div><div class="bar"></div></div>
 
 <div id="wrap">
   <div id="board">
@@ -396,6 +470,33 @@ var KITS={
   A:{helmet:'#f1f1ec', mask:'#14161a', jersey:'#b8232f', sleeve:'#b8232f',
      pants:'#e8e8e2', sock:'#14161a', num:'#f1f1ec', stripe:'#8c1a24', glove:'#191b1f'}
 };
+
+// The teams you can play in single player, easiest first. Each kit recolours
+// the navy in the away art: lo at its darkest, hi at full light, g how fast it
+// climbs from one to the other. The numbers set how the computer plays:
+// spd  how fast their men run
+// shed how long your line holds their rush (higher is easier on you)
+// abil how often they use their moves
+// miss how wild their quarterback throws (higher is wilder)
+// Multiplayer keeps the plain Rivals.
+var RIVALS={id:'rivals', name:'Rivals', short:'RIVALS', tier:'', lvl:0, hex:'#e0384e', lite:'#ff8a94',
+  kit:{lo:[40,18,24], hi:[255,58,70], g:1}, stripe:'#8c1a24', patch:'#a8232f',
+  spd:1, shed:1, abil:1, miss:1};
+var TEAMS=[
+  {id:'goblins', name:'Bog Goblins', short:'GOBLINS', tier:'ROOKIE', lvl:1, hex:'#ff9a2e', lite:'#ffc27a',
+   kit:{lo:[70,32,6], hi:[255,160,48], g:2.2}, stripe:'#8a4a0c', patch:'#b8661a',
+   spd:0.84, shed:1.45, abil:0.35, miss:1.4, blurb:'Slow off the ball and easy to block. Learn the game here.'},
+  {id:'golems', name:'Stone Golems', short:'GOLEMS', tier:'PRO', lvl:2, hex:'#b9c0cc', lite:'#dfe4ec',
+   kit:{lo:[38,40,46], hi:[215,220,230], g:2}, stripe:'#4a4f58', patch:'#6b717c',
+   spd:0.93, shed:1.18, abil:0.65, miss:1.15, blurb:'Big and steady, a step slow. A fair fight.'},
+  {id:'harpies', name:'Storm Harpies', short:'HARPIES', tier:'ALL-PRO', lvl:3, hex:'#b06bff', lite:'#d3aaff',
+   kit:{lo:[30,12,52], hi:[196,120,255], g:2}, stripe:'#4a1f7a', patch:'#6d34a8',
+   spd:1.0, shed:1.0, abil:1.0, miss:1.0, blurb:'Quick, and they use their moves. Bring your best.'},
+  {id:'hydras', name:'Crimson Hydras', short:'HYDRAS', tier:'LEGEND', lvl:4, hex:'#e0384e', lite:'#ff8a94',
+   kit:{lo:[40,18,24], hi:[255,58,70], g:1}, stripe:'#8c1a24', patch:'#a8232f',
+   spd:1.07, shed:0.8, abil:1.45, miss:0.75, blurb:'Faster than you, with every move on every down.'}
+];
+var FOE=RIVALS;
 var BASE_SPD=118, SPRINT=1.34, DEF_SPD=123;
 // Everything ran at real time and plays were over before you could read them.
 // One dial slows the whole simulation together: movement, animation, the
@@ -911,13 +1012,13 @@ function blit3D(P){
     ctx.textAlign='center'; ctx.textBaseline='middle';
     ctx.font='700 '+Math.max(6,22*sbs)+'px "Anton", sans-serif';
     ctx.fillStyle='#ffd23f'; ctx.fillText('HEROES', sbx+sbw*0.25, sby+sbh*0.28);
-    ctx.fillStyle='#ff8a94'; ctx.fillText('RIVALS', sbx+sbw*0.75, sby+sbh*0.28);
+    ctx.fillStyle=FOE.lite; ctx.fillText(FOE.short, sbx+sbw*0.75, sby+sbh*0.28);
     ctx.font='700 '+Math.max(8,40*sbs)+'px "Anton", sans-serif'; ctx.fillStyle='#f1f1ec';
     ctx.fillText(String(G.scoreH||0), sbx+sbw*0.25, sby+sbh*0.66);
     ctx.fillText(String(G.scoreA||0), sbx+sbw*0.75, sby+sbh*0.66);
     var clk=Math.max(0,Math.ceil(G.clock||0)), mm=Math.floor(clk/60), ss=clk%60;
-    ctx.font='700 '+Math.max(6,18*sbs)+'px "JetBrains Mono", monospace'; ctx.fillStyle='#ffd23f';
-    ctx.fillText(mm+':'+(ss<10?'0':'')+ss, sbx+sbw*0.5, sby+sbh*0.5);
+    ctx.font='700 '+Math.max(6,(G.training?11:18)*sbs)+'px "JetBrains Mono", monospace'; ctx.fillStyle='#ffd23f';
+    ctx.fillText(G.training ? 'PRACTICE' : mm+':'+(ss<10?'0':'')+ss, sbx+sbw*0.5, sby+sbh*0.5);
     ctx.textAlign='left';
   }
   ctx.restore();
@@ -1143,7 +1244,7 @@ function setupPlay(playId){
   }
   // how long each rusher needs to work free of his man
   for(var rk=0;rk<rushers.length;rk++){
-    rushers[rk].shedAt = 2.30 + Math.random()*1.40;
+    rushers[rk].shedAt = (2.30 + Math.random()*1.40) * (rushers[rk].team==='A' && !NET.on ? FOE.shed : 1);
     rushers[rk].engaged = 0;
     rushers[rk].shed = false;
   }
@@ -1385,6 +1486,7 @@ function releaseThrow(best){
     var reach = Math.hypot(tx-G.ball.x, ty-G.ball.y);  // how far it has to go
     var lock = (best===G.lockMan) ? Math.min(1, G.lockT/1.05) : 0;
     var miss = (1-lock)*(1-lock);                      // falls away quickly
+    if(side==='A' && !NET.on) miss*=FOE.miss;          // how wild their passer is depends on the team
     if(miss>0.01){
       var spread = (3.0 + Math.min(3.4, reach/(14*YD))) * YD * miss;
       var ma=Math.random()*Math.PI*2, mr=Math.sqrt(Math.random())*spread;
@@ -2534,6 +2636,7 @@ function runLane(p,d){
 
 function aim(p,tx,ty,spd){
   if(!isFinite(tx)||!isFinite(ty)||!isFinite(spd)) return;   // refuse nowhere
+  if(p.team==='A' && !NET.on) spd*=FOE.spd;                   // the team you picked sets their pace
   var dx=tx-p.x,dy=ty-p.y,m=Math.hypot(dx,dy)||1;
   p.vx=dx/m*spd; p.vy=dy/m*spd;
 }
@@ -2602,7 +2705,7 @@ function cpuAbilities(dt,now){
 
     if(!want) continue;
     if(!abReady(q,want)) continue;
-    if(Math.random() > (AI_ODDS[want]||0.02)) continue;
+    if(Math.random() > (AI_ODDS[want]||0.02) * (q.team==='A' && !NET.on ? FOE.abil : 1)) continue;
 
     fireAbility({man:q, local:false}, null, kit.indexOf(want));
     q.aiCd = 1.4 + Math.random()*1.3;
@@ -2920,9 +3023,10 @@ function confetti(x,y){
 
 // ---- pre-snap: everyone set, play clock running, waiting on the hike -----
 function presnap(dt){
+  if(G.paused) return;                              // the menu is up
   G.playClock-=dt;
   if(G.clockRunning){
-    G.clock-=dt;
+    if(!G.training) G.clock-=dt;
     if(G.clock<=0){ G.clock=0; gameOver(); return; }
   }
   for(var i=0;i<G.players.length;i++){
@@ -3156,7 +3260,7 @@ function step(dt){
   var d=dir(), now=performance.now(), since=G.gt-G.snapT;
   if(G.fgKick && fgKickTick(dt)) return;
   if(G.puntK && puntTick(dt)) return;
-  G.clock-=dt;
+  if(!G.training) G.clock-=dt;
   if(G.clock<=0){ G.clock=0; gameOver(); return; }
   if(G.handoffAt!=null && since>G.handoffAt && G.carrier && G.carrier.role==='QB'){
     if(handoff(G.offense,true)) G.handoffAt=null;
@@ -3830,7 +3934,7 @@ function step(dt){
     if((dir()>0&&G.carrier.x>=goal)||(dir()<0&&G.carrier.x<=goal)){ score(); return; }
   }
 
-  G.clock-=dt;
+  if(!G.training) G.clock-=dt;
   if(G.clock<=0){ G.clock=0; gameOver(); }
 }
 
@@ -4357,7 +4461,7 @@ var PART_FILES = {
   helmetAlt:'parts/football-helmet-alt.png',       // second lid, for variety
   farmHand:'parts/football-forearm-hand.png'       // open glove, for the reach
 };
-var SPR = { ready:false, H:{}, A:{}, pending:0 };
+var SPR = { ready:false, H:{}, A:{}, raw:{}, T:{}, pending:0 };   // raw: the art as drawn; T: each team's tinted set
 
 // The ball. Lace-free on purpose: a spiral is rotation about the long axis,
 // so the laces sweep across the face rather than orbiting with the sprite,
@@ -4366,8 +4470,9 @@ var BALL_IMG = new Image(); BALL_IMG.ready=false;
 BALL_IMG.onload = function(){ BALL_IMG.ready=true; };
 BALL_IMG.src = 'parts/football-body.png';
 
-// recolour the navy kit to crimson for the away side, leaving skin and white alone
-function tintAway(img){
+// recolour the navy kit to the away team's colours, leaving skin and white alone
+function tintAway(img, kit){
+  var K=kit||FOE.kit;
   var c=document.createElement('canvas'); c.width=img.width; c.height=img.height;
   var x=c.getContext('2d'); x.drawImage(img,0,0);
   try{
@@ -4377,10 +4482,10 @@ function tintAway(img){
       var r=a[i],g=a[i+1],b=a[i+2];
       // navy = blue clearly dominant and not too bright
       if(b>r+24 && b>g+14 && b<210){
-        var lum=(r*0.3+g*0.59+b*0.11)/255;
-        a[i]=Math.min(255, 40+lum*215);
-        a[i+1]=Math.round(18+lum*40);
-        a[i+2]=Math.round(24+lum*46);
+        var lum=(r*0.3+g*0.59+b*0.11)/255, tk=Math.min(1,lum*K.g);
+        a[i]=Math.round(K.lo[0]+(K.hi[0]-K.lo[0])*tk);
+        a[i+1]=Math.round(K.lo[1]+(K.hi[1]-K.lo[1])*tk);
+        a[i+2]=Math.round(K.lo[2]+(K.hi[2]-K.lo[2])*tk);
       }
     }
     x.putImageData(d,0,0);
@@ -4413,7 +4518,7 @@ function drawPart(img,x,y,w,h){
   keys.forEach(function(k){
     var im=new Image();
     im.onload=function(){
-      SPR.H[k]=outlinePart(im); SPR.A[k]=outlinePart(tintAway(im));
+      SPR.raw[k]=im; SPR.H[k]=outlinePart(im); SPR.A[k]=outlinePart(tintAway(im));
       if(--SPR.pending===0) SPR.ready=true;
     };
     im.onerror=function(){ SPR.pending--; };   // stay on the vector fallback
@@ -4455,7 +4560,7 @@ function drawSprite(p){
   var S = p.team==='H' ? SPR.H : SPR.A;
   var TORSO  = (p.role==='OL'||p.role==='C'||p.role==='BL') && S.torsoOL ? S.torsoOL : S.torso;
   var PANTS  = p.team==='H' ? '#f1f1ec' : '#e8e8e2';
-  var STRIPE = p.team==='H' ? '#1f2d54' : '#8c1a24';
+  var STRIPE = p.team==='H' ? '#1f2d54' : FOE.stripe;
   var HELMET = (S.helmetAlt && (p.num%2===1)) ? S.helmetAlt : S.helmet;
   // Torso carries the figure; the helmet must read smaller than the shoulders.
   var HIP=-16, SHO=-28.5;
@@ -4561,7 +4666,7 @@ function drawSprite(p){
   drawPart(TORSO, TORSO===S.torso?-5.4:-6.3, SHO-3.5, TORSO===S.torso?10.8:12.6, 15);
 
   // the art has a 12 painted on it, so patch it out and stamp the real number
-  ctx.fillStyle = p.team==='H' ? '#223058' : '#a8232f';
+  ctx.fillStyle = p.team==='H' ? '#223058' : FOE.patch;
   roundRect(-0.2, SHO+3.2, 3.6, 5.6, 0.9); ctx.fill();
   ctx.save(); ctx.scale(p.face,1);
   ctx.fillStyle = p.team==='H' ? '#c8a63c' : '#f1f1ec';
@@ -5096,7 +5201,7 @@ function iHaveBall(){ return G.offense === mySide(); }
 function hud(){
   elH.textContent=G.scoreH; elA.textContent=G.scoreA;
   var mm=Math.floor(G.clock/60), ss=Math.floor(G.clock%60);
-  elClock.textContent=mm+':'+(ss<10?'0':'')+ss;
+  elClock.textContent=G.training ? 'PRACTICE' : mm+':'+(ss<10?'0':'')+ss;
   var ord=['','1st','2nd','3rd','4th'][Math.min(4,G.down)];
   elDD.textContent=ord+' & '+Math.max(1,Math.round(G.toGo))+'  ·  ball on '+yardLineLabel(G.los);
   if(G.phase==='presnap'){
@@ -5104,7 +5209,7 @@ function hud(){
       '  ·  HIKE :'+(G.playClock<10?'0':'')+Math.max(0,Math.ceil(G.playClock));
     elPoss.style.color=G.clockRunning?'#e0384e':'#4fd18b';
   } else {
-    elPoss.textContent=iHaveBall()?'Your ball':(mySide()==='H'?'Rivals ball — you’re on D':'Heroes ball — you’re on D');
+    elPoss.textContent=iHaveBall()?'Your ball':(mySide()==='H'?FOE.name+' ball — you’re on D':'Heroes ball — you’re on D');
     elPoss.style.color=iHaveBall()?'#ffd23f':'#e0384e';
   }
   var dbg=document.getElementById('dbg');
@@ -5509,11 +5614,11 @@ function statRow(label,h,a,hi){
 function showStats(){
   var H=G.stats.H, A=G.stats.A, L=G.stats.log;
   var html='<h2>Box score</h2>'+
-    '<p class="sub">Heroes '+G.scoreH+' &middot; Rivals '+G.scoreA+'</p>'+
+    '<p class="sub">Heroes '+G.scoreH+' &middot; '+FOE.name+' '+G.scoreA+'</p>'+
     '<div style="display:flex;padding:2px 0 5px;font-size:11px;letter-spacing:.12em;font-weight:700">'+
       '<div style="flex:1"></div>'+
       '<div style="width:104px;text-align:right;white-space:nowrap;color:#ffd23f">HEROES</div>'+
-      '<div style="width:104px;text-align:right;white-space:nowrap;color:#e0384e">RIVALS</div></div>'+
+      '<div style="width:104px;text-align:right;white-space:nowrap;color:'+FOE.hex+'">'+FOE.short+'</div></div>'+
     statRow('Plays', H.plays, A.plays)+
     statRow('Total yards', H.yards, A.yards, true)+
     statRow('First downs', H.fd, A.fd)+
@@ -5555,34 +5660,17 @@ function showStats(){
 // computer, or into opening a room.
 var PICK_THEN='solo';
 
+// The start screen is the title: Single player or Multiplayer (see front end).
 function showStart(){
   NET.sentPick=false;
-  elSheet.innerHTML =
-    '<h2>Hail Mythery</h2>'+
-    '<p class="sub">Four downs, a three minute clock, signature moves</p>'+
-    '<div class="grid2">'+
-      '<button class="card" id="modeOne" type="button">'+
-        '<div class="k">1 PLAYER</div><div class="t">Single player</div>'+
-        '<div class="d">Pick a hero and play the computer. You call the plays on both sides of the ball.</div>'+
-      '</button>'+
-      '<button class="card" id="modeTwo" type="button">'+
-        '<div class="k">2 PLAYERS</div><div class="t">Multiplayer</div>'+
-        '<div class="d">One of you hosts and reads out a four letter code, the other types it in. You each call your own plays.</div>'+
-      '</button>'+
-    '</div>';
-  elOv.classList.add('show');
-  document.getElementById('modeOne').addEventListener('click',function(){
-    PICK_THEN='solo'; showHeroPick();
-  });
-  document.getElementById('modeTwo').addEventListener('click',showOnline);
-  document.getElementById('modeOne').focus();
+  showFront('main');
 }
 
 function showHeroPick(){
   var html='<h2>Pick your hero</h2><p class="sub">'+
     (PICK_THEN==='host'?'You are the Heroes. This is your signature move'
      :PICK_THEN==='guest'?'You are the Rivals. This is your signature move'
-                       :'Every one has a different signature move')+
+                       :(MODE.training?'Training':'Live match')+' vs the '+FOE.name+' \u00b7 every hero has a signature move')+
     '</p><div class="grid3">';
   HEROES.forEach(function(h){
     html+='<button class="card" type="button" data-id="'+h.id+'">'+
@@ -5598,12 +5686,14 @@ function showHeroPick(){
   html += '<div style="margin-top:10px">'+
     '<button class="card" id="pickBack" type="button" style="width:100%">'+
       '<div class="k">BACK</div>'+
-      '<div class="t">'+(PICK_THEN==='host'?'Do not host after all':'Back to the menu')+'</div>'+
+      '<div class="t">'+(PICK_THEN==='host'?'Do not host after all':PICK_THEN==='solo'?'Pick another team':'Back to the menu')+'</div>'+
     '</button></div>';
   elSheet.innerHTML=html; elOv.classList.add('show');
   document.getElementById('pickBack').addEventListener('click',function(){
+    var solo=(PICK_THEN==='solo');
     NET.choosing=false; PICK_THEN='solo';
-    netTeardown(); showStart();
+    netTeardown();
+    if(solo) showFront('team'); else showStart();   // one step back: the team you play
   });
   Array.prototype.forEach.call(elSheet.querySelectorAll('.card:not(#pickBack)'),function(b){
     b.addEventListener('click',function(){
@@ -5889,7 +5979,7 @@ function callCoin(call){
   el.querySelector('.cb').style.visibility='hidden';
   setTimeout(function(){
     el.querySelector('.face').textContent=(res==='H'?'HM':'\u2605');
-    el.querySelector('.cr').textContent=(res==='H'?'HEADS':'TAILS')+'  \u00b7  '+(won?'YOU WIN. YOU RECEIVE.':'RIVALS WIN. THEY RECEIVE.');
+    el.querySelector('.cr').textContent=(res==='H'?'HEADS':'TAILS')+'  \u00b7  '+(won?'YOU WIN. YOU RECEIVE.':FOE.short+' WIN. THEY RECEIVE.');
   }, 1400);
   var g0=G;
   setTimeout(function(){
@@ -6389,16 +6479,19 @@ function waitTick(){
 }
 function showOver(){
   var w=G.scoreH>G.scoreA?(HERO.name.split(' ')[1].toUpperCase()+' WINS'):
-        G.scoreH<G.scoreA?'RIVALS WIN':'TIE GAME';
-  elSheet.innerHTML='<h2>'+w+'</h2><p class="sub">Final · Heroes '+G.scoreH+', Rivals '+G.scoreA+'</p>'+
+        G.scoreH<G.scoreA?(FOE.short+' WIN'):'TIE GAME';
+  elSheet.innerHTML='<h2>'+w+'</h2><p class="sub">Final · Heroes '+G.scoreH+', '+FOE.name+' '+G.scoreA+'</p>'+
     '<div class="grid2">'+
     '<button class="card" id="again" type="button"><div class="k">ENTER</div>'+
     '<div class="t">RUN IT BACK</div><div class="d">Same hero, fresh clock.</div></button>'+
     '<button class="card" id="swap" type="button"><div class="k">H</div>'+
     '<div class="t">NEW HERO</div><div class="d">Pick somebody else.</div></button>'+
     '<button class="card" id="overStats" type="button"><div class="k">STATS</div>'+
-    '<div class="t">BOX SCORE</div><div class="d">How the game was actually won.</div></button></div>';
+    '<div class="t">BOX SCORE</div><div class="d">How the game was actually won.</div></button>'+
+    '<button class="card" id="toMenu" type="button"><div class="k">MENU</div>'+
+    '<div class="t">MAIN MENU</div><div class="d">A new mode or a new team.</div></button></div>';
   elOv.classList.add('show');
+  document.getElementById('toMenu').addEventListener('click',quitToMenu);
   var os=document.getElementById('overStats');
   if(os) os.addEventListener('click',function(){ G.showingStats=true; showStats(); });
   document.getElementById('again').addEventListener('click',start);
@@ -6407,7 +6500,9 @@ function showOver(){
 }
 function start(){
   var keepH=G?G.scoreH:0;
-  G=freshGame(); elOv.classList.remove('show'); hud();
+  hideFront();
+  pressed=Object.create(null);                      // the Enter that picked him must not skip his entrance
+  G=freshGame(); G.training=MODE.training; elOv.classList.remove('show'); hud();
   heroIntro();
 }
 // The star player walks out before the first snap: the stadium dims, a
@@ -6468,6 +6563,7 @@ window.addEventListener('keydown',function(e){
   }
   if(G.phase==='presnap' && !NET.on){
     var akk=e.key.toLowerCase();
+    if(akk==='escape' && !G.audibleOpen && !G.paused){ askQuit(); return; }
     if(akk==='o'){ pressed['o']=false; callTimeout(); }
     if(akk==='x'){ pressed['x']=false; if(G.audibleOpen) closeAudible(); else openAudible(); }
     else if(G.audibleOpen){
@@ -6658,11 +6754,13 @@ if(TOUCH_UI){
   if(!document.getElementById('preBar')){
     stage.insertAdjacentHTML('beforeend',
       '<div id="preBar"><button type="button" id="pbArt">PLAY ART</button>'+
-      '<button type="button" id="pbAud">AUDIBLE</button><button type="button" id="pbTO">TIMEOUT</button></div>');
+      '<button type="button" id="pbAud">AUDIBLE</button><button type="button" id="pbTO">TIMEOUT</button>'+
+      '<button type="button" id="pbMenu">MENU</button></div>');
     var pb=function(id,fn){ document.getElementById(id).addEventListener('touchstart',function(ev){ ev.preventDefault(); ev.stopPropagation(); fn(); },{passive:false}); };
     pb('pbArt',function(){ if(!G) return; G.artUntil = playArtOn() ? 0 : performance.now()+4000; });
     pb('pbAud',function(){ if(!G) return; if(G.audibleOpen) closeAudible(); else openAudible(); });
     pb('pbTO', function(){ callTimeout(); });
+    pb('pbMenu', function(){ askQuit(); });
   }
 }
 
@@ -7077,13 +7175,334 @@ window.GH = {
   dive:function(dx,dy){ return swipeTackle(dx||60,dy||0,'H'); }
 };
 
+// ================================================================ front end
+// The game opens like a console game: a black screen with the studio credit,
+// then the title over a play in motion, then the menus. Single player goes on
+// to Training or a Live Match, then the team you want to play (by
+// difficulty), then your hero.
+var MODE={training:false};
+var FRONT={built:false, on:false, raf:0, t0:0, menu:'main', crowd:null, first:true};
+
+// a team's tinted body parts, made the first time they are needed and kept
+function teamParts(t){
+  var keys=Object.keys(SPR.raw), c=SPR.T[t.id];
+  if(c && c._n===keys.length) return c;
+  c={_n:keys.length};
+  keys.forEach(function(k){ c[k]=outlinePart(tintAway(SPR.raw[k], t.kit)); });
+  SPR.T[t.id]=c; return c;
+}
+// the team you play: its name on the scoreboard, its colours on the field,
+// and its numbers in how the computer plays (see TEAMS)
+function applyFoe(t){
+  FOE=t||RIVALS;
+  var nm=document.querySelector('.team.away .nm'); if(nm) nm.textContent=FOE.short;
+  var ch=document.querySelector('.team.away .chip'); if(ch) ch.style.background=FOE.hex;
+  if(elA) elA.style.color=FOE.hex;
+  var tp=teamParts(FOE);
+  for(var k in tp) if(k!=='_n') SPR.A[k]=tp[k];
+}
+
+// one man, drawn by the game's own renderer onto any canvas
+function frontPose(team,num,role,face,run){
+  return { team:team, num:num, name:'', role:role, x:0, y:0, vx:150*face, vy:0, face:face, run:run,
+           spd:1, pwr:1, agi:1, lean:0.16, spin:0, z:0, arm:0, throwArm:0, phase:0, stun:0,
+           cel:0, burst:0, hero:false, down:0, hp:100 };
+}
+function drawPoseOn(x2, pose, px, py, sc, parts, foe, carry){
+  var realCtx=ctx, realC=G?G.carrier:null, realA=SPR.A, realF=FOE;
+  x2.save();
+  try{
+    ctx=x2; if(parts) SPR.A=parts; if(foe) FOE=foe;
+    if(G) G.carrier=carry?pose:null;
+    x2.translate(px,py); x2.scale(sc,sc);
+    drawSprite(pose);
+  }catch(e){ /* the title is decoration; it never stops the game */ }
+  ctx=realCtx; SPR.A=realA; FOE=realF; if(G) G.carrier=realC;
+  x2.restore();
+}
+
+function showSplash(){
+  var sp=document.getElementById('splash');
+  if(!sp){ showFront('main'); return; }
+  var done=false;
+  function lift(){
+    if(done) return; done=true;
+    window.removeEventListener('keydown', lift);
+    showFront('main');                              // the title is there as the black lifts
+    sp.classList.add('out');
+    setTimeout(function(){ sp.style.display='none'; }, 850);
+  }
+  sp.classList.add('play');
+  setTimeout(lift, 3400);
+  sp.addEventListener('click', lift);
+  sp.addEventListener('touchstart', function(e){ e.preventDefault(); lift(); }, {passive:false});
+  window.addEventListener('keydown', lift);
+}
+function skipSplash(){ var sp=document.getElementById('splash'); if(sp) sp.style.display='none'; }
+
+function frontBuild(){
+  if(FRONT.built) return; FRONT.built=true;
+  document.body.insertAdjacentHTML('beforeend',
+    '<div id="front"><canvas id="frontCv"></canvas>'+
+      '<div id="fTop"><div id="fLogo">HAIL MYTHERY</div>'+
+      '<div id="fTag">Four downs &middot; three minutes &middot; signature moves</div></div>'+
+      '<div id="fMenu"></div>'+
+      '<div id="fCredit">A game by Vulcan Consulting Group</div></div>');
+  window.addEventListener('keydown', function(e){
+    if(!FRONT.on) return;
+    var k=e.key;
+    if(k==='Escape' || k==='Backspace'){
+      var b=document.getElementById('fBack'); if(b){ e.preventDefault(); b.click(); } return;
+    }
+    if(k.indexOf('Arrow')===0){                      // arrows walk the buttons, Enter picks
+      var list=[].slice.call(document.querySelectorAll('#fMenu .fb'));
+      if(!list.length) return;
+      var i=list.indexOf(document.activeElement), fwd=(k==='ArrowRight'||k==='ArrowDown');
+      i = i<0 ? 0 : (i+(fwd?1:-1)+list.length)%list.length;
+      list[i].focus(); e.preventDefault();
+    }
+  });
+}
+function showFront(menu){
+  frontBuild();
+  var f=document.getElementById('front');
+  elOv.classList.remove('show');
+  if(cardEl) cardEl.classList.remove('in','intro');
+  if(!FRONT.on){
+    FRONT.on=true; FRONT.t0=performance.now();
+    f.classList.remove('on'); void f.offsetWidth; f.classList.add('show','on');
+    if(FRONT.raf) cancelAnimationFrame(FRONT.raf);
+    FRONT.raf=requestAnimationFrame(frontLoop);
+  }
+  frontMenu(menu||'main');
+}
+function hideFront(){
+  FRONT.on=false;
+  var f=document.getElementById('front'); if(f) f.classList.remove('show','on');
+  if(FRONT.raf) cancelAnimationFrame(FRONT.raf); FRONT.raf=0;
+}
+function fBtn(id,k,t,d){
+  return '<button class="fb" id="'+id+'" type="button"><span class="k">'+k+'</span>'+
+         '<span class="t">'+t+'</span><span class="d">'+d+'</span></button>';
+}
+function frontMenu(which){
+  FRONT.menu=which;
+  var m=document.getElementById('fMenu'), h='';
+  if(which==='main'){
+    h='<div class="frow">'+
+      fBtn('fSolo','1 PLAYER','Single Player','You against the computer')+
+      fBtn('fMulti','2 PLAYERS','Multiplayer','You against a friend, online')+
+      '</div>';
+  } else if(which==='solo'){
+    h='<div class="fhead"><button class="fback" id="fBack" type="button">\u2039 BACK</button><span>SINGLE PLAYER</span></div>'+
+      '<div class="frow">'+
+      fBtn('fTrain','PRACTICE','Training','No clock. Learn the moves.')+
+      fBtn('fLive','FULL GAME','Live Match','Three minutes on the clock.')+
+      '</div>';
+  } else {
+    h='<div class="fhead"><button class="fback" id="fBack" type="button">\u2039 BACK</button>'+
+      '<span>'+(MODE.training?'TRAINING':'LIVE MATCH')+' \u00b7 PICK YOUR OPPONENT</span></div><div class="frow">';
+    TEAMS.forEach(function(t,i){
+      var st=''; for(var s2=0;s2<4;s2++) st+=(s2<t.lvl?'\u2605':'\u2606');
+      h+='<button class="fb team" type="button" data-i="'+i+'" style="--tc:'+t.hex+'">'+
+         '<canvas width="104" height="124"></canvas><span class="tx">'+
+         '<span class="k">'+t.tier+' '+st+'</span><span class="t">'+t.name+'</span>'+
+         '<span class="d">'+t.blurb+'</span></span></button>';
+    });
+    h+='</div>';
+  }
+  m.innerHTML=h;
+  m.classList.remove('in','first'); void m.offsetWidth;
+  m.classList.add('in'); if(FRONT.first){ m.classList.add('first'); FRONT.first=false; }
+  function on(id,fn){ var e=document.getElementById(id); if(e) e.addEventListener('click',fn); }
+  on('fSolo', function(){ frontMenu('solo'); });
+  on('fMulti', function(){
+    MODE.training=false; applyFoe(RIVALS);          // two people play Heroes against Rivals
+    hideFront(); showOnline();
+  });
+  on('fTrain', function(){ MODE.training=true;  frontMenu('team'); });
+  on('fLive',  function(){ MODE.training=false; frontMenu('team'); });
+  on('fBack',  function(){ frontMenu(which==='team' ? 'solo' : 'main'); });
+  Array.prototype.forEach.call(m.querySelectorAll('.fb.team'), function(b){
+    var t=TEAMS[+b.getAttribute('data-i')];
+    drawTeamMan(b.querySelector('canvas'), t);
+    b.addEventListener('click', function(){
+      applyFoe(t); hideFront();
+      PICK_THEN='solo'; showHeroPick();
+    });
+  });
+  var first=m.querySelector('.fb'); if(first && !TOUCH_UI) first.focus();
+}
+// each team card shows one of their men in his colours
+function drawTeamMan(cv, t){
+  if(!cv) return;
+  if(!SPR.ready){ setTimeout(function(){ if(cv.isConnected) drawTeamMan(cv,t); }, 400); return; }
+  var x2=cv.getContext('2d'); x2.setTransform(1,0,0,1,0,0); x2.clearRect(0,0,cv.width,cv.height);
+  var g=x2.createRadialGradient(cv.width/2,cv.height*0.55,4,cv.width/2,cv.height*0.55,cv.height*0.6);
+  g.addColorStop(0,'rgba(255,255,255,.14)'); g.addColorStop(1,'rgba(255,255,255,0)');
+  x2.fillStyle=g; x2.fillRect(0,0,cv.width,cv.height);
+  x2.fillStyle='rgba(0,0,0,.35)'; x2.beginPath(); x2.ellipse(cv.width/2,cv.height*0.95,26,5,0,0,Math.PI*2); x2.fill();
+  drawPoseOn(x2, frontPose('A', 50+t.lvl*7, 'COV', 1, 0.95), cv.width/2-4, cv.height*0.95, 2.5, teamParts(t), t, false);
+}
+
+function frontLoop(){
+  if(!FRONT.on){ FRONT.raf=0; return; }
+  try{ frontDraw((performance.now()-FRONT.t0)/1000); }catch(e){ /* never stop the menu over a picture */ }
+  FRONT.raf=requestAnimationFrame(frontLoop);
+}
+// The title picture: a night game, the crowd up in the stands, and a play
+// going by. The Heroes' back has it, his lead blocker out in front, one of
+// the Rivals chasing and another coming to meet him. Plain helmets and
+// numbers: nobody from the cards.
+function frontDraw(t){
+  var cv=document.getElementById('frontCv'); if(!cv) return;
+  var W=cv.clientWidth||window.innerWidth, H=cv.clientHeight||window.innerHeight;
+  var dp=Math.min(2, window.devicePixelRatio||1);
+  if(cv.width!==Math.round(W*dp) || cv.height!==Math.round(H*dp)){
+    cv.width=Math.round(W*dp); cv.height=Math.round(H*dp); FRONT.crowd=null;
+  }
+  var x=cv.getContext('2d'); x.setTransform(dp,0,0,dp,0,0);
+  var hz=H*0.47, sTop=hz*0.4;                        // the grass starts at hz; the stands above it
+
+  // night sky
+  var sky=x.createLinearGradient(0,0,0,hz);
+  sky.addColorStop(0,'#02040a'); sky.addColorStop(1,'#0e1727');
+  x.fillStyle=sky; x.fillRect(0,0,W,hz);
+
+  // the stands, packed, drawn once per screen size
+  if(!FRONT.crowd){
+    var cc=document.createElement('canvas');
+    cc.width=Math.max(1,Math.round(W)); cc.height=Math.max(1,Math.round(hz-sTop));
+    var cx=cc.getContext('2d'), cols=['#2a3448','#3a2a33','#44506a','#5a4a3a','#6a2a32','#2d477f','#8a7a5a','#1f2433','#b89b4a'];
+    cx.fillStyle='#0a0f18'; cx.fillRect(0,0,cc.width,cc.height);
+    for(var r=0; r<cc.height; r+=5){
+      for(var c2=((r/5)%2)*3; c2<cc.width; c2+=6){
+        cx.globalAlpha=0.3+0.55*(r/cc.height);
+        cx.fillStyle=cols[(Math.random()*cols.length)|0];
+        cx.beginPath(); cx.arc(c2, r+2.5, 2.2, 0, Math.PI*2); cx.fill();
+      }
+    }
+    cx.globalAlpha=1; FRONT.crowd=cc;
+  }
+  x.drawImage(FRONT.crowd, 0, sTop, W, hz-sTop);
+  for(var fl=0; fl<3; fl++){                          // camera flashes in the crowd
+    if(Math.random()<0.07){
+      var fx=Math.random()*W, fy=sTop+Math.random()*(hz-sTop), fr=5+Math.random()*4;
+      var fgr=x.createRadialGradient(fx,fy,0,fx,fy,fr);
+      fgr.addColorStop(0,'rgba(255,255,255,.95)'); fgr.addColorStop(1,'rgba(255,255,255,0)');
+      x.fillStyle=fgr; x.fillRect(fx-fr,fy-fr,fr*2,fr*2);
+    }
+  }
+  // the wall between the stands and the field, with a gold trim
+  var wh=Math.max(6,H*0.028);
+  x.fillStyle='#121a26'; x.fillRect(0,hz-wh,W,wh);
+  x.fillStyle='rgba(255,210,63,.55)'; x.fillRect(0,hz-wh,W,1.5);
+
+  // the field, rushing past as the camera runs with the ball
+  var fg=x.createLinearGradient(0,hz,0,H);
+  fg.addColorStop(0,'#1a5429'); fg.addColorStop(1,'#2e7c3a');
+  x.fillStyle=fg; x.fillRect(0,hz,W,H-hz);
+  var gap=Math.max(70,W*0.15), off=(t*W*0.2)%(gap*2), vx0=W*0.5, spread=1.9;
+  for(var i=-12;i<18;i++){
+    var a=i*gap-off, b=a+gap;
+    if(i%2===0){
+      x.fillStyle='rgba(255,255,255,.05)';
+      x.beginPath(); x.moveTo(a,hz); x.lineTo(b,hz);
+      x.lineTo(vx0+(b-vx0)*spread,H); x.lineTo(vx0+(a-vx0)*spread,H); x.closePath(); x.fill();
+    }
+    x.strokeStyle='rgba(255,255,255,.5)'; x.lineWidth=1.7;
+    x.beginPath(); x.moveTo(a,hz); x.lineTo(vx0+(a-vx0)*spread,H); x.stroke();
+  }
+
+  // floodlights: two towers, their beams leaning across the field
+  x.save(); x.globalCompositeOperation='lighter';
+  [[W*0.07, sTop*0.42, 0],[W*0.93, sTop*0.42, 1]].forEach(function(L){
+    var lx=L[0], ly=L[1], sw=Math.sin(t*0.35+L[2]*2.1)*0.05;
+    var a0=(L[2]?Math.PI*0.58:Math.PI*0.2)+sw, a1=a0+Math.PI*0.22, R=Math.max(W,H)*1.4;
+    var bg=x.createRadialGradient(lx,ly,0,lx,ly,R);
+    bg.addColorStop(0,'rgba(255,240,200,.2)'); bg.addColorStop(1,'rgba(255,240,200,0)');
+    x.fillStyle=bg; x.beginPath(); x.moveTo(lx,ly);
+    x.lineTo(lx+Math.cos(a0)*R, ly+Math.sin(a0)*R); x.lineTo(lx+Math.cos(a1)*R, ly+Math.sin(a1)*R);
+    x.closePath(); x.fill();
+    var gl=x.createRadialGradient(lx,ly,0,lx,ly,34);
+    gl.addColorStop(0,'rgba(255,250,225,.9)'); gl.addColorStop(1,'rgba(255,250,225,0)');
+    x.fillStyle=gl; x.fillRect(lx-34,ly-34,68,68);
+    x.fillStyle='rgba(255,252,238,1)';
+    for(var lr=0; lr<2; lr++) for(var lc=0; lc<4; lc++) x.fillRect(lx-13+lc*7, ly-4+lr*5, 5, 3.5);
+  });
+  x.restore();
+
+  // the play
+  if(SPR.ready){
+    var low=H*0.74, base=(H*0.31)/44, run=t*11;
+    var cast=[
+      {team:'H', num:11, role:'WR',   face:1,  fx:0.30, d:0.10, ph:2.2},
+      {team:'H', num:64, role:'OL',   face:1,  fx:0.63, d:0.40, ph:0.5},
+      {team:'A', num:55, role:'RUSH', face:1,  fx:0.17, d:0.55, ph:1.4},
+      {team:'A', num:31, role:'COV',  face:-1, fx:0.84, d:0.66, ph:3.1},
+      {team:'H', num:22, role:'RB',   face:1,  fx:0.45, d:0.92, ph:0.0, carry:true}
+    ];
+    var rv=teamParts(RIVALS);
+    cast.forEach(function(c){
+      var gy=hz+(low-hz)*(0.22+0.78*c.d), sc=base*(0.7+0.3*c.d);
+      var gx=W*c.fx + Math.sin(t*1.1+c.ph)*W*0.012;
+      x.fillStyle='rgba(0,0,0,.34)'; x.beginPath(); x.ellipse(gx, gy, 10*sc, 2.4*sc, 0, 0, Math.PI*2); x.fill();
+      if(c.carry){                                   // speed lines trailing the ball carrier
+        x.strokeStyle='rgba(255,255,255,.22)'; x.lineWidth=Math.max(1,sc*0.5);
+        for(var sl=0; sl<3; sl++){
+          var sy=gy-sc*(14+sl*8), sx=gx-sc*(9+((t*60+sl*23)%14));
+          x.beginPath(); x.moveTo(sx,sy); x.lineTo(sx-sc*(9+sl*3),sy); x.stroke();
+        }
+      }
+      drawPoseOn(x, frontPose(c.team, c.num, c.role, c.face, run+c.ph), gx, gy, sc,
+                 c.team==='A'?rv:null, RIVALS, !!c.carry);
+    });
+  }
+
+  // a vignette, and a darker band under the menu so the buttons read
+  var vg=x.createRadialGradient(W/2,H*0.5,Math.min(W,H)*0.35,W/2,H*0.5,Math.max(W,H)*0.75);
+  vg.addColorStop(0,'rgba(0,0,0,0)'); vg.addColorStop(1,'rgba(0,0,0,.6)');
+  x.fillStyle=vg; x.fillRect(0,0,W,H);
+  var bb=x.createLinearGradient(0,H*0.7,0,H);
+  bb.addColorStop(0,'rgba(2,4,8,0)'); bb.addColorStop(1,'rgba(2,4,8,.55)');
+  x.fillStyle=bb; x.fillRect(0,H*0.7,W,H*0.3);
+  var tb=x.createLinearGradient(0,0,0,H*0.3);
+  tb.addColorStop(0,'rgba(2,4,8,.55)'); tb.addColorStop(1,'rgba(2,4,8,0)');
+  x.fillStyle=tb; x.fillRect(0,0,W,H*0.3);
+}
+
+// Mid-game: keep playing, or leave for the menu.
+function askQuit(){
+  if(!G || NET.on || G.paused) return;
+  if(G.audibleOpen) closeAudible();
+  G.paused=true;
+  elSheet.innerHTML='<h2>'+(G.training?'Training':'Paused')+'</h2>'+
+    '<p class="sub">'+(G.training ? 'vs the '+FOE.name : 'Heroes '+G.scoreH+' \u00b7 '+FOE.name+' '+G.scoreA)+'</p>'+
+    '<div class="grid2">'+
+    '<button class="card" id="qStay" type="button"><div class="k">RESUME</div><div class="t">Keep playing</div>'+
+      '<div class="d">Back to the line.</div></button>'+
+    '<button class="card" id="qLeave" type="button"><div class="k">QUIT</div><div class="t">Main menu</div>'+
+      '<div class="d">'+(G.training?'End the practice.':'This game will not count.')+'</div></button></div>';
+  elOv.classList.add('show');
+  document.getElementById('qStay').addEventListener('click',function(){ G.paused=false; elOv.classList.remove('show'); });
+  document.getElementById('qLeave').addEventListener('click',quitToMenu);
+  if(!TOUCH_UI) document.getElementById('qStay').focus();
+}
+function quitToMenu(){
+  if(G && G.audibleOpen) closeAudible();
+  G=freshGame(); G.phase='intro';
+  elOv.classList.remove('show');
+  showStart();
+}
+
 function boot(){
   resize(); G=freshGame(); G.phase='intro';
   elMvName.textContent=HERO.moveName;
-  showStart();
   requestAnimationFrame(frame);
   // a shared link drops you straight into their room
   var m=/[?&]r=([A-Za-z0-9]{4})\b/.exec(location.search);
+  if(!(m && netReady())){ showSplash(); return; }   // black, the credit, then the title
+  skipSplash();
   if(m && netReady()){
     showOnline();
     document.getElementById('netForm').style.display='flex';

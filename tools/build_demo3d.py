@@ -317,13 +317,13 @@ function blit3D(P){
     ctx.textAlign='center'; ctx.textBaseline='middle';
     ctx.font='700 '+Math.max(6,22*sbs)+'px "Anton", sans-serif';
     ctx.fillStyle='#ffd23f'; ctx.fillText('HEROES', sbx+sbw*0.25, sby+sbh*0.28);
-    ctx.fillStyle='#ff8a94'; ctx.fillText('RIVALS', sbx+sbw*0.75, sby+sbh*0.28);
+    ctx.fillStyle=FOE.lite; ctx.fillText(FOE.short, sbx+sbw*0.75, sby+sbh*0.28);
     ctx.font='700 '+Math.max(8,40*sbs)+'px "Anton", sans-serif'; ctx.fillStyle='#f1f1ec';
     ctx.fillText(String(G.scoreH||0), sbx+sbw*0.25, sby+sbh*0.66);
     ctx.fillText(String(G.scoreA||0), sbx+sbw*0.75, sby+sbh*0.66);
     var clk=Math.max(0,Math.ceil(G.clock||0)), mm=Math.floor(clk/60), ss=clk%60;
-    ctx.font='700 '+Math.max(6,18*sbs)+'px "JetBrains Mono", monospace'; ctx.fillStyle='#ffd23f';
-    ctx.fillText(mm+':'+(ss<10?'0':'')+ss, sbx+sbw*0.5, sby+sbh*0.5);
+    ctx.font='700 '+Math.max(6,(G.training?11:18)*sbs)+'px "JetBrains Mono", monospace'; ctx.fillStyle='#ffd23f';
+    ctx.fillText(G.training ? 'PRACTICE' : mm+':'+(ss<10?'0':'')+ss, sbx+sbw*0.5, sby+sbh*0.5);
     ctx.textAlign='left';
   }
   ctx.restore();
