@@ -1474,11 +1474,11 @@ function fireAbility(seat, IN, slot){
     for(var sa=0;sa<G.players.length;sa++){        // everyone hanging on to him lets go and goes down
       var sq2=G.players[sa];
       if(!(sq2.wrapT>0) || sq2.team===me.team || sq2.gripLock) continue;
-      if(sq2.humanWrap && !mine) continue;         // the computer's stiff arm does not undo your own tackle
+      if((sq2.humanWrap || sq2.strongGrab) && !mine) continue;   // the computer's stiff arm does not undo your tackle or a special move's
       breakWrap(sq2,me); sq2.stun=Math.max(sq2.stun,0.9); sq2._pst=sq2.stun;
     }
     if(mine) me.iFrames=Math.max(me.iFrames||0,0.5);   // yours slips every grab; the computer's leaves your own tackle alone
-    if(v.humanWrap && !mine && v.wrapT>0){ abSpend(me,id); tell('STIFF ARM!',600); return; }
+    if((v.humanWrap || v.strongGrab) && !mine && v.wrapT>0){ abSpend(me,id); tell('STIFF ARM!',600); return; }
     v.stun=1.3; v.down=Math.max(v.down,1.0); v.wrapped=0;
     launch(v, me.x, me.y, 230, 5.4);
     spokes(v.x,v.y-16,'rgba(255,210,63,.9)',8,8,30);
@@ -3511,7 +3511,7 @@ function step(dt){
           // trail your man with a cushion toward your own end zone
           var r=p.cover;
           var lead=0.13;
-          aim(p, r.x + r.vx*lead + d*((p.pos==='CB'?5:3.5)+(G.cushion||0)),   // tighter: at 9 yards off, nearly every pass was caught
+          aim(p, r.x + r.vx*lead + d*((p.pos==='CB'?2.5:2)+(G.cushion||0)),   // tight: at 5 yards off, 72% of throws landed with nobody within 4 yards
                  r.y + r.vy*lead, DEF_SPD*1.02);
         } else {
           aim(p, G.ball.x+d*10*YD, G.ball.y, DEF_SPD*0.9);
@@ -3541,6 +3541,10 @@ function step(dt){
         // backs running alongside a carrier instead of hitting him. It shrinks
         // to nothing over the last few yards.
         lane *= Math.max(0, Math.min(1, (dist - 3*YD) / (6*YD)));
+      }
+      if(G.thrown && !G.thrown.lat && Math.hypot(bx-p.x,by-p.y)<12*YD){
+        aim(p, bx, by, DEF_SPD*1.18);                 // the ball is in the air near him: break on it, straight at the spot
+        continue;
       }
       aim(p, ax, ay+lane, DEF_SPD*(p.role==='RUSH'?1.10:0.96)*openChase());
     }
@@ -3845,7 +3849,7 @@ function step(dt){
         // away or, if the defender is right on it, takes it.
         var dd=Math.hypot(cov.x-G.ball.x,cov.y-G.ball.y);
         var rS=Math.max(0.05,1-near/win)*(r.agi||1), dS=Math.max(0.05,1-dd/(win*1.7))*(cov.agi||1)*0.9*(swat?1.8:1);   // a defender dives for it from further
-        var pC=Math.max(0.2, Math.min(0.82, 0.2+0.62*rS/(rS+dS)));
+        var pC=Math.max(0.15, Math.min(0.72, 0.12+0.62*rS/(rS+dS)));   // (covered receivers were winning 83% of the time)
         var roll=Math.random();
         caught = roll<pC;
         pickIt = !caught && dd<CATCH_R*1.3 && roll > 1-(1-pC)*0.4;
@@ -3954,7 +3958,7 @@ function step(dt){
           t2.humanWrap=true; t2.wrapT=99; G.touchDive=false; car.iFrames=0;
           car.hp-=25/res; dmgText(car,'-'+Math.round(25/res),'#ffffff'); G.dotAcc=0;
         }
-        if(t2.humanWrap || t2.gripLock) t2.stun=0;
+        if(t2.humanWrap || t2.gripLock || t2.strongGrab) t2.stun=0;   // a knock does not shake yours or a special move's
         var holdFast = t2.gripLock || (t2.invisUntil && G.gt<t2.invisUntil) ||
                        (t2.wolfUntil && G.gt<t2.wolfUntil) || (t2.furyUntil && G.gt<t2.furyUntil);   // grip, invisible, wolf or monster: no shaking them
         if(!holdFast && (jking || t2.stun>0)){ breakWrap(t2,car); continue; }
@@ -4030,7 +4034,7 @@ function step(dt){
       grabbers++; lastT=t2;
     }
     if(grabbers>0){
-      var drain=((68*grabbers + 20*hw + 58*bite)/res)*dt;   // your own tackle drains him faster, a wolf or a grip faster still
+      var drain=((68*grabbers + 50*hw + 58*bite + 25*strong)/res)*dt;   // your own tackle drains him faster, a move's too, a wolf or a grip faster still
       car.hp -= drain;
       var drag=Math.max(0.18, 1-grabbers*0.42);       // dragged down as they hang on
       if(strong) drag=Math.min(drag,0.3);             // a grab from a special move stops him like yours does
