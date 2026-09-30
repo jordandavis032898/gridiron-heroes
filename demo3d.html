@@ -4513,7 +4513,7 @@ function snapPos(){
   if(!to || G.phase!=='live') return null;
   var k=(G.gt-G.snapT)/SNAP_DUR;
   if(k>=1){
-    if(fk) return {x:to.x+d*4, y:to.y, h:3, flat:true};              // held on the tee till the kick
+    if(fk){ to.stance=1; return {x:to.x+d*5, y:to.y, h:5, upright:true}; }   // the holder, down on one knee, holds it on the spot
     if(pk) return {x:to.x+d*5, y:to.y, h:17, flat:true};             // in the punter's hands
     return null;
   }
@@ -4527,7 +4527,7 @@ function drawSnap(P){
   ctx.fillStyle='rgba(0,0,0,.28)';
   ctx.beginPath(); ctx.ellipse(sp.x,sp.y,5.5,2.3,0,0,Math.PI*2); ctx.fill();
   ctx.translate(sp.x, sp.y-sp.h);
-  ctx.rotate(sp.flat ? 0 : (sp.k||0)*Math.PI*3);        // a spiral back to him
+  ctx.rotate(sp.upright ? -Math.PI/2 : (sp.flat ? 0 : (sp.k||0)*Math.PI*3));   // upright under the holder's finger, or a spiral back
   if(BALL_IMG.ready) ctx.drawImage(BALL_IMG,-7.9,-4.9,15.8,9.8);
   else { ctx.fillStyle='#7a4a28'; ctx.beginPath(); ctx.ellipse(0,0,7.1,4.2,0,0,Math.PI*2); ctx.fill(); }
   ctx.restore();
@@ -6037,6 +6037,7 @@ function fgKickTick(dt){
 function launchFieldGoal(){
   var fk=G.fgKick, d=dir(), mid=FH/2;
   G.fgKick=null;
+  if(fk.holder) fk.holder.stance=0;                   // up off his knee once it is kicked
   if(fk.kicker){ fk.kicker.vx=0; fk.kicker.vy=0; fk.kicker.arm=0.5; }
   if(fk.blocked){
     burst(fk.holder.x, fk.holder.y-10, '#ffffff'); G.shake=REDUCED?0:12;
@@ -6434,6 +6435,7 @@ if(TOUCH_UI){
     }
     if(G.phase!=='live' || FT.id!==null) return;
     FT.id=t.identifier; FT.x0=t.clientX; FT.y0=t.clientY; FT.t0=performance.now(); FT.done=false;
+    FT.first=(G.phase==='live') ? pickOnScreen(t.clientX,t.clientY) : null;   // who the finger went down on
     // A pass starts on a receiver (or his tab on the edge). A finger put down
     // anywhere else is not a throw: a slide is a spin, a tap is nothing.
     if(canAim() && pickOnScreen(t.clientX,t.clientY)){ FT.mode='aim'; ftAim(t); }
@@ -6496,7 +6498,9 @@ if(TOUCH_UI){
         var tx=tg?tg.x:G.mouse.x, ty=tg?tg.y:G.mouse.y;
         var qbx=G.carrier;
         // your back right beside you: hand it to him instead of throwing it
-        if(tg && (tg.role==='RB'||tg.role==='TE') && Math.hypot(tg.x-qbx.x,tg.y-qbx.y)<HANDOFF_R*1.4 &&
+        // the back walking under your finger while you aim at someone else does not take it
+        if(tg && tg!==FT.first && FT.first && Math.hypot(tg.x-qbx.x,tg.y-qbx.y)<HANDOFF_R*1.6){ tg=FT.first; tx=tg.x; ty=tg.y; }
+        if(tg && tg===FT.first && (tg.role==='RB'||tg.role==='TE') && Math.hypot(tg.x-qbx.x,tg.y-qbx.y)<HANDOFF_R*1.4 &&
            !(NET.on && !NET.host) && handoffTarget()===tg && handoff('H')){ /* handed off */ }
         else if(NET.on && !NET.host) netSend({t:'thr', x:Math.round(tx), y:Math.round(ty)});
         else throwAt(tx,ty,'H');                     // the lock you built is what it is worth
