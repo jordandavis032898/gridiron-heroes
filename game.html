@@ -2661,7 +2661,6 @@ function driveHuman(seat, IN, dt, now){
   var base = onO ? BASE_SPD : DEF_SPD;
   var mult=(sprinting?SPRINT:1)*(me.burst>0?1.7:1)*me.spd;
   if(!diving && seat.local){                          // a dive that is over no longer homes...
-    if(G.touchDive && (G.tchaseEnd||0)>now && !onO) G.tchase=G.tchaseEnd;   // ...but a missed one keeps charging for the rest of the swipe
     G.touchDive=false;
   }
   // A slide on a touch screen from further off: he charges the ball carrier,
@@ -2693,7 +2692,7 @@ function driveHuman(seat, IN, dt, now){
         // he is slippery for a beat (a juke, a fresh handoff): stay on him
         // instead of sailing past, and the tackle lands when it wears off
         me.vx=hc.vx+hx*4; me.vy=hc.vy+hy*4;
-      } else if(hm<18*YD){
+      } else if(hm<5*YD){
         var sp=Math.max(Math.hypot(me.vx,me.vy), BASE_SPD*2.7);
         var k=Math.min(1,dt*9);
         me.vx+=(hx/hm*sp-me.vx)*k; me.vy+=(hy/hm*sp-me.vy)*k;
@@ -5552,8 +5551,18 @@ function launchPunt(){
     var q=G.players[i]; q.stance=0; q.assign=null; q.cover=null; q.engaged=0;
     if(q.team===kickTeam){ q.role='COV'; q.pos='KC'; q.route=null; q.lane=Math.max(-3,Math.min(3,Math.round((q.y-mid)/(4*YD))))*14; }
     else if(q===ret){ q.role='RB'; q.pos=''; q.route='ret'; }
-    else { q.role='WR'; q.pos=''; q.route='lead'; }
+    else { q.role='OL'; q.pos=''; q.route='block'; }  // they turn and block for him
   }
+  // each blocker picks up the nearest coverage man nobody has yet, and walls
+  // him off from the returner (the offence's block logic does the rest)
+  var cover=G.players.filter(function(c){ return c.team===kickTeam && c!==pu; }), taken=[];
+  G.players.forEach(function(bq){
+    if(bq.team!==recv || bq===ret) return;
+    var best=null, bd=1e9;
+    for(var ci=0;ci<cover.length;ci++){ var cv2=cover[ci]; if(taken.indexOf(cv2)>=0) continue;
+      var cd=Math.hypot(cv2.x-bq.x,cv2.y-bq.y); if(cd<bd){ bd=cd; best=cv2; } }
+    if(best){ bq.assign=best; taken.push(best); }
+  });
   var deep=(rGoal-tx)*d;                               // how far into the end zone it comes down
   G.kickReturn=true; G.ball.held=false; G.carrier=null;
   G.thrown={x:pu.x, y:pu.y, tx:tx, ty:ty, target:ret, t:0, dur:2.0+pk.pow*0.6, arc:125,
@@ -6063,22 +6072,23 @@ if(TOUCH_UI){
         if(Math.hypot(px,py)>30){                    // a slide, however slow (a resting finger is not one)
           var a=screenToWorld(FT.x0,FT.y0), b=screenToWorld(t.clientX,t.clientY);
           var dx=b.x-a.x, dy=b.y-a.y;
-          // Any swipe that is not pointed away from the ball carrier dives at
-          // him, led by where he is going. Swiping exactly at a moving man on
-          // a small screen is too hard, so a slide means "tackle him".
-          var tc=G.carrier, tm=G.controlled;
+          // A swipe is a tackle, done right where your man is: he leaves his
+          // feet along the swipe. Only the stick moves him around the field.
+          // If the ball carrier is within a few yards and the swipe points
+          // roughly at him, the dive is steered onto him so it lands; further
+          // off, it is a tackle at thin air.
+          var tc=G.carrier, tm=G.controlled, near=false;
           if(tc && tm && tc.team!==tm.team){
-            var lx=tc.x+tc.vx*0.25-tm.x, ly=tc.y+tc.vy*0.25-tm.y, lm=Math.hypot(lx,ly)||1;
+            var lx=tc.x+tc.vx*0.2-tm.x, ly=tc.y+tc.vy*0.2-tm.y, lm=Math.hypot(lx,ly)||1;
             var sm=Math.hypot(dx,dy)||1;
-            dx=lx; dy=ly;                              // a slide on defence means: go get him
+            if(lm<5*YD && (dx*lx+dy*ly)/(sm*lm) > 0.2){ dx=lx; dy=ly; near=true; }
           }
           if(Math.hypot(dx,dy)>0.5){
             if(NET.on && !NET.host) netSend({t:'dive', x:Math.round(dx*9), y:Math.round(dy*9)});
-            else {
-              var far=tc && tm ? Math.hypot(tc.x-tm.x,tc.y-tm.y) : 0;
-              if(tc && tm && tc.team!==tm.team && far>3.2*YD){
-                G.tchase=performance.now()+2200; G.tchaseEnd=G.tchase;   // too far to dive: charge him, dive when close
-              } else if(swipeTackle(dx,dy,'H')!==false){ G.touchDive=true; G.diveUntil=performance.now()+640; G.tchaseEnd=performance.now()+2200; }
+            else if(swipeTackle(dx,dy,'H')!==false){
+              var me3=G.controlled;                        // a tackle is a short lunge, a few yards, not a run
+              if(me3 && !near){ me3.vx*=0.42; me3.vy*=0.42; }
+              G.touchDive=near; G.diveUntil=performance.now()+(near?420:340);
             }
           }
           FT.done=true;
