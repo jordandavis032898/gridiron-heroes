@@ -1046,7 +1046,7 @@ function bestDefender(side){
 function switchTo(q){
   var old=G.controlled;
   if(!q || q===old) return;
-  G.controlled=q; G.switchFlash=0.5; G.switchLockUntil=G.gt+0.9;
+  G.controlled=q; G.switchFlash=0.5; G.switchLockUntil=G.gt+0.9; G.swCarryUntil=G.gt+0.3*(GAME_SPEED||1);
   if(old && !REDUCED) streak(old.x,old.y-10,q.x,q.y-10,'rgba(255,210,63,.75)',2.2,0.3);
 }
 function nearestOf(p,team,seeAll){
@@ -3493,7 +3493,17 @@ function driveHuman(seat, IN, dt, now){
     // A key is all or nothing, so ease in and out of it over about a tenth
     // of a second: he gets up to speed and plants to stop instead of snapping.
     var ramp=1-Math.exp(-dt/0.045);
-    me.vx+=(a.x*base*mult-me.vx)*ramp; me.vy+=(a.y*base*mult-me.vy)*ramp;
+    var tvx=a.x*base*mult, tvy=a.y*base*mult;
+    var nvx=me.vx+(tvx-me.vx)*ramp, nvy=me.vy+(tvy-me.vy)*ramp;
+    // Just switched to him on defence: he keeps the speed he had while he
+    // turns to where your thumb is pointing (blending his old line into the
+    // new one used to bleed off a third of his speed for a moment)
+    if(!onO && (a.x||a.y) && G.swCarryUntil>G.gt){
+      var cur=Math.hypot(me.vx,me.vy), nsp=Math.hypot(nvx,nvy), keep=Math.max(cur, Math.hypot(tvx,tvy));
+      var turn=cur>20 ? (a.x*me.vx+a.y*me.vy)/cur : 1;   // (a turning run keeps its speed; turning right round still has to slow)
+      if(turn>-0.2 && nsp>1 && nsp<keep){ nvx*=keep/nsp; nvy*=keep/nsp; }
+    }
+    me.vx=nvx; me.vy=nvy;
   }
   else { me.vx*=0.90; me.vy*=0.90; }
 }
