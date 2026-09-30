@@ -1918,16 +1918,21 @@ function switchPlayer(side){
   var pool=[];
   for(var i=0;i<G.players.length;i++){
     var q=G.players[i];
-    if(q.team===side && q.stun<=0) pool.push(q);
+    if(q.team===side && q.stun<=0 && !(q.down>0)) pool.push(q);
   }
   if(pool.length<2) return;
+  // On defence the button ranks your men by how well placed they are to make
+  // the play (defScore), not by distance to the ball. The first press gives
+  // you the best one; presses in quick succession step down the list.
+  var onD=(side!==G.offense) && (G.carrier || G.thrown);
   var bx=G.ball?G.ball.x:0, by=G.ball?G.ball.y:0;
-  pool.sort(function(a,b){
-    return Math.hypot(a.x-bx,a.y-by)-Math.hypot(b.x-bx,b.y-by);
-  });
-  var idx=pool.indexOf(cur);
-  var nxt=pool[(idx+1)%pool.length];
-  if(side==='H'){ G.controlled=nxt; G.switchFlash=0.5; }
+  pool.sort(onD ? function(a,b){ return defScore(a)-defScore(b); }
+                : function(a,b){ return Math.hypot(a.x-bx,a.y-by)-Math.hypot(b.x-bx,b.y-by); });
+  var nowS=performance.now(), nxt;
+  if(G.swCycleUntil>nowS){ var idx=pool.indexOf(cur); nxt=pool[(idx+1)%pool.length]; }
+  else nxt=(pool[0]===cur) ? pool[1] : pool[0];
+  G.swCycleUntil=nowS+1200;
+  if(side==='H') switchTo(nxt);                 // also holds off the automatic switch for a moment
   else { G.controlled2=nxt; }
   if(side==='H'||!NET.on||!NET.host) say(surname(nxt),600);
 }
