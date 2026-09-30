@@ -282,6 +282,8 @@
     background:rgba(12,17,20,.45); color:#ffd23f; visibility:hidden; -webkit-tap-highlight-color:transparent;}
   html.touchui #bSwitch.on{visibility:visible;}
   html.touchui #bSwitch:active{background:rgba(255,210,63,.3);}
+  html.touchui #bSwitch.pulse{animation:swpulse .5s ease-in-out infinite alternate; border-color:#fff;}
+  @keyframes swpulse{from{transform:scale(1); box-shadow:0 0 0 0 rgba(255,210,63,.0);} to{transform:scale(1.14); box-shadow:0 0 16px 4px rgba(255,210,63,.75); background:rgba(255,210,63,.35);}}
   html.touchui #bSwitch svg{width:22px; height:22px; stroke:#ffd23f; fill:none; stroke-width:2.4; stroke-linecap:round; stroke-linejoin:round;}
   html.touchui #bSwitch b{font:700 9px 'Barlow Condensed',sans-serif; letter-spacing:.08em; text-shadow:0 1px 2px #000;}
   html.touchui #stage:has(.overlay.show) #bSwitch, #stage.tdcam #bSwitch{visibility:hidden !important;}
@@ -2244,8 +2246,15 @@ var BOX_CANCEL=true, BOX_REDO=0.08;                // your punch knocks his swin
 var BOX_AI_BREAK=0.15, BOX_WRIGGLE=0.002;          // the computer's runner punching back, and spinning out, while held
 var BOX_ASSIST=false, BOX_QB_ASSIST=true;          // the automatic sidestep and stiff arm in a clinch: a passer's only
 var POW_WORDS=['POW','BAM','WHAM','SMACK','THUD','CRACK','BOOM'];
-var AUTO_NEXT=true, AUTO_FAR=true;
-var PUNCH_DUR=0.19, CP_EVERY=0.3;   // a punch's swing, and how soon the ball carrier can throw the next (game seconds)   // control jumps to the next man up when the runner beats yours, or when yours is out of the play and another can make it
+// Control jumping to the next man up by itself (when the runner beats yours,
+// or yours is out of the play): off. He did not want his man changing unless
+// he asked; the SWITCH button does it.
+var AUTO_NEXT=false, AUTO_FAR=false, AUTO_SWITCH=false;
+var PUNCH_DUR=0.19, CP_EVERY=0.3;   // a punch's swing, and how soon the ball carrier can throw the next (game seconds)
+// Once the runner is past the line the computer's defenders chase at 1.5x
+// (openChase) and yours stayed at 1x, so the man you were steering fell
+// behind his own team-mates. He chases as fast as they do now.
+var DEF_CHASE=true;
 function touchTackle(me,dx,dy){
   if(!G || G.phase!=='live' || !me || me.stun>0 || me.down>0 || G.offense===me.team) return false;
   if(G.diveCd>0) return false;
@@ -3412,6 +3421,7 @@ function driveHuman(seat, IN, dt, now){
   // on defence the AI runs at DEF_SPD, so a human on that side has to as well
   // or he is permanently behind his own team-mates
   var base = onO ? BASE_SPD : DEF_SPD;
+  if(!onO && DEF_CHASE && G.carrier && G.carrier.team!==me.team) base=DEF_SPD*Math.max(1, (me.role==='RUSH'?1.10:0.96)*openChase());   // as fast as the computer runs a man in his spot
   var mult=(sprinting?SPRINT:1)*(me.burst>0?1.4:1)*me.spd*buffMul(me);   // a burst is 1.4x (1.7x broke away three times in four)
   // In a clinch the ball carrier is held where he stands and boxes his way
   // out. (The hold used to be applied after he had already moved each frame,
@@ -4052,12 +4062,14 @@ function step(dt){
     // keeps you on him. Then you get the defender best placed to make the
     // play, not simply the one nearest the ball, so control does not jump
     // across the field.
-    if(!cm || cm.team!=='H' || outFor>0.6){
+    // (With AUTO_SWITCH off, which is how he wants it, your man only changes
+    // when you press SWITCH; the button pulses when he is out of the play.)
+    if(!cm || cm.team!=='H' || (AUTO_SWITCH && outFor>0.6)){
       var n2=bestDefender('H');
       if(n2 && n2!==cm && !(n2.stun>0) && !(n2.down>0)) switchTo(n2);
     }
     // They throw it: you get the man nearest where it is going (once a throw)
-    else if(free && G.thrown && !G.thrown.swDone && !G.thrown.lat && !G.thrown.kickoff){
+    else if(AUTO_SWITCH && free && G.thrown && !G.thrown.swDone && !G.thrown.lat && !G.thrown.kickoff){
       G.thrown.swDone=true;
       var nt=null, ntd=1e9;
       for(var tn=0;tn<G.players.length;tn++){ var tq=G.players[tn];
@@ -4066,7 +4078,7 @@ function step(dt){
       if(nt && nt!==cm && ntd+3*YD < Math.hypot(cm.x-G.thrown.tx,cm.y-G.thrown.ty)) switchTo(nt);
     }
     // a new ball carrier (a handoff, a catch): only if someone else is far better placed
-    else if(free && G.carrier && G.carrier!==G.swCar && G.gt-G.snapT>0.3){
+    else if(AUTO_SWITCH && free && G.carrier && G.carrier!==G.swCar && G.gt-G.snapT>0.3){
       G.swCar=G.carrier;
       if(!(cm.wrapT>0)){
         var nb=bestDefender('H');
@@ -4089,7 +4101,18 @@ function step(dt){
       }
     }
     if(G.carrier && G.gt-G.snapT<=0.3) G.swCar=G.carrier;
-  }
+    // SWITCH pulses when your man is out of it: flat on the turf, or well
+    // behind the play while a team-mate is close enough to make it
+    var hintMe=false;
+    if(cm && cm.team==='H' && G.phase==='live'){
+      if(outFor>0.3) hintMe=true;
+      else if(G.carrier && G.carrier.team!=='H' && Math.hypot(G.carrier.x-cm.x,G.carrier.y-cm.y)>SLIDE_REACH){
+        var hb=bestDefender('H');
+        hintMe = !!(hb && hb!==cm && Math.hypot(G.carrier.x-hb.x,G.carrier.y-hb.y)<SLIDE_REACH && defScore(hb)<defScore(cm)-3*YD);
+      }
+    }
+    G.swHint=hintMe;
+  } else G.swHint=false;
   if(G.switchFlash>0) G.switchFlash-=dt;
 
   // Tackling is a struggle, not a touch. Defenders wrap up and drain the
@@ -5632,7 +5655,7 @@ function iHaveBall(){ return G.offense === mySide(); }
 function hud(){
   stage.classList.toggle('tdcam', !!(G.broadcast && G.broadcast.td && G.broadcast.until>performance.now()));
   var bSw=document.getElementById('bSwitch');
-  if(bSw) bSw.classList.toggle('on', (G.phase==='live'||G.phase==='presnap') && !iHaveBall());
+  if(bSw){ bSw.classList.toggle('on', (G.phase==='live'||G.phase==='presnap') && !iHaveBall()); bSw.classList.toggle('pulse', !!G.swHint && G.phase==='live'); }
   elH.textContent=G.scoreH; elA.textContent=G.scoreA;
   var mm=Math.floor(G.clock/60), ss=Math.floor(G.clock%60);
   elClock.textContent=G.training ? 'PRACTICE' : mm+':'+(ss<10?'0':'')+ss;
