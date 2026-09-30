@@ -1367,6 +1367,43 @@ function nearestDef(){
     if(d<bd){bd=d;best=p;} }
   return best;
 }
+// How well placed a defender is to make the play: close to where the ball
+// carrier will be in half a second, coming at him, in front of him rather
+// than chasing, and not tied up with a blocker. Lower is better.
+function defScore(q){
+  var c=G.carrier, tx, ty, vx=0, vy=0;
+  if(c){ tx=c.x+c.vx*0.5; ty=c.y+c.vy*0.5; vx=c.vx; vy=c.vy; }
+  else if(G.thrown){ tx=G.thrown.tx; ty=G.thrown.ty; }
+  else { tx=G.ball.x; ty=G.ball.y; }
+  var dx=tx-q.x, dy=ty-q.y, d=Math.hypot(dx,dy)||1, sc=d;
+  var qs=Math.hypot(q.vx,q.vy);
+  if(qs>10) sc-=18*((q.vx*dx+q.vy*dy)/(qs*d));                          // coming at him
+  var cs=Math.hypot(vx,vy);
+  if(c && cs>10){
+    var ox=q.x-c.x, oy=q.y-c.y, od=Math.hypot(ox,oy)||1;
+    sc-=24*Math.max(0,(ox*vx+oy*vy)/(cs*od));                          // in his way, not behind him
+  }
+  if((q.engaged||0)>0 && (q.engaged||0)<=(q.shedAt||2.5) && q.eBlk) sc+=12*YD;   // locked up with a blocker
+  if(q.stun>0 || q.down>0) sc+=40*YD;
+  return sc;
+}
+function bestDefender(side){
+  var best=null, bs=1e9;
+  for(var i=0;i<G.players.length;i++){
+    var q=G.players[i];
+    if(q.team!==side) continue;
+    var sc=defScore(q); if(sc<bs){ bs=sc; best=q; }
+  }
+  return best;
+}
+// hand control to another man, with a flash and a streak from the old one so
+// your eye follows the change
+function switchTo(q){
+  var old=G.controlled;
+  if(!q || q===old) return;
+  G.controlled=q; G.switchFlash=0.5; G.switchLockUntil=G.gt+0.9;
+  if(old && !REDUCED) streak(old.x,old.y-10,q.x,q.y-10,'rgba(255,210,63,.75)',2.2,0.3);
+}
 function nearestOf(p,team,seeAll){
   var best=null,bd=Infinity;
   for(var i=0;i<G.players.length;i++){var q=G.players[i];
@@ -2726,30 +2763,54 @@ function bigHit(me,M){
   if(!G.carrier||M.power<45||M.hitCd>0) return;
   M.punchBuf=0;
   var c=G.carrier, dd=Math.hypot(c.x-me.x,c.y-me.y);
-  // A punch takes a tenth of his fight and staggers him. On a phone the fist
-  // throws a shock that reaches about eight yards, so you do not have to be
-  // on top of him; right on top of him it lands the same.
-  var reach=TOUCH_UI ? 8*YD : 28;
-  M.hitCd=TOUCH_UI ? 0.25 : 0.8; M.power-=45; me.arm=0.5;
-  if(dd>reach){
-    if(TOUCH_UI){ M.hitCd=0.2; if(me===G.controlled) hint('TOO FAR TO PUNCH',700); }
-    else say('WHIFF',420);
-    return;
-  }
-  G.shake=REDUCED?0:9;
-  if(dd>TACKLE_R) G.fx.push({streak:true,x:me.x,y:me.y-16,x2:c.x,y2:c.y-16,c:'rgba(255,210,63,.95)',w:3.2,life:0.2,max:0.2});
-  burst(c.x,c.y,'#ffd23f');
+  // A punch: he winds up, steps in (a quick lunge, so the fist really lands
+  // on the man instead of swinging at air from yards away), and it connects
+  // (landPunch). A tenth of his fight, and he snaps back a step.
+  var reach=TOUCH_UI ? 4*YD : 2.5*YD;
+  M.hitCd=TOUCH_UI ? 0.32 : 0.8; M.power-=45;
+  me.punchT=0.001; me.punchDur=0.27; me.punchHit=false;
+  me.punchV=(dd<=reach && c.team!==me.team) ? c : null;   // nobody in reach: a jab at the air
+  if(!me.punchV && TOUCH_UI){ M.hitCd=0.22; }
+}
+// the frame the fist lands
+function landPunch(me,c){
+  if(!c || G.carrier!==c || G.phase!=='live') return;
+  var fx=c.x-(me.face||1)*3, fy=c.y-20;
+  G.hitStopUntil=performance.now()+60;              // a beat of freeze so the hit has weight
+  G.shake=REDUCED?0:8;
+  pow(fx,fy,'#ffd23f');
+  c.lean=-0.5; c.sq=0.22;                           // his head snaps back
+  var kx=c.x-me.x, ky=c.y-me.y, km=Math.hypot(kx,ky)||1;
+  c.vx=c.vx*0.3+kx/km*80; c.vy=c.vy*0.3+ky/km*80;   // and he stumbles back a step
   if(Math.random() < 0.04/Math.max(0.8,c.pwr||1)){
-    fumble(c,(c.x-me.x)*3.2,(c.y-me.y)*3.2);
+    fumble(c,kx/km*160,ky/km*160);
     say('FUMBLE!',1200); credit(me,'FORCED FUMBLE');
   } else {
-    c.hp-=10; c.vx*=0.35; c.vy*=0.35;                // he staggers
-    flash(c.x,c.y-18,'rgba(255,255,255,1)',26);
-    shock(c.x,c.y,'rgba(255,210,63,.9)',4,30,0.28);
+    c.hp-=10;
     dmgText(c,'-10','#ffd23f');
     credit(me,'BIG HIT');
     if(c.hp<=0){ c.down=1.6; endPlay(c.x,'BIG HIT'); }
   }
+}
+// the punch as it plays out: the wind up, then the step in, then the landing
+function punchTick(me,dt){
+  if(!(me.punchT>0)) return;
+  var PD=me.punchDur||0.27, PT=me.punchT;
+  me.punchT+=dt;
+  var v=me.punchV;
+  if(v && !me.punchHit && PT>PD*0.28){
+    var lx=v.x-me.x, ly=v.y-me.y, ld=Math.hypot(lx,ly)||1, stop=15;
+    me.face=lx>=0?1:-1; me.lean=0.28;
+    var left=Math.max(dt, PD*0.6-PT);
+    if(ld>stop){ var st=Math.min(ld-stop, (ld-stop)*dt/left + 0.5); me.x+=lx/ld*st; me.y+=ly/ld*st; }
+    if(PT>=PD*0.6 || ld<=stop+1.5){ me.punchHit=true; landPunch(me,v); }
+  }
+  if(me.punchT>=PD){ me.punchT=0; me.punchV=null; me.punchHit=false; }
+}
+// a comic-book starburst where a blow lands
+function pow(x,y,c){
+  if(REDUCED) return;
+  G.fx.push({pow:true,x:x,y:y,c:c||'#ffd23f',rot:Math.random()*6.28,vx:0,vy:0,life:0.16,max:0.16});
 }
 
 function groundPound(me,M){
@@ -3949,6 +4010,7 @@ function step(dt){
     if(q.phase>0) q.phase=Math.max(0,q.phase-dt*1.1);
     if(q.iFrames>0) q.iFrames-=dt;
     if(q.wrapped>0) q.wrapped-=dt;
+    if(q.punchT>0) punchTick(q,dt);
     if(!REDUCED){                                    // the moves you can see running
       if(q.flyUntil && G.gt<q.flyUntil && Math.random()<dt*20)
         G.fx.push({x:q.x+(Math.random()-0.5)*10, y:q.y-4, vx:(Math.random()-0.5)*20, vy:10, r:1.2+Math.random(),
@@ -4005,7 +4067,7 @@ function step(dt){
     var e=G.fx[f]; e.life-=dt;
     if(e.ringed){ e.r+=dt*130; }
     else if(e.emit){ if(e.p) emitTick(e,dt); }
-    else if(e.shock||e.flash||e.streak||e.gh||e.dome||e.bolt||e.laser||e.crack){ /* on a timer */ }
+    else if(e.shock||e.flash||e.streak||e.gh||e.dome||e.bolt||e.laser||e.crack||e.pow||e.dmg){ /* on a timer */ }
     else { e.x+=e.vx*dt; e.y+=e.vy*dt; e.vx*=0.93; e.vy*=0.93;
            if(e.grav){ e.vy+=e.grav*dt; } }
     if(e.life<=0) G.fx.splice(f,1);
@@ -4132,16 +4194,35 @@ function step(dt){
     if(G.loose.t>6){ endPlay(G.ball.x,'DEAD BALL'); return; }
   } else if(G.carrier){ G.ball.x=G.carrier.x; G.ball.y=G.carrier.y; }
 
-  if(G.offense==='A'){
-    if(!G.controlled||G.controlled.stun>0||G.controlled.down>0||G.controlled.team!=='H'){
-      // the nearest defender who is on his feet (it used to pick the man
-      // who had just been flattened, so you stayed stuck on the ground)
-      var n2=null, bd2=1e9;
-      for(var dn=0;dn<G.players.length;dn++){ var dq=G.players[dn];
-        if(dq.team!=='H' || dq.stun>0 || dq.down>0) continue;
-        var dd2=Math.hypot(dq.x-G.ball.x,dq.y-G.ball.y); if(dd2<bd2){ bd2=dd2; n2=dq; } }
-      if(n2 && n2!==G.controlled){ G.controlled=n2; G.switchFlash=0.5; }
+  if(G.offense==='A' && !NET.on){
+    var cm=G.controlled, outFor=cm ? Math.max(cm.stun||0, cm.down||0) : 9;
+    var free=!(G.switchLockUntil>G.gt);
+    // Your man only changes when he is really out of it: a quick knock down
+    // keeps you on him. Then you get the defender best placed to make the
+    // play, not simply the one nearest the ball, so control does not jump
+    // across the field.
+    if(!cm || cm.team!=='H' || outFor>0.6){
+      var n2=bestDefender('H');
+      if(n2 && n2!==cm && !(n2.stun>0) && !(n2.down>0)) switchTo(n2);
     }
+    // They throw it: you get the man nearest where it is going (once a throw)
+    else if(free && G.thrown && !G.thrown.swDone && !G.thrown.lat && !G.thrown.kickoff){
+      G.thrown.swDone=true;
+      var nt=null, ntd=1e9;
+      for(var tn=0;tn<G.players.length;tn++){ var tq=G.players[tn];
+        if(tq.team!=='H' || tq.stun>0 || tq.down>0) continue;
+        var td3=Math.hypot(tq.x-G.thrown.tx,tq.y-G.thrown.ty); if(td3<ntd){ ntd=td3; nt=tq; } }
+      if(nt && nt!==cm && ntd+3*YD < Math.hypot(cm.x-G.thrown.tx,cm.y-G.thrown.ty)) switchTo(nt);
+    }
+    // a new ball carrier (a handoff, a catch): only if someone else is far better placed
+    else if(free && G.carrier && G.carrier!==G.swCar && G.gt-G.snapT>0.3){
+      G.swCar=G.carrier;
+      if(!(cm.wrapT>0)){
+        var nb=bestDefender('H');
+        if(nb && nb!==cm && defScore(cm)-defScore(nb) > 7*YD) switchTo(nb);
+      }
+    }
+    if(G.carrier && G.gt-G.snapT<=0.3) G.swCar=G.carrier;
   }
   if(G.switchFlash>0) G.switchFlash-=dt;
 
@@ -4200,6 +4281,8 @@ function step(dt){
           shock(car.x,car.y,'rgba(255,210,63,.9)',4,36,0.3);
           spokes(car.x,car.y-16,'rgba(255,210,63,.9)',8,8,32);
           dmgText(car,'-'+Math.round(th),'#ffffff');
+          pow((car.x+t2.x)/2, car.y-16, '#ffffff'); car.sq=0.24; car.lean=-0.35;
+          G.hitStopUntil=performance.now()+70;
           G.shake=REDUCED?0:12; G.tchase=0; G.touchDive=false; G.dotAcc=0;
           grabbers++; hw++; lastT=t2;
           continue;
@@ -4235,7 +4318,10 @@ function step(dt){
         return;
       }
       t2.wrapT=(0.85+Math.random()*0.7)*((t2.pwr||1)/res);
-      if(TOUCH_UI && t2===G.controlled){ t2.wrapT=99; t2.humanWrap=true; hw++; G.dotAcc=0; dmgText(car,'-'+Math.round(hit/res),'#ffffff'); }   // your man ran into him: your tackle
+      if(TOUCH_UI && t2===G.controlled){   // your man ran into him: your tackle
+        t2.wrapT=99; t2.humanWrap=true; hw++; G.dotAcc=0; dmgText(car,'-'+Math.round(hit/res),'#ffffff');
+        pow((car.x+t2.x)/2, car.y-16, '#ffffff'); car.sq=0.22; G.hitStopUntil=performance.now()+60;
+      }
       t2.wrapA=Math.atan2(tdy,tdx);
       burst(car.x,car.y-8,'#ffffff');
       G.shake=REDUCED?0:Math.max(G.shake,6);
@@ -4345,7 +4431,7 @@ function postPlay(txt, minHold, then){
       q.p.cel=Math.max(q.p.cel||0, 2.0); q.p.celKind=q.dance||'pump';               // his celebration runs with the card
     }, cardAt);
   }
-  var done = cardAt + (q && q.p ? (td?3100:2000) : 500);
+  var done = cardAt + (q && q.p ? (td?3100:1500) : 500);
   setTimeout(function(){
     if(G!==g0 || G.over) return;
     if(then) then(); else G.phase='playcall';
@@ -4760,6 +4846,15 @@ function draw(){
       var bl=Math.hypot(e.x2-e.x,e.y2-e.y), ba=Math.atan2(e.y2-e.y,e.x2-e.x);
       addSprite(fxTint(FXI.bolt,solidOf(e.c)),(e.x+e.x2)/2,(e.y+e.y2)/2,
                 bl,bl*0.5*(128/256),k2,ba,1);
+    } else if(e.pow){
+      var pk=1-k2, pr2=10+pk*16;
+      ctx.save(); ctx.translate(e.x,e.y); ctx.rotate(e.rot); ctx.globalAlpha=Math.min(1,k2*2.2);
+      ctx.beginPath();
+      for(var pp=0;pp<20;pp++){ var pa3=pp/20*Math.PI*2, prr=(pp%2?pr2*0.5:pr2); ctx.lineTo(Math.cos(pa3)*prr, Math.sin(pa3)*prr*0.8); }
+      ctx.closePath(); ctx.fillStyle=e.c; ctx.fill();
+      ctx.lineWidth=1.6; ctx.strokeStyle='rgba(20,14,4,.9)'; ctx.stroke();
+      ctx.beginPath(); ctx.arc(0,0,pr2*0.3,0,Math.PI*2); ctx.fillStyle='#fffbe8'; ctx.fill();
+      ctx.restore();
     } else if(e.dmg){
       ctx.save(); ctx.globalAlpha=Math.min(1,k2*1.8);
       ctx.font='700 15px "Anton", Impact, sans-serif'; ctx.textAlign='center'; ctx.textBaseline='middle';
@@ -5062,6 +5157,20 @@ function drawSprite(p){
   var POCKET = !KD && p===G.carrier && p.role==='QB' && p.pocket>0 && !(p.throwArm>0);
   if(POCKET){ AF=0.25; EF=2.15; AB=0.2; EB=2.2; }
 
+  // When he changes what he is doing (stops, starts, sets, catches, gets
+  // up) the limbs ease over for a moment instead of snapping to the new pose.
+  var pmode = KD ? 'kd' : (p.stance>0 ? 'st' : (p.cel>0 ? 'cel' : (p.locked>0 ? 'lk' :
+              (p.catchT>0 ? 'ct' : (POCKET ? 'pk' : (moving ? 'run' : 'idle'))))));
+  var pnow=performance.now();
+  if(p._pm!==pmode){ if(p._pa && pmode!=='kd' && p._pm!=='kd'){ p._pb0=pnow; p._pf=p._pa; } p._pm=pmode; }
+  if(p._pb0 && p._pf && pnow-p._pb0<140){
+    var bk=(pnow-p._pb0)/140; bk=bk*bk*(3-2*bk); var PF=p._pf;
+    AF=PF.AF+(AF-PF.AF)*bk; AB=PF.AB+(AB-PF.AB)*bk; EF=PF.EF+(EF-PF.EF)*bk; EB=PF.EB+(EB-PF.EB)*bk;
+    LF={t:PF.LFt+(LF.t-PF.LFt)*bk, s:PF.LFs+(LF.s-PF.LFs)*bk};
+    LB={t:PF.LBt+(LB.t-PF.LBt)*bk, s:PF.LBs+(LB.s-PF.LBs)*bk};
+  }
+  p._pa={AF:AF,AB:AB,EF:EF,EB:EB,LFt:LF.t,LFs:LF.s,LBt:LB.t,LBs:LB.s};
+
   ctx.translate(0,bob);
 
   // ---- back leg, then back arm
@@ -5115,6 +5224,14 @@ function drawSprite(p){
     var elT=boneH(S.uarm,3.6,SHO+1,ta,UA,HUA);
     boneH(S.farm,elT.x,elT.y,ta+0.35,FA,HFA);
     if(GR.sf) sleeve(elT.x,elT.y,ta+0.35,FA*0.7,HFA*1.3,GR.sc);
+  } else if(!KD && p.punchT>0){
+    var pu=p.punchT/(p.punchDur||0.27), pa, pe;
+    if(pu<0.28){ var pw=pu/0.28; pa=0.2-1.15*pw; pe=0.6+1.35*pw; }                       // wind up: fist cocked back
+    else if(pu<0.6){ var ps=(pu-0.28)/0.32; ps=1-(1-ps)*(1-ps); pa=-0.95+2.5*ps; pe=1.95-1.9*ps; }   // strike: straight out
+    else { var pr=(pu-0.6)/0.4; pa=1.55-1.3*pr; pe=0.05+0.85*pr; }                        // and back
+    var elP=boneH(S.uarm,3.6,SHO+1,pa,UA,HUA);
+    boneH(S.farm,elP.x,elP.y,pa+pe,FA,HFA);
+    if(GR.sf) sleeve(elP.x,elP.y,pa+pe,FA*0.7,HFA*1.3,GR.sc);
   } else if(!KD && p.arm>0){
     var k=p.arm/0.55;
     var elS=boneH(S.uarm,3.6,SHO+1,1.38*k,UA,HUA);
@@ -5310,8 +5427,12 @@ function drawGuyRaw(p){
               0, 0, Math.PI*2);
   ctx.fill();
   if(ctrl){
-    ctx.strokeStyle='rgba(238,243,232,.9)'; ctx.lineWidth=1.5;
-    ctx.beginPath(); ctx.ellipse(p.x,p.y,13,5.2,0,0,Math.PI*2); ctx.stroke();
+    // red and pulsing when the ball carrier is close enough to tackle or punch
+    var inR = G.phase==='live' && G.carrier && G.carrier.team!==p.team &&
+              Math.hypot(G.carrier.x-p.x,G.carrier.y-p.y) < TACKLE_REACH;
+    var rp = inR ? 13+Math.sin(performance.now()/60)*1.6 : 13;
+    ctx.strokeStyle= inR ? 'rgba(255,70,70,.95)' : 'rgba(238,243,232,.9)'; ctx.lineWidth= inR ? 2.4 : 1.5;
+    ctx.beginPath(); ctx.ellipse(p.x,p.y,rp,rp*0.4,0,0,Math.PI*2); ctx.stroke();
     if(G.switchFlash>0){
       var sf=G.switchFlash/0.5, rr=13+(1-sf)*18;
       ctx.strokeStyle='rgba(255,210,63,'+sf.toFixed(2)+')'; ctx.lineWidth=2.2;
@@ -6187,7 +6308,11 @@ function showPlaycall(){
   });
   html+='</div>';
   var canTO = !NET.on && G.clockRunning && (G.timeouts|0)>0;
+  var lastId=G.lastCall && G.lastCall[onO?'o':'d'], lastP=null;
+  list.forEach(function(pl){ if(pl.id===lastId && pl.id!=='punt' && pl.id!=='fg') lastP=pl; });
   html+='<div style="margin-top:8px; display:flex; gap:8px">'+
+    (lastP ? '<button class="card" id="samePlay" type="button" style="flex:1;border-color:var(--gold)">'+
+      '<div class="k">SAME PLAY</div><div class="t">'+lastP.name+' again</div></button>' : '')+
     '<button class="card" id="seeStats" type="button" style="flex:1">'+
     '<div class="k">STATS</div><div class="t">Box score and play by play</div></button>'+
     (canTO ? '<button class="card" id="toSheet" type="button" style="flex:1">'+
@@ -6202,6 +6327,8 @@ function showPlaycall(){
   });
   var sb=document.getElementById('seeStats');
   if(sb) sb.addEventListener('click',function(){ G.showingStats=true; showStats(); });
+  var spb=document.getElementById('samePlay');
+  if(spb) spb.addEventListener('click',function(){ choose(lastId); });
   var tb=document.getElementById('toSheet');
   if(tb) tb.addEventListener('click',function(){ callTimeout(); });
   var f=elSheet.querySelector('.card'); if(f) f.focus();
@@ -6887,6 +7014,7 @@ function choose(id){
     return;
   }
   elOv.classList.remove('show');
+  G.lastCall=G.lastCall||{}; G.lastCall[iHaveBall()?'o':'d']=id;   // for "same play" next time
   if(NET.on && NET.host){
     G.hostPick=id; G.pickAt=performance.now();
     tryStartPlay();
@@ -7107,7 +7235,7 @@ if(TOUCH_UI){
     if(canAim() && pickOnScreen(t.clientX,t.clientY)){ FT.mode='aim'; ftAim(t); }
     else if(canAim()) FT.mode='spin';
     else if(!iHaveBall()) FT.mode='tackle';         // swipe tackles, tap punches or switches
-    else if(G.thrown){ takeControl(pickMine(t.clientX,t.clientY)); FT.mode=null; }
+    else if(G.thrown){ FT.mode=null; }                // your pass is in the air: a tap does not switch you
     else FT.mode='spin';                             // carrying it: swipe to spin
   },{passive:false});
   window.addEventListener('touchmove',function(e){
@@ -7159,7 +7287,9 @@ if(TOUCH_UI){
       }
       if(FT.mode==='tackle' && !FT.done && G && G.phase==='live' &&
          Math.hypot(t.clientX-FT.x0,t.clientY-FT.y0)<22 && performance.now()-FT.t0<380){
-        if(!takeControl(pickMine(t.clientX,t.clientY))) touchMove=true;   // the punch (big hit, or a swat at a pass)
+        var cr=G.carrier, cm2=G.controlled;
+        var inPunch = cr && cm2 && cr.team!==cm2.team && Math.hypot(cr.x-cm2.x,cr.y-cm2.y) < 4*YD;
+        if(inPunch || !takeControl(pickMine(t.clientX,t.clientY))) touchMove=true;   // the punch (big hit, or a swat at a pass)
       }
       if(G) G.mouse.on=false;
       FT.id=null; FT.mode=null;
@@ -7549,6 +7679,7 @@ var last=0;
 function frame(ts){
   if(!last) last=ts;
   var dt=Math.min(0.05,(ts-last)/1000)*GAME_SPEED; last=ts;
+  if(G && G.hitStopUntil && performance.now()<G.hitStopUntil) dt=0;   // hit-stop: the moment of contact holds for a beat
   if(NET.on && !NET.host){
     // guest: render only, no simulation
     try{
