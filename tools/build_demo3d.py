@@ -220,10 +220,10 @@ function sidelineGuys(P){
   }
   return out;
 }
-function STAND_OFF(){ return TOUCH_UI ? -VH*0.02 : VH*0.08; }   // how far the field sits below centre (a phone keeps it high: less stand, more field)
+function STAND_OFF(){ return TOUCH_UI ? VH*0.08 : VH*0.08; }   // how far the field sits below centre (a phone keeps it high: less stand, more field)
 function setupProj(sx,sy){
   var want=BASE3*CAM3.z, fit=camFit(camPoints(),cam.x,cam.y);
-  var tgt=Math.max(TOUCH_UI?BASE3*0.62:0.35, Math.min(want,fit));
+  var tgt=Math.max((TOUCH_UI && G && G.phase==='live')?BASE3*0.62:0.35, Math.min(want,fit));   // the phone floor only while the ball is live
   if(!CAM3.S) CAM3.S=tgt;
   // pull out fast so nothing leaves the frame, push in gently
   CAM3.S += (tgt-CAM3.S)*(tgt<CAM3.S?(TOUCH_UI?0.12:0.3):(TOUCH_UI?0.035:0.06));
@@ -334,7 +334,7 @@ function camMood(now){
   if(G && G.phase==='heroIntro') return 1.9;        // close on the star as he walks out
   if(G && G.broadcast && G.broadcast.until>now) return 1.85;   // in on the man who made the play
   if(G && playArtOn()) return 0.7;                   // pull back to read the play
-  if(!G || G.phase!=='live') return 0.86;
+  if(!G || G.phase!=='live') return TOUCH_UI ? 0.5 : 0.86;   // between plays on a phone: a wide stadium shot
   if(G.thrown) return 0.92;
   var c=G.carrier;
   if(!c) return 1.0;
@@ -435,10 +435,12 @@ subs.append(('''    ctx.globalAlpha=k2;
     ctx.globalAlpha=k2;
     if(e.ringed){'''))
 
-subs.append(('''  if(G.kick) drawKick();
+subs.append(('''  if(!G._p3) drawSnap(null);
+  if(G.kick) drawKick();
   else if(G.thrown||(G.ball&&!G.ball.held)) drawBall();
   ctx.restore();
-}''', '''  if(P3 && G.ball) at3D(P3,G.ball.x,G.ball.y);
+}''', '''  drawSnap(P3);
+  if(P3 && G.ball) at3D(P3,G.ball.x,G.ball.y);
   if(G.kick) drawKick();
   else if(G.thrown||(G.ball&&!G.ball.held)) drawBall();
   ctx.restore();
@@ -479,6 +481,7 @@ subs.append(('''  scale += (want-scale)*0.06;
       tx=(x0+x1)/2*0.6+bx*0.4; ty=(y0+y1)/2*0.6+by*0.4;
     }
   }
+  if(TOUCH_UI && VIEW3D && G.phase!=='live' && !actCam) ty-=9*YD;   // tilt up toward the stands between plays
   if(!isFinite(tx)) tx=FW/2;
   if(!isFinite(ty)) ty=FH/2;
   var follow = actCam ? (TOUCH_UI?0.12:0.2) : (VIEW3D ? (TOUCH_UI?0.09:0.15) : 0.11);

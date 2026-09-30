@@ -100,6 +100,7 @@
   #legend b{color:var(--text); font-weight:600;}
   kbd{font-family:'JetBrains Mono',monospace; font-size:10px; background:var(--panel-2); border:1px solid var(--line); border-radius:2px; padding:1px 4px; color:var(--chalk);}
 
+  #meters{display:none !important;}
   #meters{position:absolute; left:10px; bottom:10px; z-index:3; width:140px; font-size:10px; letter-spacing:.13em; text-transform:uppercase; font-weight:700;}
   .meter{margin-bottom:5px;}
   .meter .lbl{color:rgba(238,243,232,.42); margin-bottom:2px; display:flex; justify-content:space-between;}
@@ -528,7 +529,7 @@ function axis(){
   x+=touchVec.x; y+=touchVec.y;
   var m=Math.hypot(x,y); return m>1?{x:x/m,y:y/m}:{x:x,y:y};
 }
-function wantSprint(){ return !!(keys['shift']||touchSprint); }
+function wantSprint(){ return false; }        // no sprinting: only a move makes a man faster
 var pressed=Object.create(null);
 function eat(k){ if(pressed[k]){ pressed[k]=false; return true; } return false; }
 function tapJuke(){ if(eat('1')||eat('j')){return true;} if(touchJuke){touchJuke=false;return true;} return false; }
@@ -565,10 +566,11 @@ function worldToScreen(wx,wy){
 // The receiver under the cursor, judged by where his body is drawn rather
 // than where the click meets the turf. In 3D a click on a man's chest lands
 // yards behind his feet, which picked the wrong man or nobody at all.
-var EDGE_M=30;
+var EDGE_M=30, EDGE_LEG=null;          // where the move buttons sit, in canvas pixels (phones)
 function edgeSpot(q){
   var p=worldToScreen(q.x,q.y), by=p.y-18*p.s;
-  var bot = VH - (TOUCH_UI ? 110 : EDGE_M);          // on a phone, above the move buttons
+  var bot = VH - EDGE_M;
+  if(TOUCH_UI && EDGE_LEG && p.x > EDGE_LEG.l-18 && p.x < EDGE_LEG.r+18) bot = EDGE_LEG.t-8;   // behind the move buttons counts as off
   if(p.x>=EDGE_M && p.x<=VW-EDGE_M && by>=EDGE_M && by<=bot) return null;
   return {x:Math.max(EDGE_M,Math.min(VW-EDGE_M,p.x)), y:Math.max(EDGE_M,Math.min(bot,by))};
 }
@@ -674,6 +676,7 @@ function mk(team,role,x,y,info){
 
 function setupPlay(playId){
   G.playNo=(G.playNo|0)+1;
+  G.aaArmed=null;
   G.controlled2=null;
   openPlay(playId);
   G.play=playId; G.players=[]; G.thrown=null; G.fx=[]; G.snapT=G.gt;
@@ -691,6 +694,7 @@ function setupPlay(playId){
   // ---- OFFENSE: C, OL, OL, TE, QB, WR, WR, RB
   var qb=mk(offCol,'QB',G.los-5.5*YD*d,mid, heroIsQB?OH:SUPPORT.QB); if(heroIsQB) applyHero(qb,OH);
   var c =mk(offCol,'C', G.los-1.5*YD*d,mid, SUPPORT.C);
+  G.snapC=c;
   var o1=mk(offCol,'OL',G.los-1*YD*d,mid-4.5*YD, SUPPORT.OL1);
   var o2=mk(offCol,'OL',G.los-1*YD*d,mid+4.5*YD, SUPPORT.OL2);
   var te=mk(offCol,'TE',G.los,mid+7.5*YD, SUPPORT.TE);
@@ -1266,8 +1270,11 @@ function fireAbility(seat, IN, slot){
     if(n2) credit(me,'SUPER BLOCK');
   }
   else if(id==='clothesline'){
-    var v2=foeNear(40);
-    if(!v2) return;
+    // The ball carrier if he is in reach, otherwise the nearest man; he lunges
+    // the last few yards to get there.
+    var v2 = (G.carrier && G.carrier.team===foeTeam && Math.hypot(G.carrier.x-me.x,G.carrier.y-me.y)<84) ? G.carrier : foeNear(76);
+    if(!v2){ tell('NOBODY IN REACH',500); return; }
+    lunge(me, v2, 14);
     v2.stun=1.7; v2.down=Math.max(v2.down,1.3); v2.wrapped=0;
     launch(v2, me.x, me.y, 200, 6.2); v2.spin=1;
     spokes(v2.x,v2.y-18,'rgba(255,255,255,.9)',7,8,28);
@@ -1278,6 +1285,7 @@ function fireAbility(seat, IN, slot){
     flash(v2.x,v2.y-18,'rgba(255,255,255,.95)',26);
     dust(v2.x,v2.y,8,1.0);
     tell('CLOTHESLINE!',700); credit(me,'CLOTHESLINE');
+    if(v2===G.carrier && G.phase==='live'){ v2.hp=0; v2.down=1.6; endPlay(v2.x,'TACKLED'); }   // on the ball carrier it is a tackle
   }
 
   // ---- receivers -------------------------------------------------------
@@ -1319,10 +1327,11 @@ function fireAbility(seat, IN, slot){
     if(n3) credit(me,'SLAM');
   }
   else if(id==='fumblegen'){
-    if(!G.carrier || G.carrier.team===me.team) return;
+    if(!G.carrier || G.carrier.team===me.team){ tell('NOBODY TO STRIP',500); return; }
     var fd=Math.hypot(G.carrier.x-me.x, G.carrier.y-me.y);
-    if(fd>48) return;                            // nothing to strip, no charge
+    if(fd>90){ tell('GET CLOSER',500); return; }    // nothing to strip, no charge
     var vic=G.carrier;
+    lunge(me, vic, 12);
     fumble(vic,(vic.x-me.x)*3.6,(vic.y-me.y)*3.6);
     G.shake=REDUCED?0:20;
     flash(vic.x,vic.y-16,'rgba(255,210,63,1)',34);
@@ -1340,7 +1349,22 @@ function fireAbility(seat, IN, slot){
 
   // ---- the secondary ---------------------------------------------------
   else if(id==='aagun'){
-    if(!G.thrown) return;                        // nothing in the air, no charge
+    // Nothing in the air yet: it arms, and fires the moment they throw.
+    if(!G.thrown || G.thrown.lat || G.thrown.kickoff){
+      G.aaArmed=me;
+      flash(me.x,me.y-32,'rgba(255,60,60,.95)',16);
+      tell('ANTI-AIR ARMED',800);
+    } else laserShot(me);
+  }
+  else return;
+
+  abSpend(me,id);
+}
+// the anti-air itself: the beam, the ball bursting, and where it ends up
+function laserShot(me){
+  function tell(t,ms){ say(t,ms||600); }
+  {
+    if(!G.thrown) return;
     var tgt=G.thrown.target;
     // A laser from his eyes to the ball where it is IN THE AIR (its height
     // above its shadow), held for half a second, and the ball bursts.
@@ -1370,12 +1394,10 @@ function fireAbility(seat, IN, slot){
       endPlay(G.los,'INCOMPLETE');
     }
   }
-  else return;
-
-  abSpend(me,id);
 }
 
 // ================================================================ specials
+var SPECIAL_CD=3;        // plays before a hero's special comes back
 function fireSpecial(seat,IN){
   seat=seat||{side:'H',man:G.controlled,M:G,hero:HERO};
   var me=seat.man; if(!me) return;
@@ -1405,8 +1427,12 @@ function fireSpecial(seat,IN){
   }
 
   var HRO=seat.hero, m=HRO.move;
+  // Like every other move it comes back after a few plays, not a second and a half.
+  var left=(M.specialDue||0)-G.playNo;
+  if(left>0){ if(seat.local!==false && (seat.side==='H'||!NET.on)) say(HRO.moveName.toUpperCase()+': '+left+(left===1?' PLAY':' PLAYS'),700); return; }
   if(M.power<HRO.cost) return;
   M.power-=HRO.cost;
+  M.specialDue=G.playNo+SPECIAL_CD+1;
   superMoment(me, HRO.moveName);
 
   if(m==='quake'){
@@ -1473,7 +1499,7 @@ function fireSpecial(seat,IN){
 
   } else if(m==='rocket'){
     // flat uninterceptable bullet to whoever is most open
-    if(me.role!=='QB'||G.carrier!==me||G.thrown||G.windup){ M.power+=HRO.cost; return; }
+    if(me.role!=='QB'||G.carrier!==me||G.thrown||G.windup){ M.power+=HRO.cost; M.specialDue=0; return; }
     var best=null,bs=-1e9;
     for(var j=0;j<G.players.length;j++){
       var r=G.players[j];
@@ -1483,7 +1509,7 @@ function fireSpecial(seat,IN){
       var sc=op*1.2+(r.x-G.los)*d/YD*1.4;
       if(sc>bs){bs=sc;best=r;}
     }
-    if(!best){ M.power+=HRO.cost; return; }
+    if(!best){ M.power+=HRO.cost; M.specialDue=0; return; }
     M.moveCd=1.4;
     G.windup={target:best,t:0,dur:0.14,qb:me,rocket:true};
     say('ROCKET!',700);
@@ -1715,6 +1741,16 @@ function portal(x,y,c){
     G.fx.push({x:x+Math.cos(a)*26, y:y-12+Math.sin(a)*11, vx:-Math.cos(a)*60-Math.sin(a)*50,
       vy:-Math.sin(a)*26+Math.cos(a)*22, r:2.2, life:0.42, max:0.42, c:c});
   }
+}
+// close the gap to a target in a blur: after-images where he was
+function lunge(me, v, stop){
+  var dx=v.x-me.x, dy=v.y-me.y, dd=Math.hypot(dx,dy)||1;
+  if(dd<=stop+2) return;
+  var go=dd-stop;
+  for(var i=1;i<=4;i++) G.fx.push({gh:true,x:me.x+dx/dd*go*(i/5),y:me.y+dy/dd*go*(i/5),face:me.face,
+    c:(me.team==='H'?'#7fa0ff':'#ff8a94'),life:0.18+i*0.04,max:0.18+i*0.04});
+  me.x+=dx/dd*go; me.y+=dy/dd*go; me.face=dx>=0?1:-1;
+  dust(me.x,me.y,6,0.8);
 }
 // put a man in the air: off his feet, then down
 function launch(q, fx, fy, power, up){
@@ -2596,7 +2632,7 @@ function driveHuman(seat, IN, dt, now){
   if(IN.k1) fireAbility(seat, IN, 0);
   if(IN.k2) fireAbility(seat, IN, 1);
   if(IN.k3) fireAbility(seat, IN, 2);
-  M.power=Math.min(100,M.power+13*dt);
+  M.power=100; M.stam=100;                        // no meters: moves are held back by cooldowns
 
   var jk=now<M.jukeUntil, diving=now<M.diveUntil;
   // on defence the AI runs at DEF_SPD, so a human on that side has to as well
@@ -3083,6 +3119,11 @@ function step(dt){
       for(var fi=0;fi<3;fi++) G.fx.push({x:G.ball.x+(Math.random()-0.5)*5, y:G.ball.y-t.h+(Math.random()-0.5)*5,
         vx:(Math.random()-0.5)*30, vy:-12-Math.random()*16, life:0.34, max:0.34,
         r:2+Math.random()*2.4, c:['#ff5a1f','#ff9a2a','#ffd23f'][fi]});
+    }
+    if(G.aaArmed && !t.lat && !t.kickoff && t.t>0.16 && G.aaArmed.team!==G.offense &&
+       G.players.indexOf(G.aaArmed)>=0 && !(G.aaArmed.stun>0)){
+      var aa=G.aaArmed; G.aaArmed=null; laserShot(aa);
+      if(!G.thrown) return;
     }
     if(t.homing && !REDUCED && Math.random()<0.7){
       G.fx.push({x:G.ball.x+(Math.random()-0.5)*10, y:G.ball.y-t.h+(Math.random()-0.5)*8,
@@ -3697,6 +3738,7 @@ function draw(){
   ctx.globalAlpha=1;
 
   drawPlayArt();
+  if(!G._p3) drawSnap(null);
   if(G.kick) drawKick();
   else if(G.thrown||(G.ball&&!G.ball.held)) drawBall();
   ctx.restore();
@@ -3973,16 +4015,45 @@ function drawSprite(p){
     // the crook of the arm instead of pasted on top of the hand
     var elF=boneH(S.uarm,3.6,SHO+1,AF,UA,HUA);
     var fa=AF+EF;
-    if(p===G.carrier){
+    if(p===G.carrier && !snapPos()){
       heldBall(p, elF.x+Math.sin(fa)*(FA-1.4), elF.y+Math.cos(fa)*(FA-1.4), fa, POCKET);
       var held=true;
     }
     boneH(S.farm,elF.x,elF.y,fa,FA,HFA);
   }
   // mid-throw or mid-stiff-arm the ball rides at his hip
-  if(p===G.carrier && !held) heldBall(p, 4.8, HIP-9, null, false);
+  if(p===G.carrier && !held && !snapPos()) heldBall(p, 4.8, HIP-9, null, false);
 }
 
+// The snap. Before it the ball is on the turf under the center's hands; at
+// the snap it flies back to the quarterback (or to the holder on a kick), and
+// only then is it in his hands.
+var SNAP_DUR=0.22;
+function snapPos(){
+  if(!G) return null;
+  var c=G.snapC; if(!c || G.players.indexOf(c)<0) return null;
+  var d=dir(), bx=c.x+d*8, by=c.y;
+  var fk=G.fgKick, pre=(G.phase==='presnap' || G.phase==='kickset');
+  if(pre) return {x:bx, y:by, h:1.5, flat:true};
+  var to = fk ? fk.holder : G.carrier;
+  if(!to || G.phase!=='live') return null;
+  var k=(G.gt-G.snapT)/SNAP_DUR;
+  if(k>=1) return fk ? {x:to.x+d*4, y:to.y, h:3, flat:true} : null;   // held on the tee till the kick
+  if(k<0) k=0;
+  return {x:bx+(to.x+d*4-bx)*k, y:by+(to.y-by)*k, h:1.5+Math.sin(k*Math.PI)*9+k*9, k:k};
+}
+function drawSnap(P){
+  var sp=snapPos(); if(!sp || G.kick) return;
+  if(P) at3D(P,sp.x,sp.y);
+  ctx.save();
+  ctx.fillStyle='rgba(0,0,0,.28)';
+  ctx.beginPath(); ctx.ellipse(sp.x,sp.y,5.5,2.3,0,0,Math.PI*2); ctx.fill();
+  ctx.translate(sp.x, sp.y-sp.h);
+  ctx.rotate(sp.flat ? 0 : (sp.k||0)*Math.PI*3);        // a spiral back to him
+  if(BALL_IMG.ready) ctx.drawImage(BALL_IMG,-7.9,-4.9,15.8,9.8);
+  else { ctx.fillStyle='#7a4a28'; ctx.beginPath(); ctx.ellipse(0,0,7.1,4.2,0,0,Math.PI*2); ctx.fill(); }
+  ctx.restore();
+}
 // The ball in a man's grip. It sways with his stride so it has weight, and
 // when he is wrapped up or nearly spent it rattles in his hands: the lower
 // his footing, the harder it shakes. That is the tell that it could come out.
@@ -4526,6 +4597,8 @@ var ICON_SPECIAL='<path d="M12 3l2.4 5.6L20 10l-4.3 3.9 1.2 5.9L12 17l-4.9 2.8 1
 function edgeMarkers(){
   var box=document.getElementById('edgeMk');
   if(!box){ box=document.createElement('div'); box.id='edgeMk'; stage.appendChild(box); }
+  var lgd=document.getElementById('legend'), sr=cv.getBoundingClientRect();
+  if(lgd){ var lr=lgd.getBoundingClientRect(); EDGE_LEG = lr.width ? {l:lr.left-sr.left, r:lr.right-sr.left, t:lr.top-sr.top} : null; }
   var on = G.phase==='live' && iHaveBall() && G.carrier && G.carrier.role==='QB' &&
            !G.thrown && !pastTheLine(G.carrier);
   var html='';
@@ -4561,8 +4634,9 @@ function touchExtras(onD, live){
   } else {
     var cost=Math.max(1,HERO.cost);
     var mvOk = HERO.move==='cannon' || (G.moveCd<=0 && G.power>=cost);
-    setAb(4, HERO.moveName, '', mvOk, live, 0, ICON_SPECIAL,
-          HERO.move==='cannon' ? 0 : need(G.moveCd,2,cost), 'move-'+HERO.move);
+    var spLeft=Math.max(0,(G.specialDue||0)-G.playNo);
+    setAb(4, spLeft>0 ? (spLeft+(spLeft===1?' PLAY':' PLAYS')) : HERO.moveName, '', spLeft===0, live, 0, ICON_SPECIAL,
+          spLeft/(SPECIAL_CD+1), 'move-'+HERO.move);
     setAb(5,'Pitch','', !!(G.carrier && G.carrier.team===G.offense && !G.thrown), live, 0, ICON_PITCH, 0, 'pitch');
   }
   var bar=document.getElementById('preBar');
@@ -5331,6 +5405,7 @@ function startFieldGoal(kind){
   }
   [-4.6,4.6].forEach(function(wy,wi){ var w=mk(kickTeam,'TE', G.los-d*1.6*YD, mid+wy*YD, SUPPORT[wi?'TE':'WR1']); w.route='block'; blockers.push(w); });
   var holder=mk(kickTeam,'TE', G.los-d*7*YD, mid+0.6*YD, SUPPORT.QB); holder.route='hold';
+  G.snapC=blockers.filter(function(b){ return b.role==='C'; })[0]||blockers[2];
   var kicker=mk(kickTeam,'TE', G.los-d*9.5*YD, mid-1.6*YD, {num:3, name:'Kicker'}); kicker.route='hold';
   for(var r=0;r<6;r++){
     var ru=mk(defT,'RUSH', G.los+d*1*YD, mid+(-5+r*2)*YD, DEFENDERS[r%DEFENDERS.length]);
@@ -5353,7 +5428,7 @@ function startFieldGoal(kind){
     fk.aim=aim; fk.pow=pow;
     for(var i=0;i<G.players.length;i++) G.players[i].stance=0;
     G.phase='live'; G.snapT=G.gt;
-    burst(G.los, mid, '#f1f1ec');
+    burst(G.snapC?G.snapC.x:G.los, mid, '#f1f1ec');
   });
 }
 // Runs inside step while a kick is being set up. True means the kick is away.
@@ -5801,6 +5876,10 @@ if(TOUCH_UI){
           // him, led by where he is going. Swiping exactly at a moving man on
           // a small screen is too hard, so a slide means "tackle him".
           var tc=G.carrier, tm=G.controlled;
+          // too far to reach him: a dive would only be a dash across the field
+          if(tc && tm && tc.team!==tm.team && Math.hypot(tc.x-tm.x,tc.y-tm.y)>9*YD){
+            say('TOO FAR',420); FT.done=true; continue;
+          }
           if(tc && tm && tc.team!==tm.team){
             var lx=tc.x+tc.vx*0.25-tm.x, ly=tc.y+tc.vy*0.25-tm.y, lm=Math.hypot(lx,ly)||1;
             var sm=Math.hypot(dx,dy)||1;
