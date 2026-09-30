@@ -6923,16 +6923,33 @@ if(TOUCH_UI){
       var q=G.players[i];
       if(q.team!==side || q===G.controlled) continue;
       var p=worldToScreen(q.x,q.y), by=p.y-18*p.s;
-      var d=Math.hypot(p.x-sx, by-sy), reach=Math.max(28, 22*p.s);
+      var d=Math.hypot(p.x-sx, by-sy), reach=Math.max(46, 34*p.s);
       if(d<reach && d<bd){ bd=d; best=q; }
     }
     return best;
   }
   function takeControl(q){
     if(!q || (NET.on && !NET.host)) return false;
-    G.controlled=q; G.switchFlash=0.5;
+    switchTo(q);
     say(surname(q),600);
     return true;
+  }
+  // the man a tap anywhere hands you: the ball in the air, whoever is nearest
+  // where it is going; otherwise whoever is best placed to make the play
+  function tapBest(){
+    var cm=G.controlled, side=mySide(), b=null;
+    if(G.thrown){
+      var bd2=1e9;
+      for(var i=0;i<G.players.length;i++){ var q=G.players[i];
+        if(q.team!==side || q.stun>0 || q.down>0) continue;
+        var qd=Math.hypot(q.x-G.thrown.tx,q.y-G.thrown.ty); if(qd<bd2){ bd2=qd; b=q; } }
+      if(b && cm && bd2+2*YD > Math.hypot(cm.x-G.thrown.tx,cm.y-G.thrown.ty)) b=null;
+    } else {
+      b=bestDefender(side);
+      if(b && (b.stun>0 || b.down>0)) b=null;
+      if(b && cm && defScore(b) > defScore(cm)-YD) b=null;
+    }
+    return (b && b!==cm) ? b : null;
   }
   function ftAim(t){
     var w=screenToWorld(t.clientX,t.clientY);
@@ -7017,9 +7034,25 @@ if(TOUCH_UI){
       }
       if(FT.mode==='tackle' && !FT.done && G && G.phase==='live' &&
          Math.hypot(t.clientX-FT.x0,t.clientY-FT.y0)<22 && performance.now()-FT.t0<380){
+        // A tap on defence does something useful wherever it lands. On the
+        // phone, 344 taps mid-play switched nobody and 299 did nothing: a
+        // switch needed a thumb right on a man, and the thumb rests in the
+        // bottom right corner. So what a tap does depends on the play:
+        //   the ball carrier on top of your man: punch him
+        //   the ball carrier within slide reach: slide at him
+        //   a tap on one of your men: him
+        //   anything else: the man best placed to make the play (the ball
+        //   in the air: the man nearest where it is going, or a swat)
         var cr=G.carrier, cm2=G.controlled;
-        var inPunch = cr && cm2 && cr.team!==cm2.team && Math.hypot(cr.x-cm2.x,cr.y-cm2.y) < 4*YD;
-        if(inPunch || !takeControl(pickMine(t.clientX,t.clientY))) touchMove=true;   // the punch (big hit, or a swat at a pass)
+        var cd2=(cr && cm2 && cr.team!==cm2.team) ? Math.hypot(cr.x-cm2.x,cr.y-cm2.y) : 1e9;
+        if(cd2 < 4*YD) touchMove=true;
+        else if(cd2 < SLIDE_REACH && !G.thrown){
+          var sdx=cr.x-cm2.x, sdy=cr.y-cm2.y;
+          if(NET.on && !NET.host) netSend({t:'dive', x:Math.round(sdx*9), y:Math.round(sdy*9)});
+          else touchTackle(cm2, sdx, sdy);
+        }
+        else if(takeControl(pickMine(t.clientX,t.clientY))){ /* the man under your thumb */ }
+        else if(!takeControl(tapBest())) touchMove=true;   // nobody better: a swat, or a jab
       }
       if(G) G.mouse.on=false;
       FT.id=null; FT.mode=null;
