@@ -131,6 +131,9 @@ function camPoints(){
   if(G.broadcast && G.broadcast.until>performance.now() && G.broadcast.p){
     return [[G.broadcast.p.x, G.broadcast.p.y]];            // only him, so the zoom can go in
   }
+  if(G.phase==='live' && G.carrier && G.brawlUntil>performance.now()){
+    return [[G.carrier.x, G.carrier.y]];                    // a clinch with your man in it: only the fight
+  }
   if(G.ball) pts.push([G.ball.x,G.ball.y]);
   if(G.thrown){
     pts.push([G.thrown.tx,G.thrown.ty]);
@@ -226,7 +229,7 @@ function setupProj(sx,sy){
   var tgt=Math.max(TOUCH_UI?BASE3*0.62:0.35, Math.min(want,fit));   // a phone never pulls out so far the players turn into ants
   if(!CAM3.S) CAM3.S=tgt;
   // pull out fast so nothing leaves the frame, push in gently
-  CAM3.S += (tgt-CAM3.S)*(tgt<CAM3.S?(TOUCH_UI?0.12:0.3):(TOUCH_UI?0.035:0.06));
+  CAM3.S += (tgt-CAM3.S)*(tgt<CAM3.S?(TOUCH_UI?0.12:0.3):((G && G.brawlUntil>performance.now())?0.1:(TOUCH_UI?0.035:0.06)));
   var S0=CAM3.S, Z0=Z3, c=TILT3;
   var K=c*S0*Z0*Z0;
   var P={S0:S0, Z0:Z0, K:K, hz:VH/2+STAND_OFF()+sy - c*S0*Z0, cx:VW/2+sx, camx:cam.x, camy:cam.y};
@@ -337,6 +340,7 @@ function camMood(now){
   if(CAM3.actUntil>now) return TOUCH_UI?1.25:1.55;
   if(G && G.phase==='heroIntro') return 1.9;        // close on the star as he walks out
   if(G && G.broadcast && G.broadcast.until>now) return G.broadcast.td ? (G.broadcast.wide ? 1.45 : (TOUCH_UI?2.2:2.4)) : (TOUCH_UI ? 1.3 : 1.85);   // in on the man who made the play (close in on a touchdown)
+  if(G && G.phase==='live' && G.carrier && G.brawlUntil>now) return TOUCH_UI?1.05:1.45;   // in on a clinch your man is in, so you can see the punches
   if(G && playArtOn()) return 0.7;                   // pull back to read the play
   if(!G || G.phase!=='live') return TOUCH_UI ? 0.72 : 0.86;   // before the snap on a phone: the same framing as the play, no jump at the snap
   if(TOUCH_UI) return 0.72;                          // a phone holds one zoom through the play
@@ -365,7 +369,8 @@ function camDirect(){
   CAM3.prevShake=G?G.shake:0;
   var zt=camMood(now), act=CAM3.actUntil>now;
   var tdz=!!(G && G.broadcast && G.broadcast.td && G.broadcast.until>now);
-  CAM3.z += (zt-CAM3.z)*(act?0.2:(tdz?0.08:(TOUCH_UI?0.03:0.05)));   // a phone eases between zooms; a touchdown pushes in
+  var brz=!!(G && G.phase==='live' && G.brawlUntil>now);
+  CAM3.z += (zt-CAM3.z)*(act?0.2:(tdz?0.08:(brz?0.12:(TOUCH_UI?0.03:0.05))));   // a phone eases between zooms; a touchdown or a clinch pushes in
   return act;
 }
 

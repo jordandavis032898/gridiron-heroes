@@ -2217,6 +2217,20 @@ var SWIPE={x:0,y:0,t:0};
 // It is a dive, not a sprint: he is flat out and low the whole way. Your own
 // team is never hit.
 var TACKLE_REACH=3.5*YD, SLIDE_REACH=9*YD;
+// Contact is a clinch, not a hit. A defender who gets to the ball carrier
+// squares up and holds him there, and the fight comes out of the carrier one
+// punch at a time: the first after BOX_FIRST, then one every BOX_EVERY (game
+// seconds). You can see every blow, and answer it with your own.
+// All of it tuned in simulation against the old touch-damage numbers
+// (yards, sacks, escapes), with the whistle now about a second after the grab.
+var BOX_FIRST=0.24, BOX_EVERY=0.3, BOX_RATE=1.2;   // when the punches come, and how hard (x the old drain)
+var BOX_YOU=0.6, BOX_YOUHOLD=0.15;                 // your own man punches faster and holds him tighter
+var BOX_HOLD=0.45, BOX_HOLDYOU=0.3;                // how far a held runner still moves: the computer's, yours
+var BOX_BREAK=0.18, BOX_LOOSEN=0.05;               // your punch: chance to break the grip, grip it takes off
+var BOX_CANCEL=true, BOX_REDO=0.08;                // your punch knocks his swing off; he comes back this soon
+var BOX_AI_BREAK=0.15, BOX_WRIGGLE=0.002;          // the computer's runner punching back, and spinning out, while held
+var BOX_ASSIST=false, BOX_QB_ASSIST=true;          // the automatic sidestep and stiff arm in a clinch: a passer's only
+var POW_WORDS=['POW','BAM','WHAM','SMACK','THUD','CRACK','BOOM'];
 function touchTackle(me,dx,dy){
   if(!G || G.phase!=='live' || !me || me.stun>0 || me.down>0 || G.offense===me.team) return false;
   if(G.diveCd>0) return false;
@@ -2468,7 +2482,7 @@ function bigHit(me,M){
 // the grip about one time in four (a special move's grab less, a person's
 // never); otherwise it loosens him and stops the drain for a beat. On a man
 // who is only closing in (a rusher on the passer), it knocks him back.
-function carrierPunch(me,M){
+function carrierPunch(me,M,ai){
   M=M||G;
   if(!me || me!==G.carrier || G.phase!=='live' || G.thrown) return;
   if(M.cpCd>0){ M.cpBuf=performance.now(); return; }
@@ -2485,22 +2499,59 @@ function carrierPunch(me,M){
   if(!foe){ return; }
   me.face=(foe.x>=me.x)?1:-1;
   var kx=foe.x-me.x, ky=foe.y-me.y, km=Math.hypot(kx,ky)||1;
-  pow((foe.x+me.x)/2, foe.y-18, '#ffd23f'); G.hitStopUntil=performance.now()+50; G.shake=REDUCED?0:7;
+  pow((foe.x+me.x)/2, foe.y-18, '#ffd23f', 1.3, powWord()); G.hitStopUntil=performance.now()+50; G.shake=REDUCED?0:7;
   if(foe.wrapT>0){
-    var breakChance = foe.humanWrap ? 0 : ((foe.strongGrab||foe.gripLock) ? 0.15 : 0.27);   // tuned in simulation: about half of grabs broken when you keep punching
+    var breakChance = foe.humanWrap ? 0 : ((foe.strongGrab||foe.gripLock) ? 0.15 : BOX_BREAK);   // tuned in simulation: about half of grabs broken when you keep punching
+    if(ai) breakChance*=BOX_AI_BREAK;
     if(Math.random()<breakChance){
       breakWrap(foe, me);
       foe.stun=Math.max(foe.stun,0.6); foe._pst=foe.stun; launch(foe, me.x, me.y, 130, 2.6);
       me.iFrames=Math.max(me.iFrames||0,0.3);
       if(me===G.controlled) hint('BROKE FREE',700);
     } else {
-      foe.wrapT=Math.max(0.25, foe.wrapT-0.2); G.drainPause=G.gt+0.12;   // rocked: the grip loosens a little
+      foe.wrapT=Math.max(0.25, foe.wrapT-BOX_LOOSEN); G.drainPause=G.gt+0.12;   // rocked: the grip loosens a little
       foe.lean=-0.4; foe.sq=0.2;
+      if(!foe.humanWrap){                               // (your own tackle is not knocked off its rhythm)
+        // his swing is knocked off, but he comes straight back with it (a
+        // fast enough puncher used to keep him from ever landing one)
+        if(BOX_CANCEL && foe.boxV && foe.punchT>0){ foe.punchT=0; foe.boxV=null; foe.boxAcc=(foe.boxAcc||0)+(foe.boxDmg||0); foe.boxT=BOX_REDO; }
+      }
     }
   } else {
     foe.stun=Math.max(foe.stun,0.22); foe._pst=foe.stun;                    // shoved back a step, not out of the play
     launch(foe, me.x, me.y, 85, 1.8);
   }
+}
+// A man in a clinch throws one: the swing starts now and the damage lands
+// with the fist (punchTick, boxLand).
+function boxPunch(t,car){
+  // what the contact used to take comes over the first two, not in one
+  // knockout blow: boxing, not a single haymaker
+  var part=(t.boxHit||0)>24 ? t.boxHit*0.5 : (t.boxHit||0);
+  t.boxDmg=(t.boxAcc||0) + part/Math.max(0.7,car.pwr||1);
+  t.boxAcc=0; t.boxHit=(t.boxHit||0)-part;
+  t.boxT=BOX_EVERY*(t.humanWrap?BOX_YOU:1)*(0.85+Math.random()*0.3);   // your own man throws them faster
+  t.face=(car.x>=t.x)?1:-1;
+  t.punchT=0.001; t.punchDur=0.24; t.punchV=null; t.punchHit=false; t.boxV=car;
+}
+function powWord(){ return POW_WORDS[(Math.random()*POW_WORDS.length)|0]; }
+function boxLand(me,c,dmg){
+  if(!c || G.carrier!==c || G.phase!=='live' || !(me.wrapT>0)){ return; }   // he let go mid-swing
+  var mine=(me===G.controlled||me===G.controlled2||c===G.controlled||c===G.controlled2);
+  c.hp-=dmg;
+  pow((me.x+c.x)/2, c.y-32, me.team==='H'?'#ffd23f':'#ff7a5c', 1.0, powWord());   // at head height, clear of the bodies
+  dmgText(c,'-'+Math.round(dmg), me.team==='H'?'#ffffff':'#ff8a94');
+  c.lean=-0.5; c.sq=0.22;                          // his head snaps back
+  if(mine){ G.hitStopUntil=Math.max(G.hitStopUntil||0, performance.now()+55); G.shake=REDUCED?0:Math.max(G.shake,6); }
+  if(c.hp>0 && c.hp<30 && Math.random()<0.025){
+    fumble(c, (c.x-me.x)*5+c.vx*0.4, (c.y-me.y)*5+c.vy*0.4);
+    say('FUMBLE!',1100);
+  }
+}
+// linemen locked up trade jabs: you can see them land, they decide nothing
+function jab(me,v){
+  me.face=(v.x>=me.x)?1:-1;
+  me.punchT=0.001; me.punchDur=0.22; me.punchV=null; me.punchHit=false; me.jabV=v;
 }
 // the frame the fist lands
 function landPunch(me,c){
@@ -2508,7 +2559,7 @@ function landPunch(me,c){
   var fx=c.x-(me.face||1)*3, fy=c.y-20;
   G.hitStopUntil=performance.now()+60;              // a beat of freeze so the hit has weight
   G.shake=REDUCED?0:8;
-  pow(fx,fy,'#ffd23f');
+  pow(fx,fy,'#ffd23f',1.3,powWord());
   c.lean=-0.5; c.sq=0.22;                           // his head snaps back
   var kx=c.x-me.x, ky=c.y-me.y, km=Math.hypot(kx,ky)||1;
   c.vx=c.vx*0.3+kx/km*80; c.vy=c.vy*0.3+ky/km*80;   // and he stumbles back a step
@@ -2535,12 +2586,20 @@ function punchTick(me,dt){
     if(ld>stop){ var st=Math.min(ld-stop, (ld-stop)*dt/left + 0.5); me.x+=lx/ld*st; me.y+=ly/ld*st; }
     if(PT>=PD*0.6 || ld<=stop+1.5){ me.punchHit=true; landPunch(me,v); }
   }
-  if(me.punchT>=PD){ me.punchT=0; me.punchV=null; me.punchHit=false; }
+  if(me.boxV && !me.punchHit && PT>PD*0.42){ me.punchHit=true; var bv=me.boxV; me.boxV=null; boxLand(me, bv, me.boxDmg||0); }
+  if(me.jabV && !me.punchHit && PT>PD*0.42){
+    me.punchHit=true; var jv=me.jabV; me.jabV=null;
+    pow((me.x+jv.x)/2, jv.y-20, '#ffffff', 0.6);
+    jv.lean=-0.25;
+  }
+  if(me.punchT>=PD){ me.punchT=0; me.punchV=null; me.punchHit=false; me.boxV=null; me.jabV=null; }
 }
 // a comic-book starburst where a blow lands
-function pow(x,y,c){
+function pow(x,y,c,sz,word){
   if(REDUCED) return;
-  G.fx.push({pow:true,x:x,y:y,c:c||'#ffd23f',rot:Math.random()*6.28,vx:0,vy:0,life:0.16,max:0.16});
+  sz=(sz||1)*(TOUCH_UI?1.3:1);                      // a phone's players are small: so are its hits, unless they are bigger
+  var lf=0.16*Math.max(0.8,Math.min(1.9,sz));
+  G.fx.push({pow:true,x:x,y:y,c:c||'#ffd23f',rot:Math.random()*6.28,vx:0,vy:0,life:lf,max:lf,sz:sz,word:word||null});
 }
 
 function groundPound(me,M){
@@ -3255,7 +3314,9 @@ function driveHuman(seat, IN, dt, now){
 
   // Auto-assist: when a tackler is right on you, your man reacts by himself.
   // Same instinct the CPU carriers have, so you are never a sitting duck.
-  if(onO && me===G.carrier && M.assistCd<=0){
+  // (a runner in a clinch boxes his own way out; a passer in the pocket still
+  // fights a rusher off by himself as well)
+  if(onO && me===G.carrier && M.assistCd<=0 && (BOX_ASSIST || !(me.wrapped>0) || (BOX_QB_ASSIST && me.role==='QB' && !pastTheLine(me)))){
     var foe=(seat.side==='H')?'A':'H';
     var thr=nearestOf(me,foe);
     var thd2=thr?Math.hypot(thr.x-me.x,thr.y-me.y):999;
@@ -3325,6 +3386,10 @@ function driveHuman(seat, IN, dt, now){
   // or he is permanently behind his own team-mates
   var base = onO ? BASE_SPD : DEF_SPD;
   var mult=(sprinting?SPRINT:1)*(me.burst>0?1.4:1)*me.spd*buffMul(me);   // a burst is 1.4x (1.7x broke away three times in four)
+  // In a clinch the ball carrier is held where he stands and boxes his way
+  // out. (The hold used to be applied after he had already moved each frame,
+  // so however many men were on him he crept on at a quarter of his speed.)
+  if(onO && me===G.carrier && me.wrapped>0) mult*=BOX_HOLDYOU;
   if(!diving && seat.local){                          // a dive that is over no longer homes...
     G.touchDive=false;
   }
@@ -3423,7 +3488,7 @@ function step(dt){
         if(p.aiCd>0) p.aiCd-=dt;
         // in your grip (or a special move's) he rarely wriggles free; in an
         // ordinary grab now and then, more often against the better teams
-        else if(thd<30 && p.role!=='QB' && Math.random()<(heldHard() ? 0.004*FOE.abil : (p.wrapped>0 ? 0.013*FOE.abil : 0.035))){
+        else if(thd<30 && p.role!=='QB' && Math.random()<(heldHard() ? BOX_WRIGGLE*FOE.abil : (p.wrapped>0 ? 0.013*FOE.abil : 0.035))){   // (held longer now the tackle is a fight: a smaller chance each moment)
           var pick=Math.random();
           p.aiCd=1.3;
           if(pick<0.4){
@@ -3439,6 +3504,9 @@ function step(dt){
             burst(th.x,th.y,'#ffd23f'); G.shake=REDUCED?0:9;
           }
         }
+        // held: he boxes back at the man on him
+        if(p.cpCd>0) p.cpCd-=dt;
+        else if(p.wrapped>0){ carrierPunch(p, p, true); p.cpCd=0.45+Math.random()*0.35; }
         if(p.role==='QB' && G.dropLeft>0 && !G.windup && thd>30){
           dropBack(p, d, dt);
         } else if(p.role==='QB' && since<1.5 && thd>30 && !G.windup){
@@ -3625,9 +3693,10 @@ function step(dt){
       if(ru.engaged > (youRu ? Math.min(ru.shedAt||2.5, 1.0) : (ru.shedAt||2.5))) continue;   // he has beaten the block (you get off it in a second)
       ru.eBlk=blk;
 
-      // hand fighting: both men punch and grab while they are locked up
-      if(Math.random()<dt*2.4) ru.arm=0.5;
-      if(Math.random()<dt*2.4) blk.arm=0.5;
+      // hand fighting: they trade jabs while they are locked up (the rush
+      // moves below decide it; the jabs are what you see)
+      if(!(ru.punchT>0) && Math.random()<dt*2.2) jab(ru, blk);
+      if(!(blk.punchT>0) && Math.random()<dt*2.2) jab(blk, ru);
 
       // A rusher does not just lean on his man. A little way into the rep he
       // tries a move: rip, swim, spin or bull rush. Win it and he is through;
@@ -3988,7 +4057,7 @@ function step(dt){
     var car=G.carrier, res=Math.max(0.7,car.pwr||1), tnow=performance.now();
     // a new ball carrier (a catch, a pick) starts with nobody on him
     if(G.wrapCar!==car){
-      for(var wc=0;wc<G.players.length;wc++) G.players[wc].wrapT=0;
+      for(var wc=0;wc<G.players.length;wc++){ G.players[wc].wrapT=0; G.players[wc].boxAcc=0; G.players[wc].boxHit=0; G.players[wc].boxV=null; }
       G.wrapCar=car;
     }
     var grabbers=0, lastT=null, hw=0, bite=0, strong=0;   // hw: your own tackles on him; bite: a wolf or a grip on him; strong: a grab from a move
@@ -4003,7 +4072,7 @@ function step(dt){
         // run out: it holds until he is down, unless he spins or jukes free.
         if(TOUCH_UI && t2===G.controlled && G.touchDive && !t2.humanWrap){   // already on him when you swiped: it is your tackle now
           t2.humanWrap=true; t2.wrapT=99; G.touchDive=false; car.iFrames=0;
-          car.hp-=25/res; dmgText(car,'-'+Math.round(25/res),'#ffffff'); G.dotAcc=0;
+          car.hp-=25/res; dmgText(car,'-'+Math.round(25/res),'#ffffff'); G.dotAcc=0; t2.boxT=0.06;
         }
         if(t2.humanWrap || t2.gripLock || t2.strongGrab) t2.stun=0;   // a knock does not shake yours or a special move's
         var holdFast = t2.gripLock || (t2.invisUntil && G.gt<t2.invisUntil) ||
@@ -4016,8 +4085,16 @@ function step(dt){
           continue;
         }
         grabbers++; lastT=t2; if(t2.humanWrap) hw++;
-        if(t2.gripLock || (t2.wolfUntil && G.gt<t2.wolfUntil) || (t2.furyUntil && G.gt<t2.furyUntil)) bite++;
-        if(t2.strongGrab || t2.gripLock || (t2.wolfUntil && G.gt<t2.wolfUntil) || (t2.furyUntil && G.gt<t2.furyUntil)) strong++;
+        var gBite = t2.gripLock || (t2.wolfUntil && G.gt<t2.wolfUntil) || (t2.furyUntil && G.gt<t2.furyUntil);
+        if(gBite) bite++;
+        if(t2.strongGrab || gBite) strong++;
+        // what used to drain off him every frame, he banks and throws as a punch
+        // (your own man, a wolf or a grip bank faster, as they drained faster)
+        if(!(G.drainPause && G.gt<G.drainPause) || t2.humanWrap){   // (a punch that rocks the others does not knock your own man off his rhythm)
+          t2.boxAcc=(t2.boxAcc||0) + BOX_RATE*((68 + (t2.humanWrap?50:0) + (gBite?58:0) + ((t2.strongGrab||gBite)?25:0))/res)*dt;
+          t2.boxT=(t2.boxT===undefined ? BOX_FIRST : t2.boxT) - dt;
+          if(t2.boxT<=0 && !(t2.punchT>0)) boxPunch(t2, car);
+        }
         continue;
       }
       // A touch-screen swipe tackle: when the dive gets to him you hit him
@@ -4029,7 +4106,7 @@ function step(dt){
           car.iFrames=0;                               // a dodge left over from before does not slip it
           var th=25/res; car.hp-=th; car.vx*=0.3; car.vy*=0.3;
           t2.wrapT=99; t2.humanWrap=true; t2.wrapA=Math.atan2(t2.y-car.y,t2.x-car.x);
-          t2.z=0; t2.vz=0; t2.arm=0.5;
+          t2.z=0; t2.vz=0; t2.arm=0.5; t2.boxAcc=0; t2.boxHit=0; t2.boxT=0.06;
           flash(car.x,car.y-16,'rgba(255,255,255,1)',34);
           shock(car.x,car.y,'rgba(255,210,63,.9)',4,36,0.3);
           spokes(car.x,car.y-16,'rgba(255,210,63,.9)',8,8,32);
@@ -4057,45 +4134,37 @@ function step(dt){
         continue;
       }
 
-      // The tackle itself. Touching a man used to drain him for as long as
-      // you stayed close, so defenders jogged alongside the carrier while
-      // his bar ran down. Now contact is a hit: it takes a chunk, then the
-      // tackler wraps up and hangs on, and the drain comes from the wrap.
+      // The tackle itself. Contact is a clinch, not a hit: he squares up and
+      // holds the ball carrier, and nothing comes off him for the touch. The
+      // damage comes from the punches he throws from there (boxPunch); what
+      // the contact used to take rides on his first two, which come sooner
+      // if he met him head on or diving.
       var hit=30*(t2.pwr||1)*(diving?1.7:1);
       var cs2=Math.hypot(car.vx,car.vy);
-      if(cs2>1 && (tdx*car.vx+tdy*car.vy)/(cs2*td) > 0.5) hit*=1.3;  // met him head on
-      car.hp-=hit/res;
-      if(car.hp>0 && car.hp<30 && Math.random()<0.025){
-        fumble(car, (car.x-t2.x)*5+car.vx*0.4, (car.y-t2.y)*5+car.vy*0.4);
-        say('FUMBLE!',1100);
-        return;
-      }
+      var headOn=cs2>1 && (tdx*car.vx+tdy*car.vy)/(cs2*td) > 0.5;
+      if(headOn) hit*=1.3;
+      t2.boxHit=hit; t2.boxAcc=0; t2.boxT=BOX_FIRST*((headOn||diving)?0.6:1);
       t2.wrapT=(1.5+Math.random()*0.8)*((t2.pwr||1)/res);   // long enough to finish him most of the time
       if(TOUCH_UI && t2===G.controlled){   // your man ran into him: your tackle
-        t2.wrapT=99; t2.humanWrap=true; hw++; G.dotAcc=0; dmgText(car,'-'+Math.round(hit/res),'#ffffff');
-        pow((car.x+t2.x)/2, car.y-16, '#ffffff'); car.sq=0.22; G.hitStopUntil=performance.now()+60;
+        t2.wrapT=99; t2.humanWrap=true; hw++; G.dotAcc=0;
       }
       t2.wrapA=Math.atan2(tdy,tdx);
-      burst(car.x,car.y-8,'#ffffff');
-      G.shake=REDUCED?0:Math.max(G.shake,6);
+      car.sq=0.2; t2.lean=0.3; t2.face=(car.x>=t2.x)?1:-1;   // chest to chest
+      flash((car.x+t2.x)/2, car.y-14, 'rgba(255,255,255,.75)', 14);
+      G.shake=REDUCED?0:Math.max(G.shake,4);
       grabbers++; lastT=t2;
     }
     if(grabbers>0){
-      var drain=((68*grabbers + 50*hw + 58*bite + 25*strong)/res)*dt;
-      if(G.drainPause && G.gt<G.drainPause) drain=0;     // rocked by his punch   // your own tackle drains him faster, a move's too, a wolf or a grip faster still
-      car.hp -= drain;
-      var drag=Math.max(0.18, 1-grabbers*0.42);       // dragged down as they hang on
+      // (they only hold him here: the damage comes from their punches)
+      var drag=Math.max(0.18, 1-grabbers*0.42);       // held up as they hang on
       if(strong) drag=Math.min(drag,0.3);             // a grab from a special move stops him like yours does
-      if(hw){
-        drag=Math.min(drag,0.3);                       // you slow him to a crawl
-        G.dotAcc=(G.dotAcc||0)+drain;                  // and the numbers tick off him
-        if(G.dotAcc>=14){ dmgText(car,'-'+Math.round(G.dotAcc),'#ff8a94'); G.dotAcc=0; }
-      }
+      if(hw) drag=Math.min(drag,BOX_YOUHOLD);         // you hold him to a crawl
+      if(car===G.controlled || car===G.controlled2 || hw) G.brawlUntil=performance.now()+450;   // the camera comes in on it
       car.vx*=drag; car.vy*=drag;
       // (the drag also goes into his running speed, see buffMul): your own grab
       // and a special move's grab stop him; an ordinary one only slows him, or
       // the computer's runners could not get anywhere at all
-      car.wrapped=0.25; car.wrapDrag=(hw||strong) ? drag : Math.max(drag,0.75); G.freeT=0;
+      car.wrapped=0.25; car.wrapDrag=(hw||strong) ? drag : Math.max(drag,BOX_HOLD); G.freeT=0;
       // the men on him are dragged along with him, arms round him
       for(var w2=0;w2<G.players.length;w2++){
         var wq=G.players[w2];
@@ -4549,7 +4618,7 @@ function draw(){
       addSprite(fxTint(FXI.bolt,solidOf(e.c)),(e.x+e.x2)/2,(e.y+e.y2)/2,
                 bl,bl*0.5*(128/256),k2,ba,1);
     } else if(e.pow){
-      var pk=1-k2, pr2=10+pk*16;
+      var pk=1-k2, pr2=(10+pk*16)*(e.sz||1);
       ctx.save(); ctx.translate(e.x,e.y); ctx.rotate(e.rot); ctx.globalAlpha=Math.min(1,k2*2.2);
       ctx.beginPath();
       for(var pp=0;pp<20;pp++){ var pa3=pp/20*Math.PI*2, prr=(pp%2?pr2*0.5:pr2); ctx.lineTo(Math.cos(pa3)*prr, Math.sin(pa3)*prr*0.8); }
@@ -4557,6 +4626,14 @@ function draw(){
       ctx.lineWidth=1.6; ctx.strokeStyle='rgba(20,14,4,.9)'; ctx.stroke();
       ctx.beginPath(); ctx.arc(0,0,pr2*0.3,0,Math.PI*2); ctx.fillStyle='#fffbe8'; ctx.fill();
       ctx.restore();
+      if(e.word){
+        ctx.save(); ctx.globalAlpha=Math.min(1,k2*2.6);
+        var wsz=Math.round(11*(e.sz||1)), wy=e.y+1-pk*3;
+        ctx.font='700 '+wsz+'px "Anton", Impact, sans-serif'; ctx.textAlign='center'; ctx.textBaseline='middle';
+        ctx.lineWidth=3.2; ctx.lineJoin='round'; ctx.strokeStyle='rgba(20,14,4,.95)'; ctx.strokeText(e.word,e.x,wy);
+        ctx.fillStyle='#fff3c4'; ctx.fillText(e.word,e.x,wy);
+        ctx.restore();
+      }
     } else if(e.dmg){
       ctx.save(); ctx.globalAlpha=Math.min(1,k2*1.8);
       ctx.font='700 15px "Anton", Impact, sans-serif'; ctx.textAlign='center'; ctx.textBaseline='middle';
@@ -4937,8 +5014,21 @@ function drawSprite(p){
     else if(pu<0.6){ var ps=(pu-0.28)/0.32; ps=1-(1-ps)*(1-ps); pa=-0.95+2.5*ps; pe=1.95-1.9*ps; }   // strike: straight out
     else { var pr=(pu-0.6)/0.4; pa=1.55-1.3*pr; pe=0.05+0.85*pr; }                        // and back
     var elP=boneH(S.uarm,3.6,SHO+1,pa,UA,HUA);
-    boneH(S.farm,elP.x,elP.y,pa+pe,FA,HFA);
+    var fist=boneH(S.farm,elP.x,elP.y,pa+pe,FA,HFA);
     if(GR.sf) sleeve(elP.x,elP.y,pa+pe,FA*0.7,HFA*1.3,GR.sc);
+    if(pu>0.26 && pu<0.72){                          // the blow: a fist you can pick out, and the air it moved
+      var wk=Math.max(0,1-Math.abs((pu-0.46)/0.26));
+      ctx.save(); ctx.globalAlpha=wk; ctx.lineCap='round';
+      ctx.strokeStyle='rgba(255,255,255,.95)'; ctx.lineWidth=1.5;
+      ctx.beginPath();
+      ctx.moveTo(fist.x-9,fist.y-2.5); ctx.lineTo(fist.x-3,fist.y-1.2);
+      ctx.moveTo(fist.x-10,fist.y+1);  ctx.lineTo(fist.x-3.5,fist.y+0.6);
+      ctx.moveTo(fist.x-8,fist.y+4);   ctx.lineTo(fist.x-3,fist.y+2.4);
+      ctx.stroke();
+      ctx.fillStyle='#fffdf2'; ctx.strokeStyle='rgba(20,14,4,.9)'; ctx.lineWidth=0.9;
+      ctx.beginPath(); ctx.arc(fist.x,fist.y,2.9,0,Math.PI*2); ctx.fill(); ctx.stroke();
+      ctx.restore();
+    }
   } else if(!KD && p.arm>0){
     var k=p.arm/0.55;
     var elS=boneH(S.uarm,3.6,SHO+1,1.38*k,UA,HUA);
@@ -5111,6 +5201,7 @@ function heldByYou(){
 // A tackler who loses his grip ends up on the grass.
 function breakWrap(t,car){
   t.wrapT=0; t.tackleCd=1.1; t.arm=0; t.humanWrap=false; t.gripLock=false; t.strongGrab=false;
+  t.boxAcc=0; t.boxHit=0; t.boxV=null; t.boxT=undefined;
   t.down=Math.max(t.down||0,0.85);
   var bx=t.x-car.x, by=t.y-car.y, bm=Math.hypot(bx,by)||1;
   t.vx=bx/bm*90; t.vy=by/bm*90;
