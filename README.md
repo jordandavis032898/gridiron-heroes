@@ -1,4 +1,4 @@
-# Gridiron Heroes
+# Hail Mythery
 
 Arcade American football. Single HTML file plus a folder of sprite art.
 No build step, no dependencies, no server.

@@ -78,7 +78,7 @@ function makeW3(){
   g.fillStyle='#0d1a2e'; g.fillRect(0,top,base.width,26);
   g.fillStyle='#ffd23f'; g.font='700 18px "Anton", sans-serif'; g.textBaseline='middle';
   for(var ax=40; ax<base.width; ax+=420){
-    g.fillText('GRIDIRON HEROES', ax, top+13);
+    g.fillText('HAIL MYTHERY', ax, top+13);
   }
   // near side: bench area
   g.fillStyle='#173d25'; g.fillRect(0,MT+FH+40,base.width,MB-40);
@@ -97,7 +97,7 @@ function makeW3(){
     g.textAlign='center'; g.textBaseline='middle'; g.fillText(label,tx2,ty2+4); g.textAlign='left';
   }
   bench(FW*0.36, FW*0.64, FH+7*YD, '#2d477f');                    // home bench, near side
-  tent(FW*0.33, FH+8*YD, '#1f2d54', 'GH'); tent(FW*0.67, FH+8*YD, '#1f2d54', 'GH');
+  tent(FW*0.33, FH+8*YD, '#1f2d54', 'HM'); tent(FW*0.67, FH+8*YD, '#1f2d54', 'HM');
   bench(FW*0.36, FW*0.64, -5.4*YD, '#8c1a24');                    // visitors, far side
   tent(FW*0.33, -5.2*YD, '#6e1520', 'RIV'); tent(FW*0.67, -5.2*YD, '#6e1520', 'RIV');
   // the field itself

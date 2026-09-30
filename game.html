@@ -13,7 +13,7 @@
   img{max-width:100%;}
   [hidden]{display:none!important;}
 </style>
-<title>Gridiron Heroes</title>
+<title>Hail Mythery</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Anton&family=Barlow+Condensed:wght@400;600;700&family=JetBrains+Mono:wght@700&display=swap">
@@ -3195,9 +3195,9 @@ var fieldCanvas = (function(){
     g.lineWidth=2; g.strokeStyle='rgba(241,241,236,.8)';
     g.beginPath(); g.arc(lx,ly,R-8,0,Math.PI*2); g.stroke();
     g.fillStyle='#c8a63c'; g.textAlign='center'; g.textBaseline='middle';
-    g.font='700 40px "Anton", sans-serif'; g.fillText('GH', lx, ly-4);
+    g.font='700 40px "Anton", sans-serif'; g.fillText('HM', lx, ly-4);
     g.fillStyle='#f1f1ec'; g.font='700 11px "Barlow Condensed", sans-serif';
-    g.fillText('GRIDIRON  HEROES', lx, ly+R*0.52);
+    g.fillText('HAIL  MYTHERY', lx, ly+R*0.52);
     for(var st=-1;st<=1;st++){                          // three stars across the top
       var sx=lx+st*16, sy=ly-R*0.58; g.beginPath();
       for(var sp=0;sp<10;sp++){ var sr=sp%2?3:7, sa=sp*Math.PI/5-Math.PI/2; g.lineTo(sx+Math.cos(sa)*sr, sy+Math.sin(sa)*sr); }
@@ -4470,7 +4470,7 @@ var PICK_THEN='solo';
 function showStart(){
   NET.sentPick=false;
   elSheet.innerHTML =
-    '<h2>Gridiron Heroes</h2>'+
+    '<h2>Hail Mythery</h2>'+
     '<p class="sub">Four downs, a three minute clock, signature moves</p>'+
     '<div class="grid2">'+
       '<button class="card" id="modeOne" type="button">'+
@@ -4778,7 +4778,7 @@ function startCoinToss(){
   var el=document.getElementById('coin');
   if(!el){ el=document.createElement('div'); el.id='coin'; stage.appendChild(el); }
   el.innerHTML='<div class="ch">COIN TOSS</div><div class="cs">Call it in the air</div>'+
-    '<div class="cc"><div class="face">GH</div></div>'+
+    '<div class="cc"><div class="face">HM</div></div>'+
     '<div class="cb"><button type="button" data-c="H"><b>1</b> HEADS</button>'+
     '<button type="button" data-c="T"><b>2</b> TAILS</button></div><div class="cr"></div>';
   el.classList.add('show');
@@ -4793,7 +4793,7 @@ function callCoin(call){
   var coin=el.querySelector('.cc'); coin.classList.add(res==='H'?'flipH':'flipT');
   el.querySelector('.cb').style.visibility='hidden';
   setTimeout(function(){
-    el.querySelector('.face').textContent=(res==='H'?'GH':'\u2605');
+    el.querySelector('.face').textContent=(res==='H'?'HM':'\u2605');
     el.querySelector('.cr').textContent=(res==='H'?'HEADS':'TAILS')+'  \u00b7  '+(won?'YOU WIN. YOU RECEIVE.':'RIVALS WIN. THEY RECEIVE.');
   }, 1400);
   var g0=G;

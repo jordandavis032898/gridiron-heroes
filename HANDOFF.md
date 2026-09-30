@@ -1,4 +1,10 @@
-# Gridiron Heroes: handoff
+# Hail Mythery: handoff
+
+Renamed from Gridiron Heroes on 30 September 2026: "gridiron" means football, so
+the old name meant the same as the registered trademark Football Heroes (Run
+Games LLC), and other football games have used "Gridiron Heroes". The repo,
+folder and URL keep the old name; the multiplayer room prefix
+(`gridiron-heroes-v1-`) is internal and was left alone.
 
 Everything a new session needs to pick this up. Read this before touching
 `game.html`.
