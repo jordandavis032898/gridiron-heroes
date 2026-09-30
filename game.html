@@ -876,6 +876,9 @@ function setupPlay(playId){
   var off = youOnO ? G.play : G.aiPlay;
   // the book records the play the offence ran, not your defensive call
   if(G.cur) G.cur.play = playName(off);
+  // on a handoff the back lines up beside the quarterback, so it is catch the
+  // snap and give it (from eleven yards deep he had to wait for him)
+  if(off==='run' || off==='draw'){ rb.x=G.los-7*YD*d; rb.y=mid+2.5*YD; }
   if(off==='deep'){ w1.route='go'; w2.route='go'; te.route='slant'; rb.route='block'; }
   else if(off==='outs'){ w1.route='out'; w2.route='out'; te.route='curl'; rb.route='wheel'; }
   else if(off==='run'){ w1.route='lead'; w2.route='lead'; te.route='block'; rb.route='mesh'; }
@@ -980,7 +983,9 @@ function setupPlay(playId){
   // The back used to start the play already holding it. Now the passer takes
   // the snap and gives it to him at the mesh point, and you can beat the
   // timer by handing off yourself.
-  G.handoffAt = (off==='run') ? 0.30 : (off==='draw' ? 0.85 : null);   // a run play is a handoff; on anything else it is your call (tap the back)
+  // a run play is a handoff: catch the snap and give it (the draw shows pass
+  // for two steps first); on anything else it is your call (tap the back)
+  G.handoffAt = (off==='run') ? SNAP_DUR : (off==='draw' ? 0.36 : null);
   G.controlled = youOnO ? G.carrier : (startLB() || nearestDef());
   if(NET.on && NET.host) G.controlled2 = pickRemoteMan(false);
   G.jukeUntil=0;
@@ -991,8 +996,9 @@ function setupPlay(playId){
 }
 
 // The drop, in yards, for each call. Quick game is three steps, intermediate
-// five, the deep shot seven. The run is a handoff, so no drop at all.
-var DROP_YDS = {short:3, outs:5, screen:5, draw:5, deep:6, run:0};
+// five, the deep shot seven. The run is a handoff, so no drop at all, and
+// the draw only shows pass for a couple of steps before he goes to the back.
+var DROP_YDS = {short:3, outs:5, screen:5, draw:2, deep:6, run:0};
 var POCKET_YDS = 6;   // deeper than this behind his snap spot and he is a runner
 function snapBall(){
   if(G.phase!=='presnap') return;
@@ -1028,6 +1034,25 @@ function dropBack(qb, fwd, dt){
   qb.vx=-fwd*v; qb.vy=0;
   qb.backpedal=0.12; qb.dropFace=fwd;
   G.dropLeft=Math.max(0, G.dropLeft - v*dt);
+}
+// A run play: once he has the snap the quarterback goes to meet the back
+// instead of standing still waiting for him to arrive.
+function meetBack(qb, dt){
+  if(G.gt-G.snapT < SNAP_DUR){ qb.vx*=0.8; qb.vy*=0.8; return; }   // the snap is still on its way
+  var back=null, bd=Infinity;
+  for(var i=0;i<G.players.length;i++){ var q=G.players[i];
+    if(q.team!==G.offense || q.role!=='RB' || q.route!=='mesh' || q.stun>0) continue;
+    var dd=Math.hypot(q.x-qb.x,q.y-qb.y); if(dd<bd){ bd=dd; back=q; } }
+  if(!back || bd<1.4*YD){ qb.vx*=0.7; qb.vy*=0.7; return; }         // close enough to put it in his belly
+  // he steps across into the back's lane (backing up to him would give
+  // ground), no more than a yard deeper than he caught it
+  var d=dir(), sp=G.qbSpot||{x:qb.x,y:qb.y};
+  var gx=((sp.x-qb.x)*d >= YD) ? qb.x : sp.x-d*YD;
+  var gy=back.y+(sp.y>=back.y?1:-1)*0.9*YD;
+  var tx=gx-qb.x, ty=gy-qb.y, tm=Math.hypot(tx,ty);
+  if(tm<0.3*YD){ qb.vx*=0.7; qb.vy*=0.7; return; }
+  var v=BASE_SPD*0.95;
+  qb.vx=tx/tm*v; qb.vy=ty/tm*v;
 }
 // On defence you start as the linebacker nearest the ball: the ends start
 // locked up with a blocker, which made the stick feel dead at the snap.
@@ -3522,6 +3547,9 @@ function driveHuman(seat, IN, dt, now){
     if(a.x||a.y){ G.dropLeft=0; me.vx=a.x*base*mult; me.vy=a.y*base*mult; }   // you took over
     else dropBack(me, fwd, dt);
   }
+  else if(onO && me===G.carrier && me.role==='QB' && G.handoffAt!=null && !G.thrown && !(a.x||a.y)){
+    meetBack(me, dt);                                // a run play: he takes it to the back
+  }
   else if(!jk||me.z>0){
     // A key is all or nothing, so ease in and out of it over about a tenth
     // of a second: he gets up to speed and plants to stop instead of snapping.
@@ -3608,6 +3636,8 @@ function step(dt){
         else if(p.wrapped>0){ carrierPunch(p, p, true); p.cpCd=0.45+Math.random()*0.35; }
         if(p.role==='QB' && G.dropLeft>0 && !G.windup && thd>30){
           dropBack(p, d, dt);
+        } else if(p.role==='QB' && G.handoffAt!=null && !G.windup){
+          meetBack(p, dt);                                 // a run play: he takes it to the back
         } else if(p.role==='QB' && since<1.5 && thd>30 && !G.windup){
           // stay in the pocket: drift back and slide off the rush
           var slide=th?Math.sign(p.y-th.y)||1:1;
