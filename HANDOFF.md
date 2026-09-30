@@ -101,6 +101,31 @@ to bottom, horizontal parts left to right.
 - `parts/ASSET-PROMPTS.md` has the prompts. The five-part batch (thigh, lower
   leg, cleat, upper arm, forearm) was written but never delivered.
 
+### Card pictures and the public domain cast
+
+- The supporting cast (`SUPPORT`, `DEFENDERS` in game.html) is public
+  domain: pre-1929 myth and literature (King Arthur, Sun Wukong, Peter Pan,
+  Robin Hood, the Headless Horseman, the Golem, the Minotaur, a Cyclops,
+  Anubis, Frankenstein's creature, Fenrir, Beowulf, a werewolf, Dracula, the
+  Invisible Man, Zeus). Draw them from the books and myths, never from a
+  film design (no bolted flat-headed monster, no caped movie count, no Disney
+  Pan). Peter Pan also has a UK royalty right. Batman, Spider-Man and the
+  like need a licence, so they are out.
+- Each one carries `stars` (card frame: 5 gold, 4 silver, 3 or fewer
+  bronze), `sig` (the move in the card's black bar) and `card` (the picture's
+  file name).
+- Card pictures are 4:3 action scenes: the character mid-move, not wearing a
+  uniform, with red-jersey players around him. Prompts are in
+  `parts/CARD-PROMPTS.md`. Originals (1200 x 900 PNG) live in
+  `parts/_cards_full/`, which is NOT published. The game loads 800 x 600 JPEGs
+  (quality 88) from `parts/cards/<card>.jpg` and falls back to .png, then to
+  the drawn player. `cardArt()` loads and caches them.
+- **When the pictures change, bump `CARD_VER`** in game.html, or browsers
+  keep showing the old ones.
+- **Never run `parts/_make_kit.py`.** It is not ours and it rewrites every
+  part image. `parts/_alt/` holds rejected script-made parts. Neither is
+  published.
+
 ---
 
 ## Systems
