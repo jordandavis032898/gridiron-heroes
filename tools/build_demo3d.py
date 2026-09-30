@@ -143,13 +143,13 @@ function camPoints(){
     var q=G.players[i];
     if(!isFinite(q.x)||!isFinite(q.y)) continue;
     if(!live){
-      if(Math.hypot(q.x-bx,q.y-by)<24*YD) pts.push([q.x,q.y]);
+      if(Math.hypot(q.x-bx,q.y-by)<(TOUCH_UI?15:24)*YD) pts.push([q.x,q.y]);
       continue;
     }
     if(q===c || q===G.controlled){ pts.push([q.x,q.y]); continue; }
     // while you are passing, every man you can throw to has to be visible
     if(passing && q.team===G.offense && q.role!=='C' && q.role!=='OL' && q.role!=='BL'){
-      if(Math.hypot(q.x-c.x,q.y-c.y)<45*YD) pts.push([q.x,q.y]);
+      if(Math.hypot(q.x-c.x,q.y-c.y)<(TOUCH_UI?24:45)*YD) pts.push([q.x,q.y]);
       continue;
     }
     // with a runner, the men closing on him
@@ -165,9 +165,10 @@ function camFit(pts,camx,camy){
   for(var i=0;i<pts.length;i++){
     var zc=Math.max(160, Z0-(pts[i][1]-camy));
     var ox=(pts[i][0]-camx)*Z0/zc, oy=c*Z0*(Z0/zc-1);
-    if(Math.abs(ox)>1) best=Math.min(best,(VW/2-60)/Math.abs(ox));
-    if(oy<-1) best=Math.min(best,(VH/2+STAND_OFF()-100)/(-oy));
-    else if(oy>1) best=Math.min(best,(VH/2-STAND_OFF()-80)/oy);
+    var mx=TOUCH_UI?VW*0.05:60, mt=TOUCH_UI?VH*0.16:100, mb=TOUCH_UI?VH*0.24:80;   // phone: clear of the move buttons along the bottom
+    if(Math.abs(ox)>1) best=Math.min(best,(VW/2-mx)/Math.abs(ox));
+    if(oy<-1) best=Math.min(best,(VH/2+STAND_OFF()-mt)/(-oy));
+    else if(oy>1) best=Math.min(best,(VH/2-STAND_OFF()-mb)/oy);
   }
   return best;
 }
@@ -219,13 +220,13 @@ function sidelineGuys(P){
   }
   return out;
 }
-function STAND_OFF(){ return VH*0.08; }   // how far the field sits below centre
+function STAND_OFF(){ return TOUCH_UI ? -VH*0.02 : VH*0.08; }   // how far the field sits below centre (a phone keeps it high: less stand, more field)
 function setupProj(sx,sy){
   var want=BASE3*CAM3.z, fit=camFit(camPoints(),cam.x,cam.y);
-  var tgt=Math.max(0.35,Math.min(want,fit));
+  var tgt=Math.max(TOUCH_UI?BASE3*0.62:0.35, Math.min(want,fit));
   if(!CAM3.S) CAM3.S=tgt;
   // pull out fast so nothing leaves the frame, push in gently
-  CAM3.S += (tgt-CAM3.S)*(tgt<CAM3.S?0.3:0.06);
+  CAM3.S += (tgt-CAM3.S)*(tgt<CAM3.S?(TOUCH_UI?0.12:0.3):(TOUCH_UI?0.035:0.06));
   var S0=CAM3.S, Z0=Z3, c=TILT3;
   var K=c*S0*Z0*Z0;
   var P={S0:S0, Z0:Z0, K:K, hz:VH/2+STAND_OFF()+sy - c*S0*Z0, cx:VW/2+sx, camx:cam.x, camy:cam.y};
@@ -329,7 +330,7 @@ function blit3D(P){
 // can see the end zone and whoever is chasing.
 var CAM3={z:0.86, actUntil:0, ax:0, ay:0, prevShake:0, prevSpin:0};
 function camMood(now){
-  if(CAM3.actUntil>now) return 1.55;
+  if(CAM3.actUntil>now) return TOUCH_UI?1.25:1.55;
   if(G && G.phase==='heroIntro') return 1.9;        // close on the star as he walks out
   if(G && G.broadcast && G.broadcast.until>now) return 1.85;   // in on the man who made the play
   if(G && playArtOn()) return 0.7;                   // pull back to read the play
@@ -348,7 +349,10 @@ function camDirect(){
   var now=performance.now();
   if(G && G.phase==='live'){
     var c=G.carrier, sp=c?(c.spin||0):0;
-    if(G.shake > CAM3.prevShake+2 || (sp>0.85 && CAM3.prevSpin<=0.85)){
+    // no punch-in while the quarterback still has it behind the line: a hit on
+    // him zoomed in and pushed the receivers off the screen mid-throw
+    var passing3 = c && c.role==='QB' && !G.thrown && !pastTheLine(c);
+    if(!passing3 && (G.shake > CAM3.prevShake+2 || (sp>0.85 && CAM3.prevSpin<=0.85))){
       CAM3.actUntil=now+620; CAM3.ax=G.ball.x; CAM3.ay=G.ball.y;
     }
     CAM3.prevSpin=sp;
@@ -438,7 +442,7 @@ subs.append(('''  if(G.kick) drawKick();
   if(G.kick) drawKick();
   else if(G.thrown||(G.ball&&!G.ball.held)) drawBall();
   ctx.restore();
-  if(P3){
+  if(P3 && !TOUCH_UI){                            // no V key on a phone
     ctx.setTransform(dpr,0,0,dpr,0,0);
     ctx.fillStyle='rgba(8,12,16,.55)'; ctx.fillRect(VW/2-80,VH-28,160,18);
     ctx.fillStyle='#ffd23f'; ctx.font='700 12px "Barlow Condensed", sans-serif';
@@ -477,7 +481,7 @@ subs.append(('''  scale += (want-scale)*0.06;
   }
   if(!isFinite(tx)) tx=FW/2;
   if(!isFinite(ty)) ty=FH/2;
-  var follow = actCam ? 0.2 : (VIEW3D ? 0.15 : 0.11);
+  var follow = actCam ? (TOUCH_UI?0.12:0.2) : (VIEW3D ? (TOUCH_UI?0.09:0.15) : 0.11);
   cam.x += (tx-cam.x)*follow; cam.y += (ty-cam.y)*follow;'''))
 
 

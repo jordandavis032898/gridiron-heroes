@@ -2,3 +2,19 @@
 Thumbs.db
 __pycache__/
 *.pyc
+
+# Source art kept out of the repo on purpose.
+#
+# parts/_icons_full is 30 MB of 1024x1024 originals and parts/_cards_full
+# another 27 MB. What the game loads is parts/icons at 128x128, 680 KB for all
+# twenty-two. This is a public repo on free GitHub Pages, so pushing the
+# originals would put 56 MB into the history permanently, make the source art
+# public, and slow every clone, to ship files the game never requests.
+#
+# The originals live on Jordan's machine. If they ever need to be shared, they
+# want a release or a drive, not the page that serves the game.
+parts/_icons_full/
+parts/_cards_full/
+parts/_alt/
+parts/_icons_preview.png
+parts/_make_kit.py

@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <meta name="description" content="Arcade American football. Four downs, a three-minute clock, and signature moves.">
 <meta name="theme-color" content="#0c1114">
 <style>
@@ -243,6 +243,95 @@
   #bJuke{right:100px; bottom:22px;} #bSpr{right:18px; bottom:76px;}
   #bMove{right:100px; bottom:104px; background:rgba(72,184,255,.25);}
   #bQ{right:18px; bottom:158px; background:rgba(255,210,63,.20); font-size:11px;}
+
+  /* ---------- touch screens ---------- */
+  /* no text selection, no long-press menu, no double-tap or pinch zoom */
+  html.touchui, html.touchui body{-webkit-user-select:none; user-select:none;
+    -webkit-touch-callout:none; -webkit-tap-highlight-color:transparent;}
+  html.touchui #stage{touch-action:none;}
+  /* a slimmer scoreboard, so the field gets the height */
+  html.touchui #board{padding-left:env(safe-area-inset-left,0px); padding-right:env(safe-area-inset-right,0px);}
+  html.touchui .team{padding:3px 10px; gap:6px;}
+  html.touchui .team .chip{height:16px; width:9px;}
+  html.touchui .team .nm{font-size:13px;}
+  html.touchui .team .sc{font-size:17px;}
+  html.touchui #mid{padding:2px 8px;}
+  html.touchui #clock{font-size:15px;}
+  html.touchui #dd{font-size:10px; margin-top:1px;}
+  html.touchui #poss{font-size:9px; margin-top:0;}
+  html.touchui #dbg{display:none;}
+  /* no game buttons over a menu */
+  html.touchui #stage:has(.overlay.show) #touch,
+  html.touchui #stage:has(.overlay.show) #meters,
+  html.touchui #stage:has(.overlay.show) #legend{visibility:hidden;}
+  html.touchui #kmeter{bottom:auto; top:40px; width:min(360px,60vw);}
+  /* a receiver off the edge of the screen: tap the tab to throw to him */
+  #edgeMk{position:absolute; inset:0; pointer-events:none; z-index:6;}
+  .emk{position:absolute; width:46px; height:46px; margin:-23px 0 0 -23px; border-radius:50%;
+    background:rgba(31,45,84,.75); border:2px solid #ffd23f; display:flex; align-items:center; justify-content:center;}
+  .emk.lk{border-color:#4fd18b; box-shadow:0 0 10px #4fd18b;}
+  .emk b{font:700 9px 'Barlow Condensed',sans-serif; color:#fff; letter-spacing:.04em;}
+  .emk i{position:absolute; left:50%; top:50%; width:0; height:0; margin:-6px 0 0 20px;
+    border-left:9px solid #ffd23f; border-top:6px solid transparent; border-bottom:6px solid transparent;
+    transform-origin:-20px 6px;}
+  /* thumbs clear of the notch and the rounded corners */
+  html.touchui #stick{left:calc(18px + env(safe-area-inset-left,0px)); bottom:16px;}
+  html.touchui .tbtn{background:rgba(12,17,20,.32); border-color:rgba(255,255,255,.26);
+    text-shadow:0 1px 2px #000;}
+  html.touchui #bJuke{right:calc(96px + env(safe-area-inset-right,0px)); bottom:18px;}
+  html.touchui #bSpr{right:calc(16px + env(safe-area-inset-right,0px)); bottom:66px;}
+  html.touchui #bMove{right:calc(96px + env(safe-area-inset-right,0px)); bottom:96px; background:rgba(72,184,255,.18);}
+  html.touchui #bQ{right:calc(16px + env(safe-area-inset-right,0px)); bottom:144px; background:rgba(255,210,63,.14);}
+  html.touchui #meters{left:calc(10px + env(safe-area-inset-left,0px)); bottom:auto; top:8px; width:108px;}
+  /* only the stick on the left; sprint is the stick pushed all the way, and a
+     juke is a swipe on the field, so the old text buttons go */
+  html.touchui .tbtn{display:none;}
+  /* the moves: icon buttons along the bottom, see-through, right of the stick */
+  html.touchui #legend{position:absolute; left:50%; right:auto; transform:translateX(-50%); bottom:6px; top:auto;
+    z-index:7; background:none; border:0; padding:0; gap:6px; pointer-events:none; align-items:flex-end;}
+  html.touchui .ab{pointer-events:auto; width:54px; color:rgba(255,255,255,.85);}
+  html.touchui .ab .ring{width:44px; height:44px; background:rgba(12,17,20,.30);
+    border-color:rgba(255,255,255,.30);}
+  html.touchui .ab.on{color:#ffd23f;}
+  html.touchui .ab.on .ring{background:rgba(255,210,63,.16); border-color:rgba(255,210,63,.85);}
+  html.touchui .ab.off{opacity:.42;}
+  html.touchui .ab .key{display:none;}
+  html.touchui .ab .cap{font-size:9px; text-shadow:0 1px 2px #000, 0 0 4px #000;}
+  html.touchui .ab .ring{background-size:cover; background-position:center; overflow:hidden;
+    width:48px; height:48px; border:3px solid #aeb6bf; box-shadow:inset 0 0 0 2px #3a4047, 0 2px 5px rgba(0,0,0,.6);}
+  html.touchui .ab svg{width:26px; height:26px; color:#fff; filter:drop-shadow(0 1px 1px #000); stroke-width:2.2;}
+  html.touchui .ab.on .ring{border-color:#ffd23f;}
+  /* painted icon: a silver bezel like a coin */
+  html.touchui .ab.img .ring{width:50px; height:50px; border:3px solid #aeb6bf;
+    box-shadow:inset 0 0 0 2px #3a4047, 0 2px 5px rgba(0,0,0,.6);}
+  html.touchui .ab.img svg{display:none;}
+  html.touchui .ab.img.off{opacity:1;}
+  /* cooldown: a dark sweep that unwinds as the move comes back */
+  html.touchui .ab .ring::after{content:''; position:absolute; inset:0; border-radius:50%; pointer-events:none;
+    background:conic-gradient(rgba(0,0,0,.66) calc(var(--cd,0) * 360deg), rgba(0,0,0,0) 0);}
+  html.touchui .ab:active .ring{transform:scale(.9);}
+  /* before the snap: play art, audible, timeout */
+  #preBar{position:absolute; top:6px; left:50%; transform:translateX(-50%); z-index:8; display:none; gap:6px;}
+  #preBar.show{display:flex;}
+  #preBar button{font-family:'Anton',sans-serif; font-size:13px; letter-spacing:.05em; color:#fff;
+    background:rgba(12,17,20,.45); border:1px solid rgba(255,255,255,.32); border-radius:16px; padding:6px 12px;
+    text-shadow:0 1px 2px #000;}
+  #preBar button.on{border-color:#ffd23f; color:#ffd23f;}
+  #preBar button.off{opacity:.4;}
+  html.touchui #audible{bottom:auto; top:44px; flex-wrap:wrap; justify-content:center; max-width:94%;}
+  html.touchui #audible button{padding:9px 12px; font-size:14px;}
+  /* the play call fits a phone: one row of small cards, no blurbs */
+  html.touchui .overlay{padding:6px 10px;}
+  html.touchui .sheet{padding:8px 10px; max-width:none;}
+  html.touchui .sheet h2{font-size:17px;}
+  html.touchui .sheet .sub{font-size:11px; margin:0 0 6px;}
+  html.touchui .grid3.pc{grid-template-columns:repeat(auto-fit,minmax(104px,1fr)); gap:6px;}
+  html.touchui .pc .card{padding:6px 6px 7px;}
+  html.touchui .pc .card .t{font-size:13px; margin:1px 0 0;}
+  html.touchui .pc .card .d{display:none;}
+  html.touchui .pc .card canvas.pd{margin:4px 0 0;}
+  html.touchui .sheet .card .t{font-size:13px;}
+  html.touchui #seeStats, html.touchui #toSheet{padding:6px 8px;}
 </style>
 
 <div id="wrap">
@@ -388,6 +477,11 @@ var PLAYS = {
 // ================================================================ dom
 var cv=document.getElementById('cv'); var ctx=cv.getContext('2d');
 var stage=document.getElementById('stage');
+// A touch screen (phone or tablet, and the iPhone app, which shows this page):
+// on-screen stick, hold-to-aim passing, swipe tackles, the ability buttons
+// floating on the right, and a camera framed for a small screen.
+var TOUCH_UI=!!(window.matchMedia && window.matchMedia('(pointer: coarse)').matches);
+if(TOUCH_UI) document.documentElement.classList.add('touchui');
 var elClock=document.getElementById('clock'), elDD=document.getElementById('dd'), elPoss=document.getElementById('poss');
 var elH=document.getElementById('scH'), elA=document.getElementById('scA'), elNmH=document.getElementById('nmH');
 var elOv=document.getElementById('ov'), elSheet=document.getElementById('sheet'), elCall=document.getElementById('callout');
@@ -402,7 +496,7 @@ function freshGame(){
     los:EZ+25*YD, down:1, toGo:10, phase:'intro', play:null, aiPlay:'spy',
     players:[], ball:null, carrier:null, controlled:null, controlled2:null, thrown:null,
     shake:0, snapT:0, gt:0, power:100, stam:100, moveCd:0, jukeUntil:0,
-    diveUntil:0, hitCd:0, loose:null, windup:null, playClock:15, assistCd:0, switchFlash:0, newSeries:false, clockRunning:false, jukeCd:0, latCd:0, lastThrow:'', kick:null,
+    diveUntil:0, hitCd:0, loose:null, windup:null, playClock:15, timeouts:3, assistCd:0, switchFlash:0, newSeries:false, clockRunning:false, jukeCd:0, latCd:0, lastThrow:'', kick:null,
     celebrate:0, celAt:null, scoringTeam:'H',
     playNo:0, hostPick:null, pickAt:0, handoffAt:null,
     cushion:0, covType:'man', zoneDeep:0, diveCd:0, drag:null,
@@ -416,7 +510,7 @@ function freshGame(){
 
 // ================================================================ input
 var keys=Object.create(null), touchVec={x:0,y:0}, touchJuke=false, touchSprint=false, touchMove=false, touchQ=false, touchSwitch=false;
-var touchAb=[false,false,false];
+var touchAb=[false,false,false], touchJukeDir=null, touchSpinDir=null;
 window.addEventListener('keydown',function(e){
   var k=e.key.toLowerCase();
   if(!e.repeat) pressed[k]=true;        // latched; a lost keyup must not kill the key
@@ -471,6 +565,12 @@ function worldToScreen(wx,wy){
 // The receiver under the cursor, judged by where his body is drawn rather
 // than where the click meets the turf. In 3D a click on a man's chest lands
 // yards behind his feet, which picked the wrong man or nobody at all.
+var EDGE_M=30;
+function edgeSpot(q){
+  var p=worldToScreen(q.x,q.y), by=p.y-18*p.s;
+  if(p.x>=EDGE_M && p.x<=VW-EDGE_M && by>=EDGE_M && by<=VH-EDGE_M) return null;
+  return {x:Math.max(EDGE_M,Math.min(VW-EDGE_M,p.x)), y:Math.max(EDGE_M,Math.min(VH-EDGE_M,by))};
+}
 function pickOnScreen(cx,cy){
   if(!G || !G.carrier || cx===undefined) return null;
   var r=cv.getBoundingClientRect(), sx=cx-r.left, sy=cy-r.top, best=null, bd=1e9;
@@ -479,6 +579,7 @@ function pickOnScreen(cx,cy){
     if(q.team!==G.offense || q===G.carrier) continue;
     if(q.role==='C'||q.role==='OL'||q.role==='BL') continue;
     var p=worldToScreen(q.x,q.y), by=p.y-18*p.s;       // middle of his body
+    if(TOUCH_UI){ var es=edgeSpot(q); if(es){ p={x:es.x, y:es.y+18*p.s, s:p.s}; by=es.y; } }
     var d=Math.hypot(p.x-sx, by-sy), reach=Math.max(30, 24*p.s);
     if(d<reach && d<bd){ bd=d; best=q; }
   }
@@ -617,13 +718,13 @@ function camPoints(){
     var q=G.players[i];
     if(!isFinite(q.x)||!isFinite(q.y)) continue;
     if(!live){
-      if(Math.hypot(q.x-bx,q.y-by)<24*YD) pts.push([q.x,q.y]);
+      if(Math.hypot(q.x-bx,q.y-by)<(TOUCH_UI?15:24)*YD) pts.push([q.x,q.y]);
       continue;
     }
     if(q===c || q===G.controlled){ pts.push([q.x,q.y]); continue; }
     // while you are passing, every man you can throw to has to be visible
     if(passing && q.team===G.offense && q.role!=='C' && q.role!=='OL' && q.role!=='BL'){
-      if(Math.hypot(q.x-c.x,q.y-c.y)<45*YD) pts.push([q.x,q.y]);
+      if(Math.hypot(q.x-c.x,q.y-c.y)<(TOUCH_UI?24:45)*YD) pts.push([q.x,q.y]);
       continue;
     }
     // with a runner, the men closing on him
@@ -639,9 +740,10 @@ function camFit(pts,camx,camy){
   for(var i=0;i<pts.length;i++){
     var zc=Math.max(160, Z0-(pts[i][1]-camy));
     var ox=(pts[i][0]-camx)*Z0/zc, oy=c*Z0*(Z0/zc-1);
-    if(Math.abs(ox)>1) best=Math.min(best,(VW/2-60)/Math.abs(ox));
-    if(oy<-1) best=Math.min(best,(VH/2+STAND_OFF()-100)/(-oy));
-    else if(oy>1) best=Math.min(best,(VH/2-STAND_OFF()-80)/oy);
+    var mx=TOUCH_UI?VW*0.05:60, mt=TOUCH_UI?VH*0.16:100, mb=TOUCH_UI?VH*0.24:80;   // phone: clear of the move buttons along the bottom
+    if(Math.abs(ox)>1) best=Math.min(best,(VW/2-mx)/Math.abs(ox));
+    if(oy<-1) best=Math.min(best,(VH/2+STAND_OFF()-mt)/(-oy));
+    else if(oy>1) best=Math.min(best,(VH/2-STAND_OFF()-mb)/oy);
   }
   return best;
 }
@@ -693,13 +795,13 @@ function sidelineGuys(P){
   }
   return out;
 }
-function STAND_OFF(){ return VH*0.08; }   // how far the field sits below centre
+function STAND_OFF(){ return TOUCH_UI ? -VH*0.02 : VH*0.08; }   // how far the field sits below centre (a phone keeps it high: less stand, more field)
 function setupProj(sx,sy){
   var want=BASE3*CAM3.z, fit=camFit(camPoints(),cam.x,cam.y);
-  var tgt=Math.max(0.35,Math.min(want,fit));
+  var tgt=Math.max(TOUCH_UI?BASE3*0.62:0.35, Math.min(want,fit));
   if(!CAM3.S) CAM3.S=tgt;
   // pull out fast so nothing leaves the frame, push in gently
-  CAM3.S += (tgt-CAM3.S)*(tgt<CAM3.S?0.3:0.06);
+  CAM3.S += (tgt-CAM3.S)*(tgt<CAM3.S?(TOUCH_UI?0.12:0.3):(TOUCH_UI?0.035:0.06));
   var S0=CAM3.S, Z0=Z3, c=TILT3;
   var K=c*S0*Z0*Z0;
   var P={S0:S0, Z0:Z0, K:K, hz:VH/2+STAND_OFF()+sy - c*S0*Z0, cx:VW/2+sx, camx:cam.x, camy:cam.y};
@@ -803,7 +905,7 @@ function blit3D(P){
 // can see the end zone and whoever is chasing.
 var CAM3={z:0.86, actUntil:0, ax:0, ay:0, prevShake:0, prevSpin:0};
 function camMood(now){
-  if(CAM3.actUntil>now) return 1.55;
+  if(CAM3.actUntil>now) return TOUCH_UI?1.25:1.55;
   if(G && G.phase==='heroIntro') return 1.9;        // close on the star as he walks out
   if(G && G.broadcast && G.broadcast.until>now) return 1.85;   // in on the man who made the play
   if(G && playArtOn()) return 0.7;                   // pull back to read the play
@@ -822,7 +924,10 @@ function camDirect(){
   var now=performance.now();
   if(G && G.phase==='live'){
     var c=G.carrier, sp=c?(c.spin||0):0;
-    if(G.shake > CAM3.prevShake+2 || (sp>0.85 && CAM3.prevSpin<=0.85)){
+    // no punch-in while the quarterback still has it behind the line: a hit on
+    // him zoomed in and pushed the receivers off the screen mid-throw
+    var passing3 = c && c.role==='QB' && !G.thrown && !pastTheLine(c);
+    if(!passing3 && (G.shake > CAM3.prevShake+2 || (sp>0.85 && CAM3.prevSpin<=0.85))){
       CAM3.actUntil=now+620; CAM3.ax=G.ball.x; CAM3.ay=G.ball.y;
     }
     CAM3.prevSpin=sp;
@@ -852,6 +957,7 @@ function swirl(p,lift,front){
   ctx.restore();
 }
 stage.addEventListener('pointermove',function(e){
+  if(e.pointerType==='touch') return;           // fingers have their own handling (touch section)
   // measure the flick before anything else moves the cursor record
   if(G && G.phase==='live'){
     var r0=cv.getBoundingClientRect();
@@ -873,6 +979,7 @@ stage.addEventListener('pointerleave',function(){ G && (G.mouse.on=false); });
 
 // release the drag: dive along it
 function endDrag(e){
+  if(e && e.pointerType==='touch') return;
   if(e && e.button===2){ if(G) G.artHold=false; return; }
   if(!G||!G.drag) return;
   var d0=G.drag; G.drag=null;
@@ -887,6 +994,7 @@ stage.addEventListener('pointerup',endDrag);
 stage.addEventListener('pointercancel',function(){ if(G) G.drag=null; });
 stage.addEventListener('contextmenu',function(e){ e.preventDefault(); });
 stage.addEventListener('pointerdown',function(e){
+  if(e.pointerType==='touch') return;           // a thumb on the stick is not a throw
   e.preventDefault();
   if(!G) return;
   if(e.button===2){ G.artHold=true; return; }   // right button: play art while held
@@ -1461,8 +1569,9 @@ function fireAbility(seat, IN, slot){
     tell('SUPER DASH!',600);
   }
   else if(id==='stiffarm'){
-    var v=foeNear(36);
-    if(!v) return;                              // nothing to put down, no charge
+    var v=foeNear(58);                          // an arm's length and a lunge
+    if(!v){ tell('NOBODY IN REACH',500); return; }   // nothing to put down, no charge
+    me.wrapped=0;
     v.stun=1.3; v.down=Math.max(v.down,1.0); v.wrapped=0;
     v.vx=(v.x-me.x)*5.5; v.vy=(v.y-me.y)*5.5;
     me.arm=0.6; G.shake=REDUCED?0:10;
@@ -1572,13 +1681,19 @@ function fireAbility(seat, IN, slot){
   else if(id==='aagun'){
     if(!G.thrown) return;                        // nothing in the air, no charge
     var tgt=G.thrown.target;
-    G.fx.push({bolt:true,x:me.x,y:me.y-24,x2:G.ball.x,y2:G.ball.y,
-               c:'rgba(255,240,170,1)',life:0.20,max:0.20});
-    streak(me.x,me.y-24,G.ball.x,G.ball.y,'rgba(255,255,255,.7)',1.0,0.26);
-    flash(me.x+(G.ball.x-me.x)*0.08, me.y-24+(G.ball.y-(me.y-24))*0.08,
-          'rgba(255,210,63,.95)',18);
-    flash(G.ball.x,G.ball.y,'rgba(255,255,255,1)',30);
-    shock(G.ball.x,G.ball.y,'rgba(255,255,255,.9)',3,30,0.28);
+    // A laser from his eyes to the ball where it is IN THE AIR (its height
+    // above its shadow), held for half a second, and the ball bursts.
+    var bx=G.ball.x, by=G.ball.y-(G.thrown.h||0), ex=me.x+(me.face||1)*2, ey=me.y-33;
+    G.fx.push({laser:true,x:ex,y:ey,x2:bx,y2:by,life:0.55,max:0.55});
+    flash(ex,ey,'rgba(255,60,60,1)',16);
+    flash(bx,by,'rgba(255,255,255,1)',34);
+    flash(bx,by,'rgba(255,90,60,.95)',24);
+    shock(bx,by,'rgba(255,120,80,.95)',3,34,0.32);
+    for(var lz=0;lz<14;lz++){                        // pieces of the ball, falling
+      var la=Math.random()*Math.PI*2, ls=60+Math.random()*120;
+      G.fx.push({x:bx,y:by,vx:Math.cos(la)*ls,vy:Math.sin(la)*ls-40,grav:260,
+                 r:1.6+Math.random()*1.6,life:0.7,max:0.7,c:(lz%3?'#7a4a28':'#ffb070')});
+    }
     G.shake=REDUCED?0:12;
     var roll=Math.random();
     if(roll<0.24){
@@ -1724,7 +1839,7 @@ function switchPlayer(side){
   var nxt=pool[(idx+1)%pool.length];
   if(side==='H'){ G.controlled=nxt; G.switchFlash=0.5; }
   else { G.controlled2=nxt; }
-  if(side==='H'||!NET.on||!NET.host) say((nxt.name||'').split(' ').pop().toUpperCase(),600);
+  if(side==='H'||!NET.on||!NET.host) say(surname(nxt),600);
 }
 
 
@@ -2679,9 +2794,21 @@ function driveHuman(seat, IN, dt, now){
       else { M.latCd=1.4; lateral(seat.side); }
     }
     if(IN.b2) fireSpecial(seat, IN);
+    // a swipe on a touch screen while carrying: spin out of it along the swipe
+    if(seat.local && touchSpinDir){
+      var sd=touchSpinDir; touchSpinDir=null;
+      if(me===G.carrier && M.power>=JUKE_COST && M.jukeCd<=0){
+        M.power-=JUKE_COST; M.jukeCd=0.95; M.jukeUntil=now+JUKE_MS;
+        me.spin=1; me.iFrames=Math.max(me.iFrames||0,0.32); me.wrapped=0;
+        me.vx=sd.x*BASE_SPD*2.4*(me.agi||1); me.vy=sd.y*BASE_SPD*2.4*(me.agi||1);
+        burst(me.x,me.y,'#7fd8ff');
+        say('SPIN!',320);
+      }
+    }
     if(IN.b1 && M.power>=JUKE_COST && M.jukeCd<=0){
       M.power-=JUKE_COST; M.jukeCd=0.95; M.jukeUntil=now+JUKE_MS;
-      var jd=(a.x||a.y)?a:{x:fwd,y:0};
+      var jd=(seat.local&&touchJukeDir)?touchJukeDir:((a.x||a.y)?a:{x:fwd,y:0});
+      if(seat.local) touchJukeDir=null;
       me.vx=jd.x*BASE_SPD*2.6*me.agi; me.vy=jd.y*BASE_SPD*2.6*me.agi;
       if(seat.local) say('JUKE!',300);
     }
@@ -2696,7 +2823,24 @@ function driveHuman(seat, IN, dt, now){
   // or he is permanently behind his own team-mates
   var base = onO ? BASE_SPD : DEF_SPD;
   var mult=(sprinting?SPRINT:1)*(me.burst>0?1.7:1)*me.spd;
-  if(diving){ me.vx*=0.988; me.vy*=0.988; }          // ride the dive out
+  if(diving){
+    me.vx*=0.988; me.vy*=0.988;                       // ride the dive out
+    // A swipe tackle on a touch screen homes in: the dive bends toward the
+    // ball carrier while you are in the air, so a slide is a tackle, not a dash.
+    var hc=G.carrier;
+    if(seat.local && G.touchDive && hc && hc.team!==me.team){
+      var hx=hc.x+hc.vx*0.12-me.x, hy=hc.y+hc.vy*0.12-me.y, hm=Math.hypot(hx,hy)||1;
+      if(hm<TACKLE_R && (hc.iFrames>0 || hc.z>0.15)){
+        // he is slippery for a beat (a juke, a fresh handoff): stay on him
+        // instead of sailing past, and the tackle lands when it wears off
+        me.vx=hc.vx+hx*4; me.vy=hc.vy+hy*4;
+      } else if(hm<9*YD){
+        var sp=Math.max(Math.hypot(me.vx,me.vy), BASE_SPD*2.7);
+        var k=Math.min(1,dt*9);
+        me.vx+=(hx/hm*sp-me.vx)*k; me.vy+=(hy/hm*sp-me.vy)*k;
+      }
+    }
+  } else if(seat.local) G.touchDive=false;
   else if(onO && me===G.carrier && me.role==='QB' && G.dropLeft>0 && !G.thrown){
     if(a.x||a.y){ G.dropLeft=0; me.vx=a.x*base*mult; me.vy=a.y*base*mult; }   // you took over
     else dropBack(me, fwd, dt);
@@ -3115,7 +3259,7 @@ function step(dt){
   for(var f=G.fx.length-1;f>=0;f--){
     var e=G.fx[f]; e.life-=dt;
     if(e.ringed){ e.r+=dt*130; }
-    else if(e.shock||e.flash||e.streak||e.gh||e.dome||e.bolt){ /* on a timer */ }
+    else if(e.shock||e.flash||e.streak||e.gh||e.dome||e.bolt||e.laser){ /* on a timer */ }
     else { e.x+=e.vx*dt; e.y+=e.vy*dt; e.vx*=0.93; e.vy*=0.93;
            if(e.grav){ e.vy+=e.grav*dt; } }
     if(e.life<=0) G.fx.splice(f,1);
@@ -3330,6 +3474,7 @@ function step(dt){
         }
         if(lastT) lastT.down=0.8;
         credit(lastT, car.role==='QB' ? 'SACK' : 'TACKLE');
+        if(G.cur) G.cur.tackler=lastT;
         if(car.role==='QB' && (car.x-G.los)*dir()<0) G.wasSack=true;   // the banner says so
         endPlay(car.x,'TACKLED'); return;
       }
@@ -3626,7 +3771,7 @@ function draw(){
   }
   if(!isFinite(tx)) tx=FW/2;
   if(!isFinite(ty)) ty=FH/2;
-  var follow = actCam ? 0.2 : (VIEW3D ? 0.15 : 0.11);
+  var follow = actCam ? (TOUCH_UI?0.12:0.2) : (VIEW3D ? (TOUCH_UI?0.09:0.15) : 0.11);
   cam.x += (tx-cam.x)*follow; cam.y += (ty-cam.y)*follow;
 
   // the viewport itself can come back wrong after a resize
@@ -3760,6 +3905,20 @@ function draw(){
     } else if(e.dome){
       var dr=e.r*(0.5+(1-k2)*0.6);
       addSprite(fxTint(FXI.dome,solidOf(e.c)),e.x,e.y-dr*0.28,dr*2,dr*2,k2*0.9,0,0.8);
+    } else if(e.laser){
+      // red glow, orange body, white-hot core, flickering, thinning as it ends
+      var fl=0.85+Math.random()*0.3, lw=k2*fl;
+      ctx.save(); ctx.globalAlpha=1; ctx.lineCap='round';
+      ctx.globalCompositeOperation='lighter';
+      ctx.strokeStyle='rgba(255,40,40,'+(0.35*k2).toFixed(3)+')'; ctx.lineWidth=11*lw;
+      ctx.beginPath(); ctx.moveTo(e.x,e.y); ctx.lineTo(e.x2,e.y2); ctx.stroke();
+      ctx.strokeStyle='rgba(255,120,60,'+(0.8*k2).toFixed(3)+')'; ctx.lineWidth=5*lw;
+      ctx.beginPath(); ctx.moveTo(e.x,e.y); ctx.lineTo(e.x2,e.y2); ctx.stroke();
+      ctx.strokeStyle='rgba(255,255,255,'+k2.toFixed(3)+')'; ctx.lineWidth=1.8*lw;
+      ctx.beginPath(); ctx.moveTo(e.x,e.y); ctx.lineTo(e.x2,e.y2); ctx.stroke();
+      ctx.fillStyle='rgba(255,90,70,'+(0.9*k2).toFixed(3)+')';            // the glow at his eyes
+      ctx.beginPath(); ctx.arc(e.x,e.y,4.5*lw,0,Math.PI*2); ctx.fill();
+      ctx.restore();
     } else if(e.bolt){
       var bl=Math.hypot(e.x2-e.x,e.y2-e.y), ba=Math.atan2(e.y2-e.y,e.x2-e.x);
       addSprite(fxTint(FXI.bolt,solidOf(e.c)),(e.x+e.x2)/2,(e.y+e.y2)/2,
@@ -3804,7 +3963,7 @@ function draw(){
   if(G.kick) drawKick();
   else if(G.thrown||(G.ball&&!G.ball.held)) drawBall();
   ctx.restore();
-  if(P3){
+  if(P3 && !TOUCH_UI){                            // no V key on a phone
     ctx.setTransform(dpr,0,0,dpr,0,0);
     ctx.fillStyle='rgba(8,12,16,.55)'; ctx.fillRect(VW/2-80,VH-28,160,18);
     ctx.fillStyle='#ffd23f'; ctx.font='700 12px "Barlow Condensed", sans-serif';
@@ -4399,7 +4558,7 @@ function heroTag(p,lift){
   // Labelling all sixteen turns to mush the moment two players overlap.
   var ctrl=(p===G.controlled), carry=(p===G.carrier);
   if(!ctrl && !carry && !p.hero) return;
-  var last=(p.name.split(' ').pop()||p.name).toUpperCase();
+  var last=surname(p)||String(p.name||'').toUpperCase();
   ctx.save();
   ctx.textAlign='center'; ctx.textBaseline='top';
   ctx.font=(ctrl?'700 7.6px':'700 6.8px')+' "Barlow Condensed", sans-serif';
@@ -4428,6 +4587,7 @@ function drawBall(){
   if(t){
     ang=Math.atan2(t.ty-t.y, t.tx-t.x);
     phase=(t.t/GAME_SPEED)*(t.lat?11:52);
+    if(t.kickoff) ang+=phase*1.2;                   // a kick turns end over end, it does not spiral
   } else if(G.loose){
     ang=Math.atan2(G.loose.vy,G.loose.vx);
     phase=G.loose.t*11;               // loose ball tumbles
@@ -4567,8 +4727,40 @@ function hud(){
 // ---- ability icons: label, key and whether they are ready right now -----
 var AB=[null,null,null,null,null,null];
 function ab(i){ return AB[i] || (AB[i]=document.getElementById('ab'+i)); }
-function setAb(i,cap,key,ready,live,cd,icon){
+// Until the painted icons exist, each move gets its own colour behind its drawing.
+var AB_COL={rocket:'#ff8c2b', perfect:'#7fd8ff', forcefield:'#3fa0ff', dash:'#ff8c2b', stiffarm:'#ffd23f',
+  teleport:'#29d3e6', superblock:'#8b93a3', clothesline:'#e0384e', superspeed:'#4fd18b', spin:'#48b8ff',
+  slam:'#c0772b', fumblegen:'#b36bff', aagun:'#ff4b4b', bighit:'#ffd23f', pound:'#d9822b', pitch:'#9ad14f',
+  quake:'#ff7a1a', skyhop:'#e8f4ff', afterburner:'#5fc8ff', phase:'#29d3e6', blur:'#b36bff'};
+// Painted ability icons, parts/icons/<name>.png, used when the file is there.
+var ICON_OK={};
+function iconImg(name, done){
+  if(ICON_OK[name]!==undefined){ if(ICON_OK[name]!=='wait') done(ICON_OK[name]); return; }
+  ICON_OK[name]='wait';
+  var im=new Image();
+  im.onload=function(){ ICON_OK[name]=true; done(true); };
+  im.onerror=function(){ ICON_OK[name]=false; done(false); };
+  im.src='parts/icons/'+name+'.png?v='+CARD_VER;
+}
+function setAb(i,cap,key,ready,live,cd,icon,frac,img){
   var e=ab(i); if(!e) return;
+  if(TOUCH_UI){
+    var rg=e.querySelector('.ring');
+    if(img && e.dataset.img!==img){
+      e.dataset.img=img; e.classList.remove('img'); rg.style.backgroundImage='';
+      iconImg(img, function(ok){
+        if(e.dataset.img!==img) return;
+        rg.style.backgroundImage = ok ? 'url(parts/icons/'+img+'.png?v='+CARD_VER+')' : '';
+        e.classList.toggle('img', !!ok);
+      });
+    }
+    rg.style.setProperty('--cd', (frac>0 ? Math.min(1,frac) : 0).toFixed(3));
+    if(img && !e.classList.contains('img')){
+      var col=AB_COL[img] || AB_COL[img.replace('move-','')] || '#34506f';
+      rg.style.background='radial-gradient(circle at 35% 30%, '+col+' 0%, rgba(8,12,18,.92) 78%)';
+      rg.style.borderColor='#aeb6bf';
+    }
+  }
   if(icon && e.dataset.icon!==icon){
     var sv=e.querySelector('svg');
     if(sv){ sv.innerHTML=icon; e.dataset.icon=icon; }
@@ -4579,8 +4771,57 @@ function setAb(i,cap,key,ready,live,cd,icon){
   e.classList.toggle('on', ok);
   e.classList.toggle('off', !ok);
 }
+var ICON_SPECIAL='<path d="M12 3l2.4 5.6L20 10l-4.3 3.9 1.2 5.9L12 17l-4.9 2.8 1.2-5.9L4 10l5.6-1.4z"/>',
+    ICON_HIT='<path d="M4 12h6M14 12h6M12 4v6M12 14v6"/><circle cx="12" cy="12" r="2.5"/>',
+    ICON_PITCH='<path d="M4 17c4-8 10-10 16-10"/><path d="M16 4l4 3-3 4"/>',
+    ICON_POUND='<path d="M12 3v11"/><path d="M8 10l4 4 4-4"/><path d="M3 20h18"/><path d="M6 17l-2 3M18 17l2 3"/>';
+// the edge markers themselves: little tabs with the receiver's name
+function edgeMarkers(){
+  var box=document.getElementById('edgeMk');
+  if(!box){ box=document.createElement('div'); box.id='edgeMk'; stage.appendChild(box); }
+  var on = G.phase==='live' && iHaveBall() && G.carrier && G.carrier.role==='QB' &&
+           !G.thrown && !pastTheLine(G.carrier);
+  var html='';
+  if(on){
+    for(var i=0;i<G.players.length;i++){
+      var q=G.players[i];
+      if(q.team!==G.offense || q===G.carrier || q.role==='C'||q.role==='OL'||q.role==='BL') continue;
+      var es=edgeSpot(q); if(!es) continue;
+      var lk=(q===G.lockMan)?Math.min(1,G.lockT/1.05):0;
+      var p=worldToScreen(q.x,q.y), ang=Math.atan2(p.y-es.y, p.x-es.x)*180/Math.PI;
+      html+='<div class="emk'+(lk>0.92?' lk':'')+'" style="left:'+Math.round(es.x)+'px;top:'+Math.round(es.y)+'px">'+
+            '<i style="transform:rotate('+Math.round(ang)+'deg)"></i><b>'+surname(q)+'</b></div>';
+    }
+  }
+  if(box.innerHTML!==html) box.innerHTML=html;
+}
+function touchExtras(onD, live){
+  var pre=(G.phase==='presnap');
+  edgeMarkers();
+  function need(cd,cdMax,cost){ return Math.max(cd>0?cd/cdMax:0, cost>0?1-G.power/cost:0, 0); }
+  if(onD){
+    setAb(4,'Big Hit','',G.hitCd<=0 && G.power>=45, live, 0, ICON_HIT, need(G.hitCd,0.8,45), 'bighit');
+    setAb(5,'Pound','',G.hitCd<=0 && G.power>=58, live, 0, ICON_POUND, need(G.hitCd,1.3,58), 'pound');
+  } else {
+    var cost=Math.max(1,HERO.cost);
+    var mvOk = HERO.move==='cannon' || (G.moveCd<=0 && G.power>=cost);
+    setAb(4, HERO.moveName, '', mvOk, live, 0, ICON_SPECIAL,
+          HERO.move==='cannon' ? 0 : need(G.moveCd,2,cost), 'move-'+HERO.move);
+    setAb(5,'Pitch','', !!(G.carrier && G.carrier.team===G.offense && !G.thrown), live, 0, ICON_PITCH, 0, 'pitch');
+  }
+  var bar=document.getElementById('preBar');
+  if(bar){
+    bar.classList.toggle('show', pre && !NET.on);
+    var to=document.getElementById('pbTO'), art=document.getElementById('pbArt');
+    to.textContent='TIMEOUT '+(G.timeouts|0);
+    to.classList.toggle('off', !G.clockRunning || (G.timeouts|0)<=0);
+    art.classList.toggle('on', playArtOn());
+    document.getElementById('pbAud').classList.toggle('on', !!G.audibleOpen);
+  }
+}
 function abilities(onD){
   var live=(G.phase==='live'), pre=(G.phase==='presnap');
+  if(TOUCH_UI) touchExtras(onD, live);
   var me = G.controlled;                 // on the guest this is its own man
   var kit = kitFor(me);
   var KEYS=['Q','R','T'];
@@ -4590,7 +4831,7 @@ function abilities(onD){
     if(!id){ setAb(i+1,'\u2014',KEYS[i],false,false); continue; }
     var left = Math.min(net ? net[i] : abLeft(me,id), ABIL[id].cd);
     setAb(i+1, left>0 ? (left+(left===1?' PLAY':' PLAYS')) : ABIL[id].name,
-          KEYS[i], left===0, live, 0, AB_ICON[id]);
+          KEYS[i], left===0, live, 0, AB_ICON[id], left/Math.max(1,ABIL[id].cd), id);
   }
 }
 
@@ -4736,8 +4977,9 @@ function playName(id){
   return String(id||'').toUpperCase();
 }
 function surname(p){
-  if(!p||!p.name) return '';
-  var bits=p.name.split(' ');
+  var src=p && (p.player||p.name);            // the football name when he has one (as on his card)
+  if(!src) return '';
+  var bits=src.split(' ');
   return bits[bits.length-1].toUpperCase();
 }
 
@@ -4783,20 +5025,26 @@ function logPlay(atX, label, scored){
           : sack    ? surname(c.qb)
           : car     ? surname(car) : '';
 
-  // Five yards or a score is the offence's play. Anything less, or a pick or
-  // a fumble, belongs to whoever on defence made it that way.
-  var offenceWon = scored || gained >= 5;
+  // Six yards or a score is the offence's play, and the card goes to the man
+  // who had the ball: the runner, the receiver who caught it, the quarterback
+  // who scrambled for it. A blocker's move never takes it from him. Five or
+  // less, or a pick or a fumble, belongs to the defender who made it so: the
+  // man who made the tackle, unless someone did something bigger (a sack, a
+  // pick, a forced fumble, a pass knocked down).
+  var offenceWon = scored || gained >= 6;
   var star, act;
   if(scored && car && car.team!==c.team){
     star=car; act = c.pick ? 'PICK SIX' : 'SCOOP AND SCORE';
   } else if(offenceWon){
-    star = c.oStar || car || c.target || c.rusher || c.qb;
+    star = (car && car.team===c.team) ? car : (c.target || c.rusher || c.qb);
     act  = scored ? 'TOUCHDOWN'
          : (c.oAct && c.oStar===star) ? c.oAct
-         : c.comp ? 'BIG CATCH' : 'BIG GAIN';
+         : c.comp ? 'BIG CATCH' : (star && star.role==='QB') ? 'QB SCRAMBLE' : 'BIG GAIN';
   } else {
-    star = c.dStar;
-    act  = c.dAct || (c.pick?'INTERCEPTION' : c.fum?'FORCED FUMBLE'
+    var big = (ACT_WEIGHT[c.dAct]||0) >= 55;           // sack, pick, fumble, pass defended
+    star = big ? c.dStar : (c.tackler || c.dStar);
+    act  = (big || c.dStar===star) && c.dAct ? c.dAct
+         : (c.pick?'INTERCEPTION' : c.fum?'FORCED FUMBLE'
          : sack?'SACK' : (c.passer&&!c.comp)?'PASS DEFENDED' : 'TACKLE');
     if(!star){ star = car || c.qb; act = c.passer?'INCOMPLETE':'NO GAIN'; }
   }
@@ -4809,8 +5057,8 @@ function logPlay(atX, label, scored){
   else if(sack){ dance='flex'; }
   else if(firstDown && car && car.team===c.team){ star=car; act='FIRST DOWN'; }
   else if(label==='OUT OF BOUNDS' && car && car.team===c.team){ star=car; act='OUT OF BOUNDS'; }
-  else if(tackled && gained<=5 && c.dStar){
-    star=c.dStar; act=c.dAct||'TACKLE'; dance='flex';
+  else if(tackled && gained<=5 && (c.tackler||c.dStar)){
+    star=c.tackler||c.dStar; act=(star===c.dStar&&c.dAct)?c.dAct:'TACKLE'; dance='flex';
     G.stopBanner=true;                                  // "DEFENSIVE STOP!"
   }
   if(star) G.cardQ={p:star, act:act, dance:dance};    // shown after the banner, in postPlay
@@ -4969,7 +5217,7 @@ function showPlaycall(){
   var html='<h2>'+(onO?'Call your play':'Call your defense')+'</h2>'+
     '<p class="sub">'+['','1st','2nd','3rd','4th'][Math.min(4,G.down)]+' &amp; '+
     Math.max(1,Math.round(G.toGo))+' on the '+yardLineLabel(G.los)+'</p>'+
-    lastPlayLine()+'<div class="grid3">';
+    lastPlayLine()+'<div class="grid3 pc">';
   list.forEach(function(p){
     html+='<button class="card" type="button" data-id="'+p.id+'">'+
       '<div class="k">'+p.key+'</div><div class="t">'+p.name+'</div>'+
@@ -4978,9 +5226,13 @@ function showPlaycall(){
       '<div class="d">'+p.desc+'</div></button>';
   });
   html+='</div>';
-  html+='<div style="margin-top:10px">'+
-    '<button class="card" id="seeStats" type="button" style="width:100%">'+
-    '<div class="k">STATS</div><div class="t">Box score and play by play</div></button></div>';
+  var canTO = !NET.on && G.clockRunning && (G.timeouts|0)>0;
+  html+='<div style="margin-top:8px; display:flex; gap:8px">'+
+    '<button class="card" id="seeStats" type="button" style="flex:1">'+
+    '<div class="k">STATS</div><div class="t">Box score and play by play</div></button>'+
+    (canTO ? '<button class="card" id="toSheet" type="button" style="flex:1">'+
+      '<div class="k">CLOCK RUNNING</div><div class="t">Timeout ('+G.timeouts+' left)</div></button>' : '')+
+    '</div>';
   elSheet.innerHTML=html; elOv.classList.add('show');
   Array.prototype.forEach.call(elSheet.querySelectorAll('canvas.pd'),function(c){
     try{ drawPlayDiagram(c, c.getAttribute('data-pd'), onO); }catch(e){ /* a diagram is decoration */ }
@@ -4990,6 +5242,8 @@ function showPlaycall(){
   });
   var sb=document.getElementById('seeStats');
   if(sb) sb.addEventListener('click',function(){ G.showingStats=true; showStats(); });
+  var tb=document.getElementById('toSheet');
+  if(tb) tb.addEventListener('click',function(){ callTimeout(); });
   var f=elSheet.querySelector('.card'); if(f) f.focus();
 }
 // ---- the playbook chalkboard ----------------------------------------------
@@ -5126,6 +5380,7 @@ function kickMeter(kind, cpu, targets, done){
   zone.style.left=(50-KM.tol*50)+'%'; zone.style.width=(KM.tol*100)+'%';
   if(KM.req>0){ req.style.left=(KM.req*100)+'%'; req.style.display='block'; } else req.style.display='none';
   el.classList.add('show');
+  if(cpu) el.classList.remove('show');            // their kicker, their meter
   G.kickClick=false;
 }
 function kickMeterTick(dt){
@@ -5500,10 +5755,22 @@ function drawPlayArt(){
   } else {
     // the reminder, small, while you are at the line
     ctx.font='700 12px "Barlow Condensed", sans-serif'; ctx.textAlign='center'; ctx.textBaseline='top';
-    ctx.fillStyle='rgba(8,12,16,.55)'; ctx.fillRect(VW/2-130,VH-56,260,18);
-    ctx.fillStyle='rgba(241,241,236,.85)'; ctx.fillText('HOLD C: PLAY ART   \u00b7   X: AUDIBLE', VW/2, VH-53);
+    if(!TOUCH_UI){                                 // a phone has buttons for these
+      ctx.fillStyle='rgba(8,12,16,.55)'; ctx.fillRect(VW/2-165,VH-56,330,18);
+      ctx.fillStyle='rgba(241,241,236,.85)'; ctx.fillText('HOLD C: PLAY ART   \u00b7   X: AUDIBLE   \u00b7   O: TIMEOUT', VW/2, VH-53);
+    }
   }
   ctx.restore();
+}
+// Three a game. Stops the clock until the snap and resets the play clock.
+function callTimeout(){
+  if(!G || NET.on) return;
+  if(G.phase!=='presnap' && G.phase!=='playcall' && G.phase!=='dead') return;
+  if((G.timeouts|0)<=0){ say('NO TIMEOUTS LEFT',900); return; }
+  if(!G.clockRunning){ say('CLOCK IS STOPPED',800); return; }
+  G.timeouts--; G.clockRunning=false; G.playClock=15;
+  say('TIMEOUT \u00b7 '+G.timeouts+' LEFT',1300);
+  if(G.phase==='playcall' && elOv.classList.contains('show')) showPlaycall();
 }
 function openAudible(){
   if(!G || G.phase!=='presnap' || NET.on) return;
@@ -5663,6 +5930,7 @@ window.addEventListener('keydown',function(e){
   }
   if(G.phase==='presnap' && !NET.on){
     var akk=e.key.toLowerCase();
+    if(akk==='o'){ pressed['o']=false; callTimeout(); }
     if(akk==='x'){ pressed['x']=false; if(G.audibleOpen) closeAudible(); else openAudible(); }
     else if(G.audibleOpen){
       var ai=['1','2','3','4','5','6','7','8','9'].indexOf(e.key), al=callSheet();
@@ -5677,7 +5945,7 @@ window.addEventListener('keydown',function(e){
 });
 
 // ================================================================ touch
-if(window.matchMedia&&window.matchMedia('(pointer: coarse)').matches){
+if(TOUCH_UI){
   elTouch.classList.add('on');
   var stick=document.getElementById('stick'), nub=document.getElementById('nub');
   var sid=null,cx=0,cy=0;
@@ -5689,9 +5957,11 @@ if(window.matchMedia&&window.matchMedia('(pointer: coarse)').matches){
     var dx=t.clientX-cx, dy=t.clientY-cy, m=Math.hypot(dx,dy), max=46;
     if(m>max){ dx=dx/m*max; dy=dy/m*max; }
     nub.style.transform='translate('+dx+'px,'+dy+'px)';
-    touchVec.x=dx/max; touchVec.y=dy/max; e.preventDefault(); } }
+    touchVec.x=dx/max; touchVec.y=dy/max;
+    touchSprint = Math.hypot(dx,dy) > max*0.9;       // all the way over is a sprint
+    e.preventDefault(); } }
   function sEnd(e){ for(var i=0;i<e.changedTouches.length;i++){
-    if(e.changedTouches[i].identifier===sid){ sid=null; touchVec.x=0; touchVec.y=0; nub.style.transform=''; } } }
+    if(e.changedTouches[i].identifier===sid){ sid=null; touchVec.x=0; touchVec.y=0; touchSprint=false; nub.style.transform=''; } } }
   stick.addEventListener('touchstart',sStart,{passive:false});
   window.addEventListener('touchmove',sMove,{passive:false});
   window.addEventListener('touchend',sEnd); window.addEventListener('touchcancel',sEnd);
@@ -5700,18 +5970,136 @@ if(window.matchMedia&&window.matchMedia('(pointer: coarse)').matches){
   document.getElementById('bSpr').addEventListener('touchend',function(){touchSprint=false;});
   document.getElementById('bMove').addEventListener('touchstart',function(e){touchMove=true;e.preventDefault();},{passive:false});
   document.getElementById('bQ').addEventListener('touchstart',function(e){touchQ=true;e.preventDefault();},{passive:false});
-  // tap the field to hike, then to throw
+  // Fingers on the field. Before the snap a tap hikes it, and during a kick
+  // a tap locks the meter. On offence, with the ball in your quarterback's
+  // hands: put your finger on a receiver and HOLD, and the lock builds (the
+  // ring closes and turns green); lift to throw. Slide to change receivers.
+  // On defence: swipe across the screen and your man dives along the swipe.
+  var FT={id:null, mode:null, x0:0, y0:0, t0:0, done:false};
+  // one of your own men under the finger, judged by where his body is drawn
+  function pickMine(cx,cy){
+    var r=cv.getBoundingClientRect(), sx=cx-r.left, sy=cy-r.top, best=null, bd=1e9, side=mySide();
+    for(var i=0;i<G.players.length;i++){
+      var q=G.players[i];
+      if(q.team!==side || q===G.controlled) continue;
+      var p=worldToScreen(q.x,q.y), by=p.y-18*p.s;
+      var d=Math.hypot(p.x-sx, by-sy), reach=Math.max(28, 22*p.s);
+      if(d<reach && d<bd){ bd=d; best=q; }
+    }
+    return best;
+  }
+  function takeControl(q){
+    if(!q || (NET.on && !NET.host)) return false;
+    G.controlled=q; G.switchFlash=0.5;
+    say(surname(q),600);
+    return true;
+  }
+  function ftAim(t){
+    var w=screenToWorld(t.clientX,t.clientY);
+    G.mouse.x=w.x; G.mouse.y=w.y; G.mouse.cx=t.clientX; G.mouse.cy=t.clientY; G.mouse.on=true;
+  }
+  function canAim(){
+    return G.phase==='live' && iHaveBall() && G.carrier && G.carrier.role==='QB' &&
+           !G.thrown && !pastTheLine(G.carrier);
+  }
   cv.addEventListener('touchstart',function(e){
     if(!G) return;
+    e.preventDefault();
+    var t=e.changedTouches[0];
+    if(G.phase==='kickset'){ G.kickClick=true; return; }
     if(G.phase==='presnap'){
+      if(G.audibleOpen){ closeAudible(); return; }
+      if(!iHaveBall()){ takeControl(pickMine(t.clientX,t.clientY)); return; }   // on defence: pick your man; they hike it
       if(NET.on && !NET.host) netSend({t:'hike'}); else snapBall();
       return;
     }
-    if(G.phase!=='live') return;
-    var t=e.changedTouches[0], w=screenToWorld(t.clientX,t.clientY);
-    if(NET.on && !NET.host){ netSend({t:'thr', x:Math.round(w.x), y:Math.round(w.y)}); return; }
-    throwAt(w.x,w.y,'H');
-  },{passive:true});
+    if(G.phase!=='live' || FT.id!==null) return;
+    FT.id=t.identifier; FT.x0=t.clientX; FT.y0=t.clientY; FT.t0=performance.now(); FT.done=false;
+    if(canAim()){ FT.mode='aim'; ftAim(t); }
+    else if(!iHaveBall()) FT.mode='tackle';         // swipe tackles, tap punches or switches
+    else if(G.thrown){ takeControl(pickMine(t.clientX,t.clientY)); FT.mode=null; }
+    else FT.mode='spin';                             // carrying it: swipe to spin
+  },{passive:false});
+  window.addEventListener('touchmove',function(e){
+    if(FT.id===null || !G) return;
+    for(var i=0;i<e.changedTouches.length;i++){
+      var t=e.changedTouches[i];
+      if(t.identifier!==FT.id) continue;
+      if(FT.mode==='aim'){
+        if(canAim()) ftAim(t); else { FT.mode=null; G.mouse.on=false; }
+      } else if(FT.mode==='spin' && !FT.done){
+        var jx=t.clientX-FT.x0, jy=t.clientY-FT.y0;
+        if(Math.hypot(jx,jy)>26 && performance.now()-FT.t0<420){
+          var ja=screenToWorld(FT.x0,FT.y0), jb=screenToWorld(t.clientX,t.clientY);
+          var wx=jb.x-ja.x, wy=jb.y-ja.y, wm=Math.hypot(wx,wy);
+          if(wm>0.5) touchSpinDir={x:wx/wm, y:wy/wm};
+          FT.done=true;
+        }
+      } else if(FT.mode==='tackle' && !FT.done){
+        var px=t.clientX-FT.x0, py=t.clientY-FT.y0, el=performance.now()-FT.t0;
+        if(Math.hypot(px,py)>26 && el<420){          // a swipe, not a resting finger
+          var a=screenToWorld(FT.x0,FT.y0), b=screenToWorld(t.clientX,t.clientY);
+          var dx=b.x-a.x, dy=b.y-a.y;
+          // Any swipe that is not pointed away from the ball carrier dives at
+          // him, led by where he is going. Swiping exactly at a moving man on
+          // a small screen is too hard, so a slide means "tackle him".
+          var tc=G.carrier, tm=G.controlled;
+          if(tc && tm && tc.team!==tm.team){
+            var lx=tc.x+tc.vx*0.25-tm.x, ly=tc.y+tc.vy*0.25-tm.y, lm=Math.hypot(lx,ly)||1;
+            var sm=Math.hypot(dx,dy)||1;
+            if(lm<14*YD && (dx*lx+dy*ly)/(sm*lm) > -0.3){ dx=lx; dy=ly; }
+          }
+          if(Math.hypot(dx,dy)>0.5){
+            if(NET.on && !NET.host) netSend({t:'dive', x:Math.round(dx*9), y:Math.round(dy*9)});
+            else if(swipeTackle(dx,dy,'H')!==false){ G.touchDive=true; G.diveUntil=performance.now()+640; }   // a touch dive carries further
+          }
+          FT.done=true;
+        }
+      }
+    }
+  },{passive:false});
+  function ftEnd(e){
+    if(FT.id===null) return;
+    for(var i=0;i<e.changedTouches.length;i++){
+      var t=e.changedTouches[i];
+      if(t.identifier!==FT.id) continue;
+      if(FT.mode==='aim' && G && canAim()){
+        ftAim(t);
+        var tg=aimTarget();
+        var tx=tg?tg.x:G.mouse.x, ty=tg?tg.y:G.mouse.y;
+        if(NET.on && !NET.host) netSend({t:'thr', x:Math.round(tx), y:Math.round(ty)});
+        else throwAt(tx,ty,'H');                     // the lock you built is what it is worth
+      }
+      if(FT.mode==='tackle' && !FT.done && G && G.phase==='live' &&
+         Math.hypot(t.clientX-FT.x0,t.clientY-FT.y0)<22 && performance.now()-FT.t0<380){
+        if(!takeControl(pickMine(t.clientX,t.clientY))) touchMove=true;   // the punch (big hit, or a swat at a pass)
+      }
+      if(G) G.mouse.on=false;
+      FT.id=null; FT.mode=null;
+    }
+  }
+  window.addEventListener('touchend',ftEnd);
+  window.addEventListener('touchcancel',ftEnd);
+  // the move buttons sit along the bottom, see-through, right of the stick
+  var lg=document.getElementById('legend');
+  if(lg && lg.parentNode!==stage){ stage.appendChild(lg); resize(); }
+  if(lg && !document.getElementById('ab4')){
+    // the hero's special (big hit on defence) and pitch (ground pound on defence)
+    lg.insertAdjacentHTML('afterbegin',
+      '<button class="ab" id="ab4" type="button"><span class="ring"><svg viewBox="0 0 24 24"></svg><span class="key"></span></span><span class="cap">Special</span></button>'+
+      '<button class="ab" id="ab5" type="button"><span class="ring"><svg viewBox="0 0 24 24"></svg><span class="key"></span></span><span class="cap">Pitch</span></button>');
+    document.getElementById('ab4').addEventListener('touchstart',function(ev){ ev.preventDefault(); ev.stopPropagation(); touchMove=true; },{passive:false});
+    document.getElementById('ab5').addEventListener('touchstart',function(ev){ ev.preventDefault(); ev.stopPropagation(); touchQ=true; },{passive:false});
+  }
+  if(!document.getElementById('preBar')){
+    stage.insertAdjacentHTML('beforeend',
+      '<div id="preBar"><button type="button" id="pbArt">PLAY ART</button>'+
+      '<button type="button" id="pbAud">AUDIBLE</button><button type="button" id="pbTO">TIMEOUT</button></div>');
+    var pb=function(id,fn){ document.getElementById(id).addEventListener('touchstart',function(ev){ ev.preventDefault(); ev.stopPropagation(); fn(); },{passive:false}); };
+    pb('pbArt',function(){ if(!G) return; G.artUntil = playArtOn() ? 0 : performance.now()+4000; });
+    pb('pbAud',function(){ if(!G) return; if(G.audibleOpen) closeAudible(); else openAudible(); });
+    pb('pbTO', function(){ callTimeout(); });
+  }
 }
 
 // ---- the icons double as buttons ----------------------------------------
@@ -5720,7 +6108,9 @@ if(window.matchMedia&&window.matchMedia('(pointer: coarse)').matches){
  [3,function(){ touchAb[2]=true; }]
 ].forEach(function(pair){
   var e=document.getElementById('ab'+pair[0]);
-  if(e) e.addEventListener('click',function(ev){ ev.preventDefault(); pair[1](); });
+  if(!e) return;
+  if(TOUCH_UI) e.addEventListener('touchstart',function(ev){ ev.preventDefault(); ev.stopPropagation(); pair[1](); },{passive:false});
+  else e.addEventListener('click',function(ev){ ev.preventDefault(); pair[1](); });
 });
 
 
