@@ -194,6 +194,28 @@ crouch, DB, WR stagger, QB), built from rig angles plus a body lean and
 drop. Pre-snap fidgets (breathing, shuffles, claps, glances) run on each
 man's own clock seeded by his number.
 
+**Stadium (3D build).** Towers, scoreboard, benches, tents and sideline
+players are anchored in world space (projected with `proj3`), never screen
+space: the first towers were drawn at fixed screen spots and slid with every
+pan. The field is framed `STAND_OFF` below centre so the stands show. The crowd
+is three pre-painted frames cycled (faster on a touchdown). `sidelineGuys` are
+drawn only when on screen.
+
+**Kicks and intro.** Touchdown is 6, then `startPAT` kicks from the 15 (94%).
+`heroIntro` spotlights the star at midfield with his card and stars before
+the first play call.
+
+**Passing physics.** Short throws are faster and flatter, deep ones slower
+and higher. Wobble (`wob`) grows with pressure at release. Contested balls
+(receiver in the window, defender within 16) are a weighted roll: catch,
+break-up or pick.
+
+**Super moves.** Play-counted cooldowns (`abSpend`). A move a person fires
+gets `superMoment`: a half-second spotlight and a corner banner. The CPU's
+moves stay quiet on purpose. J = juke/dive, K = special/big hit. Keyboard
+movement eases in over ~0.1s. Picks, fumbles and touchdowns set
+`G.broadcast`, which zooms the camera onto the playmaker while his card is up.
+
 **Knockdowns.** `knockPose` turns `down`/`stun` time into a posed timeline on
 the rig: fall back, lie flat, sit up, one knee, stand. Game logic freezes a
 man until both reach zero, so the get-up finishes exactly as he can move.

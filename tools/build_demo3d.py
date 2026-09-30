@@ -43,23 +43,37 @@ function makeW3(){
   var base=document.createElement('canvas'); base.width=c.width; base.height=c.height;
   var g=base.getContext('2d');
   // apron round the field
-  g.fillStyle='#16311f'; g.fillRect(0,0,base.width,base.height);
+  g.fillStyle='#1d4a2c'; g.fillRect(0,0,base.width,base.height);
   // the far stands: tiers of crowd climbing away from the field
   var top=MT-120;
-  var sg=g.createLinearGradient(0,0,0,top);
-  sg.addColorStop(0,'#0b0f16'); sg.addColorStop(1,'#1c2433');
-  g.fillStyle=sg; g.fillRect(0,0,base.width,top);
-  var seed=7; function rnd(){ seed=(seed*16807)%2147483647; return seed/2147483647; }
-  var cols=['#c9d3e0','#2d477f','#8c1a24','#e8c14a','#f1f1ec','#51607a','#a8232f','#233a6e'];
-  for(var ty=18; ty<top-8; ty+=9){
-    g.fillStyle='rgba(0,0,0,.35)'; g.fillRect(0,ty+6,base.width,2);        // tier edge
-    for(var tx=4; tx<base.width; tx+=5+rnd()*3){
-      g.fillStyle=cols[(rnd()*cols.length)|0];
-      g.globalAlpha=0.45+rnd()*0.45;
-      g.fillRect(tx, ty+rnd()*2, 3, 4);
+  // The crowd is painted three times with the same fans in the same seats;
+  // in frames 1 and 2 a different handful are up with their arms raised.
+  // Cycling the frames makes the stands move, faster when they are cheering.
+  function paintCrowd(gc, frame){
+    var sg=gc.createLinearGradient(0,0,0,top);
+    sg.addColorStop(0,'#0b0f16'); sg.addColorStop(1,'#1c2433');
+    gc.fillStyle=sg; gc.fillRect(0,0,base.width,top);
+    var seed=7; function rnd(){ seed=(seed*16807)%2147483647; return seed/2147483647; }
+    var s2=frame*977+13; function rnd2(){ s2=(s2*16807)%2147483647; return s2/2147483647; }
+    var cols=['#c9d3e0','#2d477f','#8c1a24','#e8c14a','#f1f1ec','#51607a','#a8232f','#233a6e'];
+    for(var ty=18; ty<top-8; ty+=9){
+      gc.fillStyle='rgba(0,0,0,.35)'; gc.fillRect(0,ty+6,base.width,2);       // tier edge
+      for(var tx=4; tx<base.width; tx+=5+rnd()*3){
+        var col=cols[(rnd()*cols.length)|0], al=0.45+rnd()*0.45, jy=rnd()*2;
+        var up = frame>0 && rnd2()<0.28;
+        gc.fillStyle=col; gc.globalAlpha=al;
+        gc.fillRect(tx, ty+jy-(up?2:0), 3, 4);
+        if(up){ gc.fillStyle='rgba(240,220,190,.85)'; gc.fillRect(tx+0.5, ty+jy-4.5, 2, 2); }   // hands up
+      }
     }
+    gc.globalAlpha=1;
   }
-  g.globalAlpha=1;
+  paintCrowd(g,0);
+  var crowd=[];
+  for(var cf=0;cf<3;cf++){
+    var ccv=document.createElement('canvas'); ccv.width=base.width; ccv.height=top;
+    paintCrowd(ccv.getContext('2d'),cf); crowd.push(ccv);
+  }
   // wall and ad boards between the stands and the field
   g.fillStyle='#0d1a2e'; g.fillRect(0,top,base.width,26);
   g.fillStyle='#ffd23f'; g.font='700 18px "Anton", sans-serif'; g.textBaseline='middle';
@@ -67,7 +81,25 @@ function makeW3(){
     g.fillText('GRIDIRON HEROES', ax, top+13);
   }
   // near side: bench area
-  g.fillStyle='#12281a'; g.fillRect(0,MT+FH+40,base.width,MB-40);
+  g.fillStyle='#173d25'; g.fillRect(0,MT+FH+40,base.width,MB-40);
+  function bench(wx0,wx1,wy,col){
+    var by=MT+wy;
+    g.fillStyle='rgba(0,0,0,.35)'; g.fillRect(M+wx0, by+10, wx1-wx0, 6);   // its shadow
+    g.fillStyle='#3b4452'; g.fillRect(M+wx0, by, wx1-wx0, 10);
+    g.fillStyle=col; g.fillRect(M+wx0, by, wx1-wx0, 3);
+  }
+  function tent(wx,wy,col,label){
+    var tx2=M+wx, ty2=MT+wy;
+    g.fillStyle='rgba(0,0,0,.3)'; g.fillRect(tx2-38,ty2+22,76,8);
+    g.fillStyle=col; g.fillRect(tx2-36,ty2-14,72,36);
+    g.fillStyle='rgba(255,255,255,.16)'; for(var sti=0;sti<6;sti++) g.fillRect(tx2-36+sti*12,ty2-14,6,36);
+    g.fillStyle='#f1f1ec'; g.font='700 16px "Anton", sans-serif';
+    g.textAlign='center'; g.textBaseline='middle'; g.fillText(label,tx2,ty2+4); g.textAlign='left';
+  }
+  bench(FW*0.36, FW*0.64, FH+7*YD, '#2d477f');                    // home bench, near side
+  tent(FW*0.33, FH+8*YD, '#1f2d54', 'GH'); tent(FW*0.67, FH+8*YD, '#1f2d54', 'GH');
+  bench(FW*0.36, FW*0.64, -5.4*YD, '#8c1a24');                    // visitors, far side
+  tent(FW*0.33, -5.2*YD, '#6e1520', 'RIV'); tent(FW*0.67, -5.2*YD, '#6e1520', 'RIV');
   // the field itself
   g.drawImage(fieldCanvas, M, MT);
   // the white border: out of bounds starts on the paint
@@ -81,12 +113,24 @@ function makeW3(){
   g.strokeStyle='rgba(255,210,63,.55)'; g.lineWidth=2; g.setLineDash([10,8]);
   g.beginPath(); g.moveTo(M+EZ+25*YD, MT+FH+BW+2.2*YD); g.lineTo(M+FW-EZ-25*YD, MT+FH+BW+2.2*YD); g.stroke();
   g.setLineDash([]);
+  // pools of light on the turf under each tower, baked in once
+  g.save(); g.globalCompositeOperation='lighter';
+  [0.18,0.4,0.6,0.82].forEach(function(fx){
+    var px=M+FW*fx, py=MT+FH*0.5, pr=FH*0.75;
+    var pg=g.createRadialGradient(px,py,0,px,py,pr);
+    pg.addColorStop(0,'rgba(255,248,225,.075)'); pg.addColorStop(1,'rgba(255,248,225,0)');
+    g.fillStyle=pg; g.fillRect(px-pr,py-pr,pr*2,pr*2);
+  });
+  g.restore();
   var w3g=c.getContext('2d'); w3g.drawImage(base,0,0);   // painted in full once, then patched
-  return {cv:c, g:w3g, base:base, M:M, MT:MT, dirty:[]};
+  return {cv:c, g:w3g, base:base, M:M, MT:MT, dirty:[], crowd:crowd};
 }
 // Everything that must stay on screen this frame.
 function camPoints(){
   var pts=[]; if(!G) return pts;
+  if(G.broadcast && G.broadcast.until>performance.now() && G.broadcast.p){
+    return [[G.broadcast.p.x, G.broadcast.p.y]];            // only him, so the zoom can go in
+  }
   if(G.ball) pts.push([G.ball.x,G.ball.y]);
   if(G.thrown){
     pts.push([G.thrown.tx,G.thrown.ty]);
@@ -122,8 +166,8 @@ function camFit(pts,camx,camy){
     var zc=Math.max(160, Z0-(pts[i][1]-camy));
     var ox=(pts[i][0]-camx)*Z0/zc, oy=c*Z0*(Z0/zc-1);
     if(Math.abs(ox)>1) best=Math.min(best,(VW/2-60)/Math.abs(ox));
-    if(oy<-1) best=Math.min(best,(VH/2-100)/(-oy));
-    else if(oy>1) best=Math.min(best,(VH/2-80)/oy);
+    if(oy<-1) best=Math.min(best,(VH/2+STAND_OFF()-100)/(-oy));
+    else if(oy>1) best=Math.min(best,(VH/2-STAND_OFF()-80)/oy);
   }
   return best;
 }
@@ -149,6 +193,33 @@ function dirtyRects3(){
   }
   return out;
 }
+// Players standing on both sidelines: not in the game, just there. They sway
+// in place and the scoring side jumps around on a touchdown. Only the ones on
+// screen are drawn.
+var SIDE3=null;
+function sidelineGuys(P){
+  if(!SIDE3){
+    SIDE3=[];
+    for(var i=0;i<16;i++){
+      var home=i<8, k=i%8;
+      SIDE3.push({team:home?'H':'A', role:(k%3===0)?'OL':'WR', pos:'', num:(home?40:60)+k*3, name:'',
+        x:FW*(0.38+k*0.034)+(k%2?6:-6), y: home ? FH+5.4*YD+(k%2)*8 : -3.6*YD-(k%2)*8,
+        vx:0, vy:0, face:(k%2?1:-1), run:k*1.7, spd:1, pwr:1, agi:1, lean:0, spin:0, z:0, arm:0,
+        throwArm:0, phase:0, stun:0, cel:0, celKind:'pump', burst:0, hero:false, stance:0,
+        hp:100, down:0, iFrames:0, wrapped:0});
+    }
+  }
+  var out=[], cheer=(G.celebrate>0)?G.scoringTeam:null, tt=performance.now()/1000;
+  for(var j=0;j<SIDE3.length;j++){
+    var sp=SIDE3[j], q=proj3(P,sp.x,sp.y);
+    if(q.y<-80 || q.y>VH+120 || q.x<-80 || q.x>VW+80) continue;
+    sp.run+=0.02;
+    sp.cel = (cheer===sp.team) ? 0.25+0.25*Math.abs(Math.sin(tt*5+j)) : 0;
+    out.push(sp);
+  }
+  return out;
+}
+function STAND_OFF(){ return VH*0.08; }   // how far the field sits below centre
 function setupProj(sx,sy){
   var want=BASE3*CAM3.z, fit=camFit(camPoints(),cam.x,cam.y);
   var tgt=Math.max(0.35,Math.min(want,fit));
@@ -157,7 +228,7 @@ function setupProj(sx,sy){
   CAM3.S += (tgt-CAM3.S)*(tgt<CAM3.S?0.3:0.06);
   var S0=CAM3.S, Z0=Z3, c=TILT3;
   var K=c*S0*Z0*Z0;
-  var P={S0:S0, Z0:Z0, K:K, hz:VH/2+sy - c*S0*Z0, cx:VW/2+sx, camx:cam.x, camy:cam.y};
+  var P={S0:S0, Z0:Z0, K:K, hz:VH/2+STAND_OFF()+sy - c*S0*Z0, cx:VW/2+sx, camx:cam.x, camy:cam.y};
   P3LAST=P; return P;
 }
 function proj3(P,wx,wy){
@@ -191,15 +262,66 @@ function blit3D(P){
   }
   // haze toward the far side sells the distance
   var hz=ctx.createLinearGradient(0,0,0,VH*0.45);
-  hz.addColorStop(0,'rgba(10,14,22,.55)'); hz.addColorStop(1,'rgba(10,14,22,0)');
+  hz.addColorStop(0,'rgba(10,14,22,.38)'); hz.addColorStop(1,'rgba(10,14,22,0)');
   ctx.fillStyle=hz; ctx.fillRect(0,0,VW,VH*0.45);
-  // stadium lights
-  for(var li=0; li<4; li++){
-    var lx=VW*(0.12+li*0.25), ly=VH*0.03;
-    var lg=ctx.createRadialGradient(lx,ly,0,lx,ly,VW*0.14);
-    lg.addColorStop(0,'rgba(255,250,225,.30)'); lg.addColorStop(1,'rgba(255,250,225,0)');
-    ctx.fillStyle=lg; ctx.fillRect(lx-VW*0.14,0,VW*0.28,VW*0.14);
+  // Light towers and the scoreboard are planted at the back of the stands and
+  // projected like everything else, so they stay put as the camera moves.
+  // (They used to be drawn at fixed screen positions and slid with the pan.)
+  // Across the screen they sit where the stadium puts them, so they pan with
+  // the stands. Up and down they are held in the strip of stands along the top
+  // of the screen (below the scoreboard bar), and hidden when the camera is too
+  // close for that strip to exist, rather than hanging over the field.
+  var LT=[0.1,0.37,0.63,0.9], backY=-W3.MT+40;
+  var wallY=proj3(P, FW/2, -120).y, topBand=3;
+  ctx.save();
+  for(var li=0; li<LT.length; li++){
+    var tq=proj3(P, FW*LT[li], backY), ls=Math.max(0.55,tq.s), lamp=6*ls;
+    var lx=tq.x, ly=Math.max(topBand+lamp*2, tq.y-120*ls);
+    if(lx<-VW*0.3 || lx>VW*1.3 || ly>wallY-lamp*3) continue;
+    ctx.globalCompositeOperation='source-over';
+    ctx.fillStyle='#1a2130'; ctx.fillRect(lx-lamp*0.4, ly+lamp*1.9, lamp*0.8, Math.max(0,Math.min(tq.y,wallY)-ly-lamp*1.9));   // the mast
+    ctx.fillStyle='#0b0f16'; ctx.fillRect(lx-lamp*4.2, ly-lamp*1.9, lamp*8.4, lamp*3.8);          // the frame
+    ctx.globalCompositeOperation='lighter';
+    ctx.fillStyle='rgba(255,248,220,.95)';
+    for(var lr=0; lr<2; lr++) for(var lc=0; lc<5; lc++)
+      ctx.fillRect(lx-lamp*3.6+lc*lamp*1.5, ly-lamp*1.4+lr*lamp*1.5, lamp*1.1, lamp*1.1);
+    var BR=260*ls;
+    var bl=ctx.createRadialGradient(lx,ly,0,lx,ly,BR);
+    bl.addColorStop(0,'rgba(255,246,215,.42)'); bl.addColorStop(0.25,'rgba(255,240,200,.12)'); bl.addColorStop(1,'rgba(255,240,200,0)');
+    ctx.fillStyle=bl; ctx.fillRect(lx-BR, ly-BR, BR*2, BR*2);
+    var FLW=200*ls, fl=ctx.createLinearGradient(lx-FLW,0,lx+FLW,0);
+    fl.addColorStop(0,'rgba(255,245,215,0)'); fl.addColorStop(0.5,'rgba(255,245,215,.28)'); fl.addColorStop(1,'rgba(255,245,215,0)');
+    ctx.fillStyle=fl; ctx.fillRect(lx-FLW, ly-1, FLW*2, 2);
+    var gq=proj3(P, FW*LT[li], FH*0.5), CW=170*gq.s;
+    var cone=ctx.createLinearGradient(0,ly,0,gq.y);
+    cone.addColorStop(0,'rgba(255,245,215,.07)'); cone.addColorStop(1,'rgba(255,245,215,0)');
+    ctx.fillStyle=cone;
+    ctx.beginPath(); ctx.moveTo(lx-lamp*4,ly); ctx.lineTo(lx+lamp*4,ly);
+    ctx.lineTo(gq.x+CW,gq.y); ctx.lineTo(gq.x-CW,gq.y); ctx.closePath(); ctx.fill();
   }
+  // the scoreboard over the stands at midfield
+  ctx.globalCompositeOperation='source-over';
+  var sbq=proj3(P, FW/2, backY), band=wallY-topBand;
+  var sbh=Math.min(104*Math.max(0.55,sbq.s), band*0.82), sbs=sbh/104, sbw=sbh*2.9, sbx=sbq.x-sbw/2;
+  var sby=Math.max(topBand+2, sbq.y-190*sbq.s);
+  if(sby+sbh>wallY-4) sby=wallY-4-sbh;
+  if(band>34 && sby>=topBand-2){
+    ctx.fillStyle='#1a2130'; ctx.fillRect(sbq.x-6*sbs, sby+sbh, 12*sbs, sbq.y-sby-sbh);
+    ctx.fillStyle='#0b0f16'; ctx.fillRect(sbx-6*sbs, sby-6*sbs, sbw+12*sbs, sbh+12*sbs);
+    ctx.fillStyle='#05070b'; ctx.fillRect(sbx, sby, sbw, sbh);
+    ctx.textAlign='center'; ctx.textBaseline='middle';
+    ctx.font='700 '+Math.max(6,22*sbs)+'px "Anton", sans-serif';
+    ctx.fillStyle='#ffd23f'; ctx.fillText('HEROES', sbx+sbw*0.25, sby+sbh*0.28);
+    ctx.fillStyle='#ff8a94'; ctx.fillText('RIVALS', sbx+sbw*0.75, sby+sbh*0.28);
+    ctx.font='700 '+Math.max(8,40*sbs)+'px "Anton", sans-serif'; ctx.fillStyle='#f1f1ec';
+    ctx.fillText(String(G.scoreH||0), sbx+sbw*0.25, sby+sbh*0.66);
+    ctx.fillText(String(G.scoreA||0), sbx+sbw*0.75, sby+sbh*0.66);
+    var clk=Math.max(0,Math.ceil(G.clock||0)), mm=Math.floor(clk/60), ss=clk%60;
+    ctx.font='700 '+Math.max(6,18*sbs)+'px "JetBrains Mono", monospace'; ctx.fillStyle='#ffd23f';
+    ctx.fillText(mm+':'+(ss<10?'0':'')+ss, sbx+sbw*0.5, sby+sbh*0.5);
+    ctx.textAlign='left';
+  }
+  ctx.restore();
 }
 
 // ---- dynamic camera: wide before the snap, tight on the action, a quick
@@ -208,6 +330,8 @@ function blit3D(P){
 var CAM3={z:0.86, actUntil:0, ax:0, ay:0, prevShake:0, prevSpin:0};
 function camMood(now){
   if(CAM3.actUntil>now) return 1.55;
+  if(G && G.phase==='heroIntro') return 1.9;        // close on the star as he walks out
+  if(G && G.broadcast && G.broadcast.until>now) return 1.85;   // in on the man who made the play
   if(!G || G.phase!=='live') return 0.86;
   if(G.thrown) return 0.92;
   var c=G.carrier;
@@ -273,6 +397,11 @@ subs.append(('''  ctx.setTransform(dpr,0,0,dpr,0,0);
       var rr=W3.dirty[di]; ctx.drawImage(W3.base,rr[0],rr[1],rr[2],rr[3],rr[0],rr[1],rr[2],rr[3]);
     }
     W3.dirty=dirtyRects3();
+    var nowc=performance.now(), crowdMs=(G.celebrate>0 || G.phase==='heroIntro') ? 110 : 340;
+    if(!W3.crowdT || nowc-W3.crowdT>crowdMs){
+      W3.crowdT=nowc; W3.crowdK=((W3.crowdK||0)+1)%W3.crowd.length;
+      ctx.drawImage(W3.crowd[W3.crowdK],0,0);
+    }
     SKIP_FIELD=true;
     ctx.save(); ctx.translate(W3.M, W3.MT);
   } else {
@@ -287,7 +416,7 @@ subs.append(('''  // depth sort so players nearer the bottom overlap the ones be
 ''', '''  if(P3){ ctx.restore(); ctx=realCtx3; SKIP_FIELD=false; blit3D(P3); ctx.save(); }
 
   // depth sort so players nearer the bottom overlap the ones behind them
-  var order=G.players.slice().sort(function(a,b){ return a.y-b.y; });
+  var order=G.players.concat(P3?sidelineGuys(P3):[]).sort(function(a,b){ return a.y-b.y; });
   for(var i=0;i<order.length;i++){
     if(P3) at3D(P3,order[i].x,order[i].y);
     drawGuy(order[i]);
@@ -329,6 +458,9 @@ subs.append(('''  scale += (want-scale)*0.06;
   var tx=bx*0.62+cx*0.38, ty=by*0.62+cy*0.38;
   var actCam = VIEW3D ? camDirect() : false;
   if(actCam){ tx=CAM3.ax; ty=CAM3.ay; }
+  else if(VIEW3D && G.broadcast && G.broadcast.until>performance.now() && G.broadcast.p){
+    tx=G.broadcast.p.x; ty=G.broadcast.p.y;
+  }
   else if(VIEW3D){
     var cp=camPoints();
     if(cp.length){
