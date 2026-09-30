@@ -2203,6 +2203,7 @@ function lateral(side){
   for(var i=0;i<G.players.length;i++){
     var q=G.players[i];
     if(q.team!==G.offense||q===G.carrier||q.stun>0) continue;
+    if(q.role==='C'||q.role==='OL'||q.role==='BL') continue;   // never pitch it to a lineman
     if((q.x-G.carrier.x)*d > -2) continue;          // must be behind the ball
     var dd=Math.hypot(q.x-G.carrier.x,q.y-G.carrier.y);
     if(dd<bd && dd<30*YD){ bd=dd; best=q; }
@@ -2257,6 +2258,7 @@ function resolveTip(){
   for(var i=0;i<G.players.length;i++){
     var q=G.players[i];
     if(q.stun>0 || q.down>0) continue;
+    if(q.team===G.offense && (q.role==='C'||q.role==='OL'||q.role==='BL')) continue;   // an offensive lineman may not catch it
     var d=Math.hypot(q.x-G.ball.x, q.y-G.ball.y);
     if(d<tcd){ tcd=d; tc=q; }
   }
@@ -2542,7 +2544,7 @@ function cpuQB(now){
   var best=null, bestScore=-1e9;
   for(var i=0;i<G.players.length;i++){
     var r=G.players[i];
-    if(r.team!==G.offense||r===qb||r.role==='BL') continue;
+    if(r.team!==G.offense||r===qb||r.role==='C'||r.role==='OL'||r.role==='BL') continue;   // linemen are not eligible
     var cov=nearestOf(r,'H');
     var open=cov?Math.hypot(cov.x-r.x,cov.y-r.y):70;
     var gain=Math.min((r.x-G.los)*d, Math.max(0,yardsToGoal()*YD))/YD;  // capped at the goal
