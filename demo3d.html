@@ -217,9 +217,9 @@
   #card .pcPos{font-size:19px; color:#1f6fff; text-shadow:0 1px 0 rgba(255,255,255,.6);}
   #card.away .pcPos{color:#d8203a;}
   #card .pcName{font-size:17px; color:#14100a; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; flex:1;}
-  #card .pcBadge{flex:none; width:34px; height:34px; border-radius:50%; background:#15120c; color:#ffd23f;
+  #card .pcBadge{flex:none; height:30px; padding:0 10px; border-radius:15px; background:#15120c; color:#ffd23f;
     border:2px solid rgba(255,255,255,.55); display:flex; align-items:center; justify-content:center;
-    font-size:10px; line-height:10px; text-align:center; letter-spacing:0; padding:2px; box-sizing:border-box;}
+    font-size:14px; line-height:14px; letter-spacing:1px; white-space:nowrap; box-sizing:border-box;}
   #card .pcSig{background:#0c0c0c; color:#fff; font-family:'Anton',sans-serif; font-size:16px;
     letter-spacing:.02em; padding:4px 8px; border-radius:3px 3px 0 0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
   #card canvas{display:block; width:100%; height:auto; background:#10151c; border-left:3px solid #0c0c0c; border-right:3px solid #0c0c0c; box-sizing:border-box;}
@@ -316,27 +316,27 @@ var REDUCED = window.matchMedia && window.matchMedia('(prefers-reduced-motion: r
 // Fan-made: no team marks, no league branding, no endorsement implied.
 // Original characters. No real players, no team marks, nothing licensed.
 var HEROES = [
-  { id:'tank', name:'Tank Mallory', pos:'Running Back', num:34,
+  { id:'tank', title:'Fault Line', name:'Tank Mallory', pos:'Running Back', num:34,
     spd:1.00, pwr:1.35, agi:0.86, skin:'#6b4630',
     move:'quake', moveName:'Earthquake', cost:46,
     desc:'Stomps the turf. Every defender in range loses their footing at once.' },
-  { id:'rafe', name:'Rafe Solomon', pos:'Running Back', num:26,
+  { id:'rafe', title:'The Vaulter', name:'Rafe Solomon', pos:'Running Back', num:26,
     spd:1.12, pwr:1.05, agi:1.18, skin:'#8a5c3b',
     move:'skyhop', moveName:'Sky Hop', cost:40,
     desc:'Launches clean over the pile and lands ten yards downfield, untouchable.' },
-  { id:'dex', name:'Dex Rivera', pos:'Wide Receiver', num:10,
+  { id:'dex', title:'Jet Stream', name:'Dex Rivera', pos:'Wide Receiver', num:10,
     spd:1.30, pwr:0.76, agi:1.14, skin:'#5e3a26',
     move:'afterburner', moveName:'Afterburner', cost:44,
     desc:'Lights the jets. Nobody catches him from behind once it is burning.' },
-  { id:'milo', name:'Milo Vance', pos:'Running Back', num:23,
+  { id:'milo', title:'Phase Shifter', name:'Milo Vance', pos:'Running Back', num:23,
     spd:1.10, pwr:0.95, agi:1.28, skin:'#e0b48e',
     move:'phase', moveName:'Phase Spin', cost:38,
     desc:'Spins so hard he goes half-transparent and comes out the other side of you.' },
-  { id:'cass', name:'Cass Okoye', pos:'Quarterback', num:8,
+  { id:'cass', title:'Pocket Blur', name:'Cass Okoye', pos:'Quarterback', num:8,
     spd:1.22, pwr:0.88, agi:1.22, skin:'#5a3623',
     move:'blur', moveName:'Blur Step', cost:34,
     desc:'Blinks forward through traffic and reappears past the rush.' },
-  { id:'rex', name:'Rex Stallings', pos:'Quarterback', num:15,
+  { id:'rex', title:'Launch Code', name:'Rex Stallings', pos:'Quarterback', num:15,
     spd:0.98, pwr:0.92, agi:1.04, skin:'#c98f63',
     move:'rocket', moveName:'Rocket Pass', cost:36,
     desc:'Fires a flat bullet that arrives before anyone can break on it.' }
@@ -1091,7 +1091,7 @@ function applyHero(p, h){
   h = h || HERO;
   p.hero=true; p.spd=h.spd; p.pwr=h.pwr; p.agi=h.agi;
   p.name=h.name; p.num=h.num; p.skin=h.skin;
-  p.stars=heroStars(h); p.sig=h.moveName; p.card='hero-'+h.id;
+  p.stars=heroStars(h); p.sig=h.moveName; p.card='hero-'+h.id; p.title=h.title||'';
 }
 
 // whichever hero the guest picked, defaulted so a game works before they choose
@@ -4639,7 +4639,7 @@ function showCard(p, action){
   cardEl.classList.add(st>=5 ? 'gold' : st===4 ? 'silver' : 'bronze');   // the frame is the rating
   var sig=p.sig || (p.hero && HERO ? HERO.moveName : '') || 'Game Changer';
   document.getElementById('pcSig').textContent=p.title || (p.player ? p.name : sig);   // the card's nickname
-  document.getElementById('pcAct').textContent=p.player ? sig.toUpperCase() : '';
+  document.getElementById('pcAct').textContent='';     // the bar already names the card; the bottom is just his number
 
   // portrait: the real rig, posed mid-stride, so it is a person not a helmet
   var cc=document.getElementById('pcArt'), x=cc.getContext('2d');
@@ -4678,8 +4678,8 @@ function showCard(p, action){
                  arm:0, throwArm:0, phase:0, stun:0, cel:0, burst:0, hero:false };
       G.carrier=null;                       // no ball tucked in the portrait
       x.save();
-      x.translate(cc.width/2, cc.height*0.92);
-      x.scale(3.6,3.6);
+      x.translate(cc.width/2, cc.height*0.97);
+      x.scale(5.4,5.4);
       drawSprite(pose);
       x.restore();
     }catch(e){ /* portrait is decoration, never let it break the card */ }
@@ -4688,7 +4688,7 @@ function showCard(p, action){
   // floor shadow and a base bar, only under the drawn player
   if(!art){
   x.fillStyle='rgba(0,0,0,.35)';
-  x.beginPath(); x.ellipse(cc.width/2,cc.height*0.93,44,9,0,0,Math.PI*2); x.fill();
+  x.beginPath(); x.ellipse(cc.width/2,cc.height*0.97,66,12,0,0,Math.PI*2); x.fill();
   x.fillStyle='rgba(0,0,0,.34)'; x.fillRect(0,cc.height-14,cc.width,14);
   }
 

@@ -113,9 +113,14 @@ to bottom, horizontal parts left to right.
   like need a licence, so they are out.
 - Each one carries `player` (the football name on top of the card, e.g.
   Brom Van Brunt), `title` (the card's nickname in the black bar, e.g. The
-  Dusk Rider), `sig` (his move, along the bottom), `stars` (card frame: 5
-  gold, 4 silver, 3 or fewer bronze) and `card` (the picture's file name).
-  The character's real name (`name`) is what shows on the field.
+  Dusk Rider), `sig` (his move; not shown on the card), `stars` (the star
+  pill, and the frame: 5 gold, 4 silver, 3 or fewer bronze) and `card` (the
+  picture's file name). The bottom of the card is only his number. The
+  character's real name (`name`) is what shows on the field.
+- The six playable heroes (`HEROES`) are original players, so they DO wear
+  the navy uniform in their art. They have a `title` too (Tank Mallory is
+  Fault Line). Their pictures are `hero-<id>`; prompts are at the end of
+  `parts/CARD-PROMPTS.md`. Until they exist, the card draws the player large.
 - Card pictures are 4:3 action scenes: the character mid-move, not wearing a
   uniform, with red-jersey players around him. Prompts are in
   `parts/CARD-PROMPTS.md`. Originals (1200 x 900 PNG) live in

@@ -219,3 +219,42 @@ Bold cartoon football card art, thick black outlines, bright saturated colours, 
 ```
 Bold cartoon football card art, thick black outlines, bright saturated colours, cel shading, exaggerated action pose, 4:3 landscape. The god Zeus as a free safety: huge jagged white beard and hair like frozen lightning, glowing electric-blue eyes, a white Greek robe over one shoulder and gold sandals, no football uniform. He drops from the sky in a lightning strike onto a red-jersey ball carrier as a jagged bolt hits the turf at the tackle, and the blast knocks two more red-jersey players flat. Blurred night stadium under bright lights with storm clouds overhead. No text, no numbers, no logos.
 ```
+
+---
+
+# Hero card prompts (the six playable heroes)
+
+The heroes are original football players, so unlike the myth characters they
+DO wear the team uniform: navy `#1f2d54` jersey and helmet, gold `#c8a63c`
+trim, white pants, no number, no logo. Same 4:3 size (1200 x 900), same rules
+otherwise. Save them in `parts/_cards_full/` as `hero-<id>.png`.
+
+**hero-tank.png** (Tank Mallory, "Fault Line", Earthquake)
+```
+Bold cartoon football card art, thick black outlines, bright saturated colours, cel shading, exaggerated action pose, 4:3 landscape. A huge, powerful running back with dark brown skin in a navy #1f2d54 helmet and jersey with gold #c8a63c trim and white pants, no number, no logo. He stomps one foot into the turf and the ground splits open around him in glowing orange cracks, chunks of turf flying up. Three red-jersey defenders lose their footing and fall in every direction. Blurred night stadium under bright lights. No text, no numbers, no logos.
+```
+
+**hero-rafe.png** (Rafe Solomon, "The Vaulter", Sky Hop)
+```
+Bold cartoon football card art, thick black outlines, bright saturated colours, cel shading, exaggerated action pose, 4:3 landscape. An athletic running back with medium brown skin in a navy #1f2d54 helmet and jersey with gold #c8a63c trim and white pants, no number, no logo, football tucked tight. He leaps clean over a pile of red-jersey players, high in the air in a superhero pose, with a white streak trailing behind him. The red-jersey players below reach up and grab nothing. Blurred night stadium under bright lights. No text, no numbers, no logos.
+```
+
+**hero-dex.png** (Dex Rivera, "Jet Stream", Afterburner)
+```
+Bold cartoon football card art, thick black outlines, bright saturated colours, cel shading, exaggerated action pose, 4:3 landscape. A lean, lightning-fast wide receiver with dark brown skin in a navy #1f2d54 helmet and jersey with gold #c8a63c trim and white pants, no number, no logo, football in one hand. He sprints so fast that blue-white flames blast out behind his cleats like jet engines, leaving a burning trail on the turf. Two red-jersey defenders chase far behind, left in the smoke. Blurred night stadium under bright lights. No text, no numbers, no logos.
+```
+
+**hero-milo.png** (Milo Vance, "Phase Shifter", Phase Spin)
+```
+Bold cartoon football card art, thick black outlines, bright saturated colours, cel shading, exaggerated action pose, 4:3 landscape. A shifty running back with light tan skin in a navy #1f2d54 helmet and jersey with gold #c8a63c trim and white pants, no number, no logo, football tucked in. He spins so fast he turns half see-through, a swirl of cyan light around him, and passes straight through a red-jersey tackler, who grabs empty air. A second red-jersey defender stares in shock. Blurred night stadium under bright lights. No text, no numbers, no logos.
+```
+
+**hero-cass.png** (Cass Okoye, "Pocket Blur", Blur Step)
+```
+Bold cartoon football card art, thick black outlines, bright saturated colours, cel shading, exaggerated action pose, 4:3 landscape. A quick, agile quarterback with dark brown skin in a navy #1f2d54 helmet and jersey with gold #c8a63c trim and white pants, no number, no logo, football held high. The quarterback blinks forward through the pass rush in a streak of purple light, leaving a fading after-image where they stood. Three red-jersey rushers crash into each other on the empty spot. Blurred night stadium under bright lights. No text, no numbers, no logos.
+```
+
+**hero-rex.png** (Rex Stallings, "Launch Code", Rocket Pass)
+```
+Bold cartoon football card art, thick black outlines, bright saturated colours, cel shading, exaggerated action pose, 4:3 landscape. A strong-armed quarterback with medium tan skin in a navy #1f2d54 helmet and jersey with gold #c8a63c trim and white pants, no number, no logo. He fires the football like a rocket, arm fully extended, the ball leaving a straight orange fire trail and a ring-shaped shockwave in the air. Two red-jersey defenders dive for it and are far too late. Blurred night stadium under bright lights. No text, no numbers, no logos.
+```
