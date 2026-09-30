@@ -358,7 +358,19 @@
   html.touchui .ab.on{color:#ffd23f;}
   html.touchui .ab.on .ring{background:rgba(255,210,63,.16); border-color:rgba(255,210,63,.85);}
   html.touchui .ab.off{opacity:.42;}
-  html.touchui .ab .key{display:none;}
+  html.touchin .ab .key{display:none;}
+  /* on a computer: the key sits above each button like a key cap */
+  html.touchui:not(.touchin) .ab .ring{overflow:visible;}
+  html.touchui:not(.touchin) .ab .key{right:auto; bottom:auto; top:-24px; left:50%; transform:translateX(-50%); z-index:2;
+    min-width:17px; height:17px; padding:0 3px; line-height:15px; font-size:10px; font-weight:700; text-align:center;
+    background:#0c1114; border:1px solid #ffd23f; color:#ffd23f; border-radius:4px; box-shadow:0 1px 3px rgba(0,0,0,.7);}
+  html.touchui:not(.touchin) .ab .key:empty{display:none;}
+  #bSwitch .kb, #preBar .kb{display:none;}
+  html.touchui:not(.touchin) #bSwitch .kb{display:block; position:absolute; top:-24px; left:50%; transform:translateX(-50%);
+    min-width:17px; height:17px; padding:0 3px; line-height:15px; font:700 10px 'JetBrains Mono',monospace; font-style:normal;
+    background:#0c1114; border:1px solid #ffd23f; color:#ffd23f; border-radius:4px; box-shadow:0 1px 3px rgba(0,0,0,.7);}
+  html.touchui:not(.touchin) #preBar .kb{display:inline-block; margin-left:5px; padding:0 4px; font:700 10px 'JetBrains Mono',monospace;
+    font-style:normal; border:1px solid currentColor; border-radius:3px; line-height:14px; vertical-align:1px;}
   html.touchui .ab .cap{font-size:9px; text-shadow:0 1px 2px #000, 0 0 4px #000;}
   html.touchui .ab .ring{background-size:cover; background-position:center; overflow:hidden;
     width:48px; height:48px; border:3px solid #aeb6bf; box-shadow:inset 0 0 0 2px #3a4047, 0 2px 5px rgba(0,0,0,.6);}
@@ -662,6 +674,7 @@ window.__hm=function(){
     ' chase:'+(G.tchase>0?1:0)+' dive:'+(G.touchDive?1:0)+' diveCd:'+(G.diveCd||0).toFixed(2);
 };
 if(TOUCH_UI) document.documentElement.classList.add('touchui');
+if(TOUCH_IN) document.documentElement.classList.add('touchin');   // a real touch screen: no key labels
 var elClock=document.getElementById('clock'), elDD=document.getElementById('dd'), elPoss=document.getElementById('poss');
 var elH=document.getElementById('scH'), elA=document.getElementById('scA'), elNmH=document.getElementById('nmH');
 var elOv=document.getElementById('ov'), elSheet=document.getElementById('sheet'), elCall=document.getElementById('callout');
@@ -1158,13 +1171,16 @@ stage.addEventListener('pointermove',function(e){
 });
 stage.addEventListener('pointerleave',function(){ G && (G.mouse.on=false); });
 
-// the right button shows the play art while it is held
+// the right button: the play art before the snap (held), a punch in a play
 stage.addEventListener('pointerup',function(e){ if(e.pointerType!=='touch' && e.button===2 && G) G.artHold=false; });
 stage.addEventListener('contextmenu',function(e){ e.preventDefault(); });
 stage.addEventListener('pointerdown',function(e){
   if(e.pointerType==='touch' || e.button!==2) return;
   e.preventDefault();
-  if(G) G.artHold=true;
+  if(!G) return;
+  // in a play the right button is the punch: with the ball or without it
+  if(G.phase==='live'){ if(iHaveBall()) touchCPunch=true; else touchMove=true; return; }
+  G.artHold=true;                               // before the snap: the play art while it is held
 });
 
 // ================================================================ setup
@@ -6306,7 +6322,7 @@ function touchExtras(onD, live){
     var cost=Math.max(1,HERO.cost);
     var mvOk = HERO.move==='cannon' || (G.moveCd<=0 && G.power>=cost);
     var spLeft=Math.max(0,(G.specialDue||0)-G.playNo);
-    setAb(4, spLeft>0 ? (spLeft+(spLeft===1?' PLAY':' PLAYS')) : HERO.moveName, '', spLeft===0, live, 0, ICON_SPECIAL,
+    setAb(4, spLeft>0 ? (spLeft+(spLeft===1?' PLAY':' PLAYS')) : HERO.moveName, 'K', spLeft===0, live, 0, ICON_SPECIAL,
           spLeft/(SPECIAL_CD+1), 'move-'+HERO.move);
     setAb(5,'Pitch','', !!(G.carrier && G.carrier.team===G.offense && !G.thrown), live, 0, ICON_PITCH, 0, 'pitch');
   }
@@ -6314,7 +6330,7 @@ function touchExtras(onD, live){
   if(bar){
     bar.classList.toggle('show', pre && !NET.on);
     var to=document.getElementById('pbTO'), art=document.getElementById('pbArt');
-    to.textContent='TIMEOUT '+(G.timeouts|0);
+    var tot='TIMEOUT '+(G.timeouts|0); if(to.dataset.t!==tot){ to.dataset.t=tot; to.innerHTML=tot+'<i class="kb">O</i>'; }   // (keeps its key label)
     to.classList.toggle('off', !G.clockRunning || (G.timeouts|0)<=0);
     art.classList.toggle('on', playArtOn());
     document.getElementById('pbAud').classList.toggle('on', !!G.audibleOpen);
@@ -6727,13 +6743,14 @@ function controlsCard(){
   var stickK=T?'Stick':'WASD', stickW=T?'Run with your left thumb.':'Run. The arrow keys work too.';
   var tap=T?'Tap':'Click', swipe=T?'Swipe':'Drag';
   var off = row(IC.stick,stickK,stickW)+
-            row(IC.aim,'Hold on a receiver', T?'Aim a pass, then lift to throw. Hold longer for a better ball.'
-                                               :'Press and hold on him, then let go to throw. Hold longer for a better ball.')+
-            row(IC.tap,tap,'Punch. Breaks a grab and knocks a rusher back.')+
+            (T ? row(IC.aim,'Hold on a receiver','Aim a pass, then lift to throw. Hold longer for a better ball.')+
+                 row(IC.tap,'Tap','Punch. Breaks a grab and knocks a rusher back.')
+               : row(IC.aim,'Click','Throw to the receiver you point at. Point at him a moment first for a better ball.')+
+                 row(IC.tap,'Right click','Punch. Breaks a grab and knocks a rusher back. A runner can click too.'))+
             row(IC.swipe,swipe,'Spin away from a tackler.')+
             row(IC.star,'Move buttons','Your heroes\u2019 special moves.'+(T?'':' Or Q, R and T.'));
   var def = row(IC.stick,stickK,stickW)+
-            row(IC.tap,tap,'Punch the ball carrier, or swat a pass in the air.')+
+            row(IC.tap,T?'Tap':'Click','Punch the ball carrier, or swat a pass in the air.'+(T?'':' Right click works too.'))+
             row(IC.swipe,swipe,'Slide tackle. Reaches up to 9 yards.')+
             row(IC.sw,'Switch','Take the defender best placed to make the play. It pulses when your man is out of it.'+(T?'':' Or E.'));
   stage.insertAdjacentHTML('beforeend',
@@ -7659,7 +7676,7 @@ if(TOUCH_UI){
   // rests to punch, so a punch never lands on it.
   if(!document.getElementById('bSwitch')){
     stage.insertAdjacentHTML('beforeend',
-      '<button id="bSwitch" type="button"><svg viewBox="0 0 24 24"><path d="M4 8h13l-3.5-3.5M20 16H7l3.5 3.5"/></svg><b>SWITCH</b></button>');
+      '<button id="bSwitch" type="button"><i class="kb">E</i><svg viewBox="0 0 24 24"><path d="M4 8h13l-3.5-3.5M20 16H7l3.5 3.5"/></svg><b>SWITCH</b></button>');
     onPress(document.getElementById('bSwitch'),function(){
       if(!G || iHaveBall()) return;
       if(G.phase==='presnap'){ if(!(NET.on && !NET.host)) switchPlayer(mySide()); return; }
@@ -7709,7 +7726,11 @@ if(TOUCH_UI){
     // A pass starts on a receiver (or his tab on the edge). A finger put down
     // anywhere else is not a throw: a slide is a spin, a tap is nothing.
     var held=G.carrier && G.carrier===G.controlled && G.carrier.wrapped>0;   // held: every tap is a punch
-    if(!held && canAim() && pickOnScreen(t.clientX,t.clientY)){ FT.mode='aim'; ftAim(t); }
+    // a mouse points: at quarterback a click is always a pass, to the man it
+    // points at (the right button punches), so a click that just misses a
+    // moving receiver is not a punch
+    var mouse=(t.identifier==='mouse');
+    if(canAim() && (mouse || (!held && pickOnScreen(t.clientX,t.clientY)))){ FT.mode='aim'; ftAim(t); }
     else if(canAim()) FT.mode='spin';
     else if(!iHaveBall()) FT.mode='tackle';         // swipe tackles, tap punches or switches
     else if(G.thrown){ FT.mode=null; }                // your pass is in the air: a tap does not switch you
@@ -7809,9 +7830,9 @@ if(TOUCH_UI){
   }
   if(!document.getElementById('preBar')){
     stage.insertAdjacentHTML('beforeend',
-      '<div id="preBar"><button type="button" id="pbArt">PLAY ART</button>'+
-      '<button type="button" id="pbAud">AUDIBLE</button><button type="button" id="pbTO">TIMEOUT</button>'+
-      '<button type="button" id="pbMenu">MENU</button></div>');
+      '<div id="preBar"><button type="button" id="pbArt">PLAY ART<i class="kb">C</i></button>'+
+      '<button type="button" id="pbAud">AUDIBLE<i class="kb">X</i></button><button type="button" id="pbTO">TIMEOUT<i class="kb">O</i></button>'+
+      '<button type="button" id="pbMenu">MENU<i class="kb">ESC</i></button></div>');
     var pb=function(id,fn){ onPress(document.getElementById(id), fn); };
     pb('pbArt',function(){ if(!G) return; G.artUntil = playArtOn() ? 0 : performance.now()+4000; });
     pb('pbAud',function(){ if(!G) return; if(G.audibleOpen) closeAudible(); else openAudible(); });
