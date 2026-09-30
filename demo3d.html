@@ -552,6 +552,7 @@ var TEAMS=[
 ];
 var FOE=RIVALS;
 var BASE_SPD=118, SPRINT=1.34, DEF_SPD=123;
+var CARRY_SPD=1.30;   // a ball carrier's pace, yours or the computer's (yours used to run at 1x while theirs ran at this)
 // Everything ran at real time and plays were over before you could read them.
 // One dial slows the whole simulation together: movement, animation, the
 // clock, cooldown timers and the routes all scale off the same number, so
@@ -3865,6 +3866,9 @@ function driveHuman(seat, IN, dt, now){
   // on defence the AI runs at DEF_SPD, so a human on that side has to as well
   // or he is permanently behind his own team-mates
   var base = onO ? BASE_SPD : DEF_SPD;
+  // with the ball he runs as fast as the computer runs its ball carrier (a
+  // passer is not a runner until he is over the line)
+  if(onO && me===G.carrier && (me.role!=='QB' || pastTheLine(me))) base=BASE_SPD*CARRY_SPD;
   if(!onO && DEF_CHASE){
     // as fast as the computer runs a man in his spot (it runs every defender
     // at these, whatever his own rating)
@@ -4021,7 +4025,7 @@ function step(dt){
           var lane2=runLane(p,d);
           // (through buffMul and the team's pace like everyone else: this set its
           // own speed, so a grab, a freeze and the difficulty never slowed him)
-          var spd2=BASE_SPD*1.30*(p.spd||1)*buffMul(p)*((p.team==='A' && !NET.on) ? FOE.spd : 1);
+          var spd2=BASE_SPD*CARRY_SPD*(p.spd||1)*buffMul(p)*((p.team==='A' && !NET.on) ? FOE.spd : 1);
           p.vx=lane2.x*spd2; p.vy=lane2.y*spd2;
         }
       } else if(p.route==='lead'){
