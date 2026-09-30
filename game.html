@@ -806,7 +806,7 @@ function setupPlay(playId){
   // the snap and gives it to him at the mesh point, and you can beat the
   // timer by handing off yourself.
   G.handoffAt = (off==='run') ? 0.30 : (off==='draw' ? 0.85 : null);
-  G.controlled = youOnO ? G.carrier : nearestDef();
+  G.controlled = youOnO ? G.carrier : (startLB() || nearestDef());
   if(NET.on && NET.host) G.controlled2 = pickRemoteMan(false);
   G.jukeUntil=0;
   G.phase='presnap'; G.playClock=15;
@@ -854,6 +854,15 @@ function dropBack(qb, fwd, dt){
   qb.vx=-fwd*v; qb.vy=0;
   qb.backpedal=0.12; qb.dropFace=fwd;
   G.dropLeft=Math.max(0, G.dropLeft - v*dt);
+}
+// On defence you start as the linebacker nearest the ball: the ends start
+// locked up with a blocker, which made the stick feel dead at the snap.
+function startLB(){
+  var best=null,bd=Infinity,me=G.offense==='H'?'A':'H';
+  for(var i=0;i<G.players.length;i++){ var p=G.players[i];
+    if(p.team!==me || p.pos!=='LB') continue;
+    var d=Math.hypot(p.x-G.ball.x,p.y-G.ball.y); if(d<bd){ bd=d; best=p; } }
+  return best;
 }
 function nearestDef(){
   var best=null,bd=Infinity,me=G.offense==='H'?'A':'H';
@@ -2463,6 +2472,7 @@ function driveHuman(seat, IN, dt, now){
   // or he is permanently behind his own team-mates
   var base = onO ? BASE_SPD : DEF_SPD;
   var mult=(sprinting?SPRINT:1)*(me.burst>0?1.7:1)*me.spd;
+  if(!diving && seat.local) G.touchDive=false;       // a dive that is over no longer homes
   if(diving){
     me.vx*=0.988; me.vy*=0.988;                       // ride the dive out
     // A swipe tackle on a touch screen homes in: the dive bends toward the
@@ -2480,7 +2490,7 @@ function driveHuman(seat, IN, dt, now){
         me.vx+=(hx/hm*sp-me.vx)*k; me.vy+=(hy/hm*sp-me.vy)*k;
       }
     }
-  } else if(seat.local) G.touchDive=false;
+  }
   else if(onO && me===G.carrier && me.role==='QB' && G.dropLeft>0 && !G.thrown){
     if(a.x||a.y){ G.dropLeft=0; me.vx=a.x*base*mult; me.vy=a.y*base*mult; }   // you took over
     else dropBack(me, fwd, dt);
@@ -2722,7 +2732,8 @@ function step(dt){
       // the line, which read as the rush bouncing off an invisible wall.
       if(Math.abs(ru.x-blk.x) > BLOCK_R*1.8) continue;
       ru.engaged=(ru.engaged||0)+dt;
-      if(ru.engaged > (ru.shedAt||2.5)) continue;     // he has beaten the block
+      var youRu=(ru===G.controlled||ru===G.controlled2);
+      if(ru.engaged > (youRu ? Math.min(ru.shedAt||2.5, 1.0) : (ru.shedAt||2.5))) continue;   // he has beaten the block (you get off it in a second)
       ru.eBlk=blk;
 
       // hand fighting: both men punch and grab while they are locked up
@@ -2754,8 +2765,9 @@ function step(dt){
         if(ru.vx*d2 < 0) ru.vx = 0;                   // kill the push through
         ru.vy *= 0.5;
       }
-      // and he gets bogged down while engaged
-      if(Math.abs(ru.x-blk.x) < BLOCK_R*1.4){
+      // and he gets bogged down while engaged (not the man you are steering:
+      // he can slide off it or back out, just not straight through)
+      if(!youRu && Math.abs(ru.x-blk.x) < BLOCK_R*1.4){
         ru.vx*=0.35; ru.vy*=0.55;
       }
       // locked up chest to chest: square to each other, driving in
@@ -4377,6 +4389,15 @@ function touchExtras(onD, live){
   var pre=(G.phase==='presnap');
   edgeMarkers();
   function need(cd,cdMax,cost){ return Math.max(cd>0?cd/cdMax:0, cost>0?1-G.power/cost:0, 0); }
+  // The hero's special only when you are the hero; pitch only while your
+  // quarterback holds it behind the line. On defence a tap is the punch, so
+  // neither circle shows: just that man's own moves.
+  var me=G.controlled;
+  var showSpecial = !onD && !!(me && me.hero);
+  var showPitch = !onD && !!(me && me===G.carrier && me.role==='QB' && !G.thrown && !pastTheLine(me));
+  var e4=ab(4), e5=ab(5);
+  if(e4) e4.style.display = showSpecial ? '' : 'none';
+  if(e5) e5.style.display = showPitch ? '' : 'none';
   if(onD){
     setAb(4,'Big Hit','',G.hitCd<=0 && G.power>=45, live, 0, ICON_HIT, need(G.hitCd,0.8,45), 'bighit');
     setAb(5,'Pound','',G.hitCd<=0 && G.power>=58, live, 0, ICON_POUND, need(G.hitCd,1.3,58), 'pound');
@@ -4406,6 +4427,7 @@ function abilities(onD){
   var net = (NET.on && !NET.host) ? (G.netAb||[0,0,0]) : null;
   for(var i=0;i<3;i++){
     var id=kit[i];
+    if(TOUCH_UI){ var ae=ab(i+1); if(ae) ae.style.display = id ? '' : 'none'; }   // no empty circles
     if(!id){ setAb(i+1,'\u2014',KEYS[i],false,false); continue; }
     var left = Math.min(net ? net[i] : abLeft(me,id), ABIL[id].cd);
     setAb(i+1, left>0 ? (left+(left===1?' PLAY':' PLAYS')) : ABIL[id].name,
@@ -5681,7 +5703,7 @@ if(TOUCH_UI){
 }
 
 // ---- the icons double as buttons ----------------------------------------
-[[1,function(){ if(G.phase==='presnap'){snapBall();return;} touchAb[0]=true; }],
+[[1,function(){ if(G.phase==='presnap'){ if(!TOUCH_UI && iHaveBall()) snapBall(); return; } touchAb[0]=true; }],
  [2,function(){ touchAb[1]=true; }],
  [3,function(){ touchAb[2]=true; }]
 ].forEach(function(pair){
