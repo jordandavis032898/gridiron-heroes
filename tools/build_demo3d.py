@@ -336,7 +336,7 @@ var CAM3={z:0.86, actUntil:0, ax:0, ay:0, prevShake:0, prevSpin:0};
 function camMood(now){
   if(CAM3.actUntil>now) return TOUCH_UI?1.25:1.55;
   if(G && G.phase==='heroIntro') return 1.9;        // close on the star as he walks out
-  if(G && G.broadcast && G.broadcast.until>now) return TOUCH_UI ? 1.3 : 1.85;   // in on the man who made the play
+  if(G && G.broadcast && G.broadcast.until>now) return G.broadcast.td ? (G.broadcast.wide ? 1.45 : (TOUCH_UI?2.2:2.4)) : (TOUCH_UI ? 1.3 : 1.85);   // in on the man who made the play (close in on a touchdown)
   if(G && playArtOn()) return 0.7;                   // pull back to read the play
   if(!G || G.phase!=='live') return TOUCH_UI ? 0.72 : 0.86;   // before the snap on a phone: the same framing as the play, no jump at the snap
   if(TOUCH_UI) return 0.72;                          // a phone holds one zoom through the play
@@ -364,7 +364,8 @@ function camDirect(){
   }
   CAM3.prevShake=G?G.shake:0;
   var zt=camMood(now), act=CAM3.actUntil>now;
-  CAM3.z += (zt-CAM3.z)*(act?0.2:(TOUCH_UI?0.03:0.05));   // a phone eases between zooms
+  var tdz=!!(G && G.broadcast && G.broadcast.td && G.broadcast.until>now);
+  CAM3.z += (zt-CAM3.z)*(act?0.2:(tdz?0.08:(TOUCH_UI?0.03:0.05)));   // a phone eases between zooms; a touchdown pushes in
   return act;
 }
 
@@ -486,7 +487,8 @@ subs.append(('''  scale += (want-scale)*0.06;
       tx=(x0+x1)/2*0.6+bx*0.4; ty=(y0+y1)/2*0.6+by*0.4;
     }
   }
-  if(TOUCH_UI && VIEW3D && G.phase!=='live' && !actCam) ty-=3*YD;   // a little tilt toward the stands before the snap
+  var tdCam=!!(G.broadcast && G.broadcast.td && G.broadcast.until>performance.now());
+  if(TOUCH_UI && VIEW3D && G.phase!=='live' && !actCam && !tdCam) ty-=3*YD;   // a little tilt toward the stands before the snap
   if(!isFinite(tx)) tx=FW/2;
   if(!isFinite(ty)) ty=FH/2;
   var follow = actCam ? (TOUCH_UI?0.12:0.2) : (VIEW3D ? (TOUCH_UI?0.09:0.15) : 0.11);

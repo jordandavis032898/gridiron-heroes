@@ -149,6 +149,15 @@
   /* the star intro puts the card to the right so the spotlight stays on him */
   #card.intro{left:auto; right:7%; transform:translate(40%,-50%) scale(.6);}
   #card.intro.in{transform:translate(0,-50%) scale(1.12);}
+  /* a touchdown: the card pops up beside the scorer while the camera is in on him */
+  #card.side{top:50%; transform:translate(-50%,-50%) scale(.35) rotate(-10deg); opacity:0;}
+  #card.side.sL{left:23%;} #card.side.sR{left:77%;}
+  #card.side.in{transform:translate(-50%,-50%) scale(1) rotate(0); opacity:1;}
+  html.touchui #card.side{top:58%;}
+  html.touchui #card.side.in{transform:translate(-50%,-50%) scale(.62) rotate(0);}
+  /* while the camera is in on a touchdown: the banner up out of his way, the controls out of the shot */
+  #stage.tdcam #callout{top:11%; font-size:clamp(26px,6vw,50px);}
+  #stage.tdcam #touch, #stage.tdcam #legend, #stage.tdcam #preBar, #stage.tdcam #skipBtn{visibility:hidden;}
   #spot{position:absolute; inset:0; z-index:5; pointer-events:none; opacity:0; transition:opacity .45s;}
   #kmeter{position:absolute; left:50%; bottom:22px; z-index:9; display:none; width:360px; transform:translateX(-50%);
     padding:10px 14px 12px; background:rgba(12,17,22,.92); border:2px solid var(--gold); border-radius:6px;
@@ -1031,7 +1040,7 @@ var CAM3={z:0.86, actUntil:0, ax:0, ay:0, prevShake:0, prevSpin:0};
 function camMood(now){
   if(CAM3.actUntil>now) return TOUCH_UI?1.25:1.55;
   if(G && G.phase==='heroIntro') return 1.9;        // close on the star as he walks out
-  if(G && G.broadcast && G.broadcast.until>now) return TOUCH_UI ? 1.3 : 1.85;   // in on the man who made the play
+  if(G && G.broadcast && G.broadcast.until>now) return G.broadcast.td ? (G.broadcast.wide ? 1.45 : (TOUCH_UI?2.2:2.4)) : (TOUCH_UI ? 1.3 : 1.85);   // in on the man who made the play (close in on a touchdown)
   if(G && playArtOn()) return 0.7;                   // pull back to read the play
   if(!G || G.phase!=='live') return TOUCH_UI ? 0.72 : 0.86;   // before the snap on a phone: the same framing as the play, no jump at the snap
   if(TOUCH_UI) return 0.72;                          // a phone holds one zoom through the play
@@ -1059,7 +1068,8 @@ function camDirect(){
   }
   CAM3.prevShake=G?G.shake:0;
   var zt=camMood(now), act=CAM3.actUntil>now;
-  CAM3.z += (zt-CAM3.z)*(act?0.2:(TOUCH_UI?0.03:0.05));   // a phone eases between zooms
+  var tdz=!!(G && G.broadcast && G.broadcast.td && G.broadcast.until>now);
+  CAM3.z += (zt-CAM3.z)*(act?0.2:(tdz?0.08:(TOUCH_UI?0.03:0.05)));   // a phone eases between zooms; a touchdown pushes in
   return act;
 }
 
@@ -1357,10 +1367,12 @@ function nearestDef(){
     if(d<bd){bd=d;best=p;} }
   return best;
 }
-function nearestOf(p,team){
+function nearestOf(p,team,seeAll){
   var best=null,bd=Infinity;
   for(var i=0;i<G.players.length;i++){var q=G.players[i];
-    if(q.team!==team)continue; var d=Math.hypot(q.x-p.x,q.y-p.y);
+    if(q.team!==team)continue;
+    if(!seeAll && q.invisUntil && G.gt<q.invisUntil) continue;   // the Invisible Man: nobody reads him
+    var d=Math.hypot(q.x-p.x,q.y-p.y);
     if(d<bd){bd=d;best=q;} }
   return best;
 }
@@ -1532,8 +1544,26 @@ var ABIL = {
   spin:       {name:'Spin Move',   cd:4, desc:'Spin straight through the tackle.'},
   slam:       {name:'Slam',        cd:5, desc:'Ground slam. Everyone near you goes down.'},
   fumblegen:  {name:'Fumble Gen',  cd:6, desc:'Rip the ball clean out of his hands.'},
-  aagun:      {name:'Anti-Air',    cd:6, desc:'Shoot the ball out of the sky.'}
+  aagun:      {name:'Anti-Air',    cd:6, desc:'Shoot the ball out of the sky.'},
+  // the cast's own moves (see SIG_MOVE)
+  bats:       {name:'Bat Blink',       cd:5, desc:'Burst into bats and come back together on the ball carrier.'},
+  vanish:     {name:"Now You Don't",   cd:5, desc:'Turn invisible. Nobody reads you, and your tackle cannot be shaken.'},
+  flight:     {name:'Take Flight',     cd:5, desc:'Fly. Catch anything thrown near you; nobody can bring you down up there.'},
+  cloud:      {name:'Somersault Cloud',cd:5, desc:'Ride a cloud over the defense.'},
+  bullseye:   {name:'Bullseye',        cd:5, desc:'An arrow pins the nearest man, and you catch anything thrown your way.'},
+  pumpkin:    {name:'Pumpkin Bomb',    cd:5, desc:'A flaming pumpkin flattens the defenders in front of you.'},
+  lightning:  {name:'Lightning Strike',cd:5, desc:'A bolt from the sky on the ball carrier.'},
+  moon:       {name:'Full Moon',       cd:5, desc:'Wolf out: faster, and your tackles hit twice as hard.'},
+  grip:       {name:'Grendel Grip',    cd:5, desc:'Lunge and lock on. Nobody breaks this tackle.'},
+  shadow:     {name:'Shadow Hunt',     cd:5, desc:'Sink into the ground and rise behind the ball carrier.'},
+  fury:       {name:'Stitched Fury',   cd:5, desc:'Nobody can block you. Straight through them.'},
+  frost:      {name:'Frost Howl',      cd:5, desc:'Freeze everyone around you.'}
 };
+// Each of the cast has a move nobody else has, keyed by his card.
+var SIG_MOVE = { dracula:'bats', 'invisible-man':'vanish', 'peter-pan':'flight', 'sun-wukong':'cloud',
+  'robin-hood':'bullseye', 'headless-horseman':'pumpkin', zeus:'lightning', werewolf:'moon', beowulf:'grip',
+  anubis:'shadow', 'frankenstein-monster':'fury', fenrir:'frost' };
+var IS_SIG={}; for(var sgk in SIG_MOVE) IS_SIG[SIG_MOVE[sgk]]=true;
 
 
 // Each ability draws its own icon. The bar used to show a fixed squiggle, a
@@ -1552,7 +1582,19 @@ var AB_ICON = {
   spin:       '<path d="M20 12a8 8 0 1 1-3.2-6.4"/><path d="M20.4 4v5.2h-5.2"/>',
   slam:       '<path d="M12 2.6v9.6M8 8.2l4 4 4-4"/><path d="M3.4 16.6c3.4 2.2 13.8 2.2 17.2 0"/><path d="M6 20c3 1.7 9 1.7 12 0"/>',
   fumblegen:  '<ellipse cx="12" cy="12" rx="6.6" ry="4"/><path d="M9.4 12h5.2"/><path d="M4.4 4.6l2.8 2.8M19.6 4.6l-2.8 2.8M4.4 19.4l2.8-2.8M19.6 19.4l-2.8-2.8"/>',
-  aagun:      '<circle cx="15.4" cy="8.6" r="4"/><path d="M15.4 2.6v2.2M15.4 12.4v2.2M9.4 8.6h2.2M19.2 8.6h2.2"/><path d="M3 21l6.4-6.4"/>'
+  aagun:      '<circle cx="15.4" cy="8.6" r="4"/><path d="M15.4 2.6v2.2M15.4 12.4v2.2M9.4 8.6h2.2M19.2 8.6h2.2"/><path d="M3 21l6.4-6.4"/>',
+  bats:       '<path d="M2 9c2 0 3.4 1.2 4.2 3 1-1.6 2.4-2.2 3.6-1.8L12 7.6l2.2 2.6c1.2-.4 2.6.2 3.6 1.8.8-1.8 2.2-3 4.2-3-1.6 2.4-2 5.4-2 7.6-1.4-1.4-3-1.6-4.4-.6-.8-1.2-2-1.8-3.6-1.8s-2.8.6-3.6 1.8C7 15 5.4 15.2 4 16.6 4 14.4 3.6 11.4 2 9z"/>',
+  vanish:     '<circle cx="12" cy="6.4" r="3.2" stroke-dasharray="2 1.8"/><path d="M5.6 21v-4.4a6.4 6.4 0 0 1 12.8 0V21" stroke-dasharray="2.4 1.8"/>',
+  flight:     '<path d="M12 13.4C9 7.6 5 6.6 2 7.6c2 1 3 3 3 5 2-1 5-1 7 .8zM12 13.4c3-5.8 7-6.8 10-5.8-2 1-3 3-3 5-2-1-5-1-7 .8z"/><path d="M12 13.4v7"/>',
+  cloud:      '<path d="M6.4 17.4h10.8a3.8 3.8 0 0 0 .2-7.6 5.4 5.4 0 0 0-10.4 1.6 3 3 0 0 0-.6 6z"/><path d="M4 20.4h14"/>',
+  bullseye:   '<circle cx="10" cy="14" r="6.2"/><circle cx="10" cy="14" r="2"/><path d="M10 14L20.6 3.4M16.4 3.4h4.2v4.2"/>',
+  pumpkin:    '<ellipse cx="12" cy="14.2" rx="8.2" ry="6.4"/><path d="M12 7.8V4.2M12 8c-2.2 1.6-2.2 10.8 0 12.4M12 8c2.2 1.6 2.2 10.8 0 12.4"/>',
+  lightning:  '<path d="M13.4 2L5 13.4h6.2L9 22l9.4-12.4h-6.2z"/>',
+  moon:       '<path d="M20 14.6A8.2 8.2 0 1 1 9.4 4a6.6 6.6 0 0 0 10.6 10.6z"/>',
+  grip:       '<path d="M6 11.4V8a1.6 1.6 0 0 1 3.2 0v2M9.2 10V7a1.6 1.6 0 0 1 3.2 0v3M12.4 10V7.6a1.6 1.6 0 0 1 3.2 0v3.4M15.6 11V9.6a1.6 1.6 0 0 1 3.2 0V14a6 6 0 0 1-6 6h-1.4A6 6 0 0 1 6 14z"/>',
+  shadow:     '<circle cx="12" cy="6" r="3.2"/><path d="M12 9.2V21.4M7 13.2h10"/>',
+  fury:       '<path d="M3 12h18"/><path d="M6.6 8.6v6.8M10.2 8.6v6.8M13.8 8.6v6.8M17.4 8.6v6.8"/>',
+  frost:      '<path d="M12 2v20M3.4 7l17.2 10M3.4 17L20.6 7"/><path d="M9.6 3.8L12 6.2l2.4-2.4M9.6 20.2L12 17.8l2.4 2.4"/>'
 };
 
 var KITS_AB = {
@@ -1571,7 +1613,30 @@ var KITS_AB = {
 // defenders are identified by pos (DE/LB/CB/S), the offence by role
 function kitFor(p){
   if(!p) return [];
-  return KITS_AB[p.pos] || KITS_AB[p.role] || [];
+  var k=KITS_AB[p.pos] || KITS_AB[p.role] || [];
+  var sg=p.card && SIG_MOVE[p.card];                 // his own move takes the last slot
+  if(!sg) return k;
+  return k.length>=3 ? k.slice(0,2).concat([sg]) : k.concat([sg]);
+}
+// speed from a move: a wolf, a cloud, a flight, or frozen stiff
+function buffMul(p){
+  var m=1;
+  if(G && p.buffUntil && G.gt<p.buffUntil) m*=(p.buffSpd||1);
+  if(G && p.flyUntil && G.gt<p.flyUntil) m*=1.25;
+  return m;
+}
+// a swarm of bats from one spot to another
+function batSwarm(x0,y0,x1,y1){
+  if(REDUCED) return;
+  for(var i=0;i<22;i++){
+    var t=0.28+Math.random()*0.12, jx=(Math.random()-0.5)*26, jy=(Math.random()-0.5)*14;
+    G.fx.push({x:x0+jx*0.5, y:y0-16+jy, vx:(x1-x0+jx)/t, vy:(y1-y0+jy)/t, r:1.8+Math.random()*1.6,
+               life:t, max:t, c:(i%3?'#1b0d22':'#6d2a8f')});
+  }
+  for(var j=0;j<12;j++){
+    var a=Math.random()*Math.PI*2, sp=40+Math.random()*80;
+    G.fx.push({x:x1, y:y1-16, vx:Math.cos(a)*sp, vy:Math.sin(a)*sp*0.6-20, r:1.8, life:0.5, max:0.5, c:'#2a1036'});
+  }
 }
 
 // Cooldowns outlive the play, and players are rebuilt every snap, so they are
@@ -1875,6 +1940,152 @@ function fireAbility(seat, IN, slot){
         flash(ex3,ey3,'rgba(255,60,60,1)',14);
       }
     }
+  }
+  // ---- the cast's own moves ----------------------------------------------
+  else if(id==='bats'){
+    // Dracula bursts into bats and comes back together right on the ball
+    // carrier, or, with a pass in the air, on the man it is thrown to.
+    var bt = (G.thrown && G.thrown.target && G.thrown.target.team!==me.team) ? G.thrown.target
+           : (G.carrier && G.carrier.team!==me.team ? G.carrier : null);
+    if(!bt || Math.hypot(bt.x-me.x,bt.y-me.y)>28*YD){ whiffMove(me,id,'rgba(150,60,200,.95)',mine); return; }
+    batSwarm(me.x,me.y,bt.x,bt.y);
+    var bsd=(me.x<bt.x)?-1:1;
+    me.x=bt.x+bsd*9; me.y=bt.y+2; me.vx=bt.vx; me.vy=bt.vy; me.face=-bsd; me.z=0; me.vz=0;
+    if(bt===G.carrier) bt.iFrames=0;
+    flash(me.x,me.y-16,'rgba(170,80,220,.95)',30);
+    shock(me.x,me.y,'rgba(120,40,160,.8)',2,26,0.3);
+    tell('BAT BLINK!',700);
+  }
+  else if(id==='vanish'){
+    // The Invisible Man: nobody on the other side can read him for a few
+    // seconds, and a tackle he makes cannot be shaken off.
+    me.invisUntil=G.gt+4;
+    shock(me.x,me.y,'rgba(210,235,255,.85)',3,30,0.32);
+    for(var vn=0;vn<14;vn++){ var va=Math.random()*Math.PI*2;
+      G.fx.push({x:me.x, y:me.y-16, vx:Math.cos(va)*70, vy:Math.sin(va)*40, r:1.6, life:0.45, max:0.45, c:'#e6f2ff'}); }
+    tell("NOW YOU DON'T",700);
+  }
+  else if(id==='flight'){
+    // Peter Pan takes off: up in the air nobody can tackle him, and a pass
+    // thrown anywhere near him is his.
+    me.flyUntil=G.gt+1.9; me.flyZ=1.15; me.vz=0;
+    flash(me.x,me.y-16,'rgba(255,245,170,.95)',28);
+    for(var fl=0;fl<16;fl++){ var fa2=Math.random()*Math.PI*2;
+      G.fx.push({x:me.x, y:me.y-10, vx:Math.cos(fa2)*60, vy:Math.sin(fa2)*30+20, r:1.4+Math.random(), life:0.6, max:0.6, c:'#fff3a0'}); }
+    tell('TAKE FLIGHT',700);
+  }
+  else if(id==='cloud'){
+    // Sun Wukong rides his cloud: up, fast, and over everyone.
+    me.flyUntil=G.gt+1.4; me.flyZ=0.8; me.vz=0; me.buffUntil=G.gt+1.4; me.buffSpd=1.6;
+    for(var cl=0;cl<14;cl++) G.fx.push({x:me.x+(Math.random()-0.5)*24, y:me.y+(Math.random()-0.5)*6,
+      vx:(Math.random()-0.5)*40, vy:(Math.random()-0.5)*10, r:3+Math.random()*3, life:0.7, max:0.7, c:'#fff4cc'});
+    flash(me.x,me.y-10,'rgba(255,220,120,.95)',30);
+    tell('SOMERSAULT CLOUD',700);
+  }
+  else if(id==='bullseye'){
+    // Robin Hood: an arrow pins the nearest man, and nothing thrown his way
+    // gets away from him this play.
+    me.sureHands=true;
+    var bx2=foeNear(14*YD);
+    if(bx2){
+      streak(me.x,me.y-24,bx2.x,bx2.y-18,'rgba(210,190,120,.95)',1.6,0.25);
+      bx2.stun=Math.max(bx2.stun,1.4); bx2._pst=bx2.stun; bx2.down=Math.max(bx2.down,1.0); bx2.vx=0; bx2.vy=0;
+      flash(bx2.x,bx2.y-18,'rgba(255,255,255,.95)',22);
+    }
+    tell('BULLSEYE',700);
+  }
+  else if(id==='pumpkin'){
+    // The Headless Horseman throws a flaming pumpkin at the defender in front
+    // of him; it bursts and flattens everyone around it.
+    var pt=null, pdist=12*YD;
+    for(var pi=0;pi<G.players.length;pi++){
+      var pq=G.players[pi];
+      if(pq.team===me.team || pq.down>0 || (pq.x-me.x)*d < -2*YD) continue;
+      var pqd=Math.hypot(pq.x-me.x,pq.y-me.y);
+      if(pqd<pdist){ pdist=pqd; pt=pq; }
+    }
+    if(!pt){ whiffMove(me,id,'rgba(255,120,30,.95)',mine); return; }
+    var ex=pt.x, ey=pt.y;
+    streak(me.x,me.y-26,ex,ey-14,'rgba(255,140,40,.95)',3,0.22);
+    flash(ex,ey-12,'rgba(255,160,40,1)',42); shock(ex,ey,'rgba(255,120,30,.95)',4,52,0.4);
+    for(var pf=0;pf<20;pf++){ var pa=Math.random()*Math.PI*2, ps=60+Math.random()*120;
+      G.fx.push({x:ex, y:ey-10, vx:Math.cos(pa)*ps, vy:Math.sin(pa)*ps*0.6-30, grav:200, r:2+Math.random()*2,
+                 life:0.6, max:0.6, c:['#ff5a1f','#ff9a2a','#ffd23f','#3a7a2a'][pf%4]}); }
+    for(var pk2=0;pk2<G.players.length;pk2++){
+      var pv=G.players[pk2];
+      if(pv.team===me.team) continue;
+      if(Math.hypot(pv.x-ex,pv.y-ey)>3.2*YD) continue;
+      pv.stun=Math.max(pv.stun,1.3); pv.down=Math.max(pv.down,1.0); launch(pv, ex, ey-4, 160, 4.2);
+    }
+    G.shake=REDUCED?0:16;
+    tell('PUMPKIN BOMB!',700);
+  }
+  else if(id==='lightning'){
+    // Zeus: a bolt out of the sky onto the ball carrier.
+    var zt=G.carrier;
+    if(!zt || zt.team===me.team || Math.hypot(zt.x-me.x,zt.y-me.y)>25*YD){ whiffMove(me,id,'rgba(140,200,255,.95)',mine); return; }
+    G.fx.push({bolt:true, x:zt.x+6, y:zt.y-190, x2:zt.x, y2:zt.y-12, c:'rgba(170,215,255,.98)', life:0.38, max:0.38});
+    G.fx.push({bolt:true, x:zt.x-10, y:zt.y-170, x2:zt.x+2, y2:zt.y-14, c:'rgba(255,255,255,.95)', life:0.3, max:0.3});
+    flash(zt.x,zt.y-14,'rgba(200,230,255,1)',44); shock(zt.x,zt.y,'rgba(150,210,255,.95)',4,46,0.36);
+    zt.hp-=25; zt.vx*=0.15; zt.vy*=0.15; zt.buffUntil=G.gt+0.9; zt.buffSpd=0.4;
+    dmgText(zt,'-25','#bfe3ff');
+    G.shake=REDUCED?0:18; credit(me,'BIG HIT');
+    tell('LIGHTNING STRIKE!',700);
+    if(zt.hp<=0){ zt.down=1.5; if(G.cur) G.cur.tackler=me; endPlay(zt.x,'TACKLED'); return; }
+  }
+  else if(id==='moon'){
+    // The Werewolf wolfs out: quicker, and his tackles bite twice as hard.
+    me.buffUntil=G.gt+4; me.buffSpd=1.4; me.wolfUntil=G.gt+4;
+    shock(me.x,me.y,'rgba(220,228,245,.9)',3,40,0.4); flash(me.x,me.y-18,'rgba(230,236,255,.95)',30);
+    tell('FULL MOON',700);
+  }
+  else if(id==='grip'){
+    // Beowulf lunges and locks on. Nothing shakes that grip.
+    var gc=G.carrier;
+    if(!gc || gc.team===me.team || Math.hypot(gc.x-me.x,gc.y-me.y)>5*YD){ whiffMove(me,id,'rgba(216,162,74,.95)',mine); return; }
+    lunge(me, gc, 10);
+    me.wrapT=99; me.gripLock=true; me.wrapA=Math.atan2(me.y-gc.y,me.x-gc.x);
+    if(me===G.controlled || me===G.controlled2) me.humanWrap=true;
+    gc.iFrames=0; gc.hp-=20; dmgText(gc,'-20','#ffd9a0');
+    flash(gc.x,gc.y-16,'rgba(255,210,140,1)',30); G.shake=REDUCED?0:10;
+    tell('GRENDEL GRIP',700);
+  }
+  else if(id==='shadow'){
+    // Anubis sinks into the ground and rises right behind the ball carrier.
+    var sc3=G.carrier;
+    if(!sc3 || sc3.team===me.team || Math.hypot(sc3.x-me.x,sc3.y-me.y)>20*YD){ whiffMove(me,id,'rgba(201,162,74,.95)',mine); return; }
+    portal(me.x,me.y,'#3a2a12');
+    var sv=Math.hypot(sc3.vx,sc3.vy), bxs, bys;
+    if(sv>20){ bxs=-sc3.vx/sv; bys=-sc3.vy/sv; } else { var sm2=Math.hypot(me.x-sc3.x,me.y-sc3.y)||1; bxs=(me.x-sc3.x)/sm2; bys=(me.y-sc3.y)/sm2; }
+    me.x=sc3.x+bxs*12; me.y=sc3.y+bys*12; me.vx=sc3.vx; me.vy=sc3.vy; me.face=(sc3.x>=me.x)?1:-1;
+    sc3.iFrames=0;
+    portal(me.x,me.y,'#c9a24a');
+    for(var sd2=0;sd2<14;sd2++) G.fx.push({x:me.x+(Math.random()-0.5)*14, y:me.y, vx:(Math.random()-0.5)*30,
+      vy:-30-Math.random()*40, r:1.6, life:0.5, max:0.5, c:'#d9b25a'});
+    tell('SHADOW HUNT',700);
+  }
+  else if(id==='fury'){
+    // Frankenstein's Monster: no block holds him for a few seconds.
+    me.furyUntil=G.gt+3; me.buffUntil=G.gt+3; me.buffSpd=1.2;
+    for(var fz=0;fz<10;fz++) streak(me.x+(Math.random()-0.5)*18, me.y-30+Math.random()*20,
+      me.x+(Math.random()-0.5)*30, me.y-30+Math.random()*20, 'rgba(120,255,150,.9)', 1.4, 0.22);
+    flash(me.x,me.y-18,'rgba(140,255,160,.95)',28);
+    tell('STITCHED FURY',700);
+  }
+  else if(id==='frost'){
+    // Fenrir howls, and everyone from the other side near him freezes.
+    var fzn=0;
+    for(var fi2=0;fi2<G.players.length;fi2++){
+      var fq=G.players[fi2];
+      if(fq.team===me.team || Math.hypot(fq.x-me.x,fq.y-me.y)>6*YD) continue;
+      fzn++;
+      if(fq===G.carrier){ fq.buffUntil=G.gt+1.5; fq.buffSpd=0.25; fq.hp-=10; dmgText(fq,'-10','#bfe9ff'); }
+      else { fq.stun=Math.max(fq.stun,1.3); fq._pst=fq.stun; fq.vx=0; fq.vy=0; }
+      for(var ic=0;ic<5;ic++) G.fx.push({x:fq.x+(Math.random()-0.5)*14, y:fq.y-8-Math.random()*20,
+        vx:(Math.random()-0.5)*20, vy:(Math.random()-0.5)*20, r:1.6+Math.random(), life:1.0, max:1.0, c:'#dff5ff'});
+    }
+    shock(me.x,me.y,'rgba(170,230,255,.95)',4,6*YD,0.45); shock(me.x,me.y,'rgba(255,255,255,.8)',6*YD,4,0.35);
+    tell('FROST HOWL',700);
   }
   else return;
 
@@ -2288,6 +2499,54 @@ function spokes(x,y,c,n,r0,r1){
 // On defence, a quick flick of the cursor sends your man into a diving
 // tackle along the swipe. Nothing to click; the gesture is the input.
 var SWIPE={x:0,y:0,t:0};
+// A swipe on a touch screen is a tackle, made where your man stands. He
+// does not run anywhere (the stick moves him): he lunges a step along the
+// swipe. Whoever from the other team is within reach goes down: the ball
+// carrier gets grabbed and drained (the tackle loop), anyone else is knocked
+// flat, and with nobody there it is a tackle at thin air. Your own team is
+// never hit.
+var TACKLE_REACH=3.5*YD;
+function touchTackle(me,dx,dy){
+  if(!G || G.phase!=='live' || !me || me.stun>0 || me.down>0 || G.offense===me.team) return false;
+  if(G.diveCd>0) return false;
+  G.diveCd=0.4;
+  var dm=Math.hypot(dx,dy)||1; dx/=dm; dy/=dm;
+  // who is in reach: the ball carrier if he is, otherwise whoever is nearest
+  // along the swipe
+  var best=null, bs=1e9;
+  for(var i=0;i<G.players.length;i++){
+    var q=G.players[i];
+    if(q.team===me.team || q.down>0) continue;
+    var qx=q.x-me.x, qy=q.y-me.y, qd=Math.hypot(qx,qy)||1;
+    if(qd>TACKLE_REACH) continue;
+    var sc=qd*(1.8-(qx*dx+qy*dy)/qd) - (q===G.carrier ? 1000 : 0);
+    if(sc<bs){ bs=sc; best=q; }
+  }
+  var now=performance.now();
+  me.z=Math.max(me.z||0,0.3); me.arm=0.5;
+  if(best){
+    var tx=best.x-me.x, ty=best.y-me.y, td=Math.hypot(tx,ty)||1;
+    me.face=tx>=0?1:-1;
+    var lunge=Math.max(BASE_SPD, td/0.12);          // a step onto him, not a run
+    me.vx=tx/td*lunge; me.vy=ty/td*lunge;
+    if(best===G.carrier){
+      G.touchDive=true; G.diveFly=lunge; G.diveUntil=now+260;   // the tackle loop grabs him on contact
+    } else {
+      // a blocker, a receiver, whoever: flattened
+      best.stun=Math.max(best.stun||0,1.0); best.down=Math.max(best.down||0,1.0);
+      best.vx=tx/td*70; best.vy=ty/td*70; best.locked=0;
+      if(best.assign===me || best.eBlk===me) me.engaged=Math.max(me.engaged||0,(me.shedAt||2.5)+0.01);
+      burst(best.x,best.y,'#ffffff'); flash(best.x,best.y-14,'rgba(255,255,255,.95)',24);
+      G.shake=REDUCED?0:Math.max(G.shake,6);
+      G.touchDive=false; G.diveUntil=now+150;
+    }
+  } else {
+    me.vx=dx*BASE_SPD*0.9; me.vy=dy*BASE_SPD*0.9;   // at thin air: he leaves his feet and lands a step on
+    G.touchDive=false; G.diveUntil=now+300;
+    dust(me.x,me.y,5,0.7);
+  }
+  return true;
+}
 function swipeTackle(dx,dy,side){
   if(!G||G.phase!=='live') return false;
   var mine=((side||'H')==='H')?G.controlled:G.controlled2;
@@ -2652,6 +2911,7 @@ function runLane(p,d){
 function aim(p,tx,ty,spd){
   if(!isFinite(tx)||!isFinite(ty)||!isFinite(spd)) return;   // refuse nowhere
   if(p.team==='A' && !NET.on) spd*=FOE.spd;                   // the team you picked sets their pace
+  spd*=buffMul(p);
   var dx=tx-p.x,dy=ty-p.y,m=Math.hypot(dx,dy)||1;
   p.vx=dx/m*spd; p.vy=dy/m*spd;
 }
@@ -2670,6 +2930,25 @@ var AI_ODDS = {
 // The computer now plays out of the same kits the player does, rather than a
 // separate hard-coded set of specials.
 function cpuAbilities(dt,now){
+  // a pass in the air: Peter Pan flies up for it, Robin Hood makes it sure,
+  // and a Dracula on the other side may come down on the man it is thrown to
+  if(G.thrown && G.phase==='live' && !G.thrown.lat && !G.thrown.kickoff && !G.thrown.sigTried && G.thrown.target){
+    G.thrown.sigTried=true;
+    var rt=G.thrown.target;
+    if(rt!==G.controlled && rt!==G.controlled2 && !(rt.stun>0)){
+      var rk=kitFor(rt);
+      ['flight','bullseye'].forEach(function(m){
+        if(G.thrown && rk.indexOf(m)>=0 && abReady(rt,m) && Math.random()<0.85) fireAbility({man:rt,local:false}, null, rk.indexOf(m));
+      });
+    }
+    for(var bi=0;bi<G.players.length && G.thrown;bi++){
+      var bq=G.players[bi];
+      if(bq.team===G.offense || bq===G.controlled || bq===G.controlled2 || bq.stun>0) continue;
+      var bk=kitFor(bq);
+      if(bk.indexOf('bats')<0 || !abReady(bq,'bats') || sigSpent(bq.team)) continue;
+      if(Math.random() < 0.3*(bq.team==='A' && !NET.on ? FOE.abil : 1)){ G.sigUsed[bq.team]=G.playNo; fireAbility({man:bq,local:false}, null, bk.indexOf('bats')); }
+    }
+  }
   if(!G.carrier||G.phase!=='live') return;
   var car=G.carrier, d=dir();
 
@@ -2718,14 +2997,39 @@ function cpuAbilities(dt,now){
       else if(toCar>74 && toCar<190 && kit.indexOf('dash')>=0) want='dash';
     }
 
+    if(!want){
+      var sg=kit[kit.length-1];
+      if(sg && IS_SIG[sg] && !sigSpent(q.team)){
+        if(q.team===G.offense){
+          if(q===car){
+            if(sg==='pumpkin' && nd<120) want=sg;
+            else if((sg==='cloud'||sg==='flight') && nd<55) want=sg;
+            else if(sg==='bullseye' && nd<90) want=sg;
+          }
+        } else {
+          if(sg==='bats' && toCar>70 && toCar<320) want=sg;
+          else if(sg==='lightning' && toCar<280) want=sg;
+          else if(sg==='shadow' && toCar>60 && toCar<260) want=sg;
+          else if(sg==='grip' && toCar<60) want=sg;
+          else if((sg==='moon'||sg==='fury') && toCar<220) want=sg;
+          else if(sg==='frost' && toCar<75) want=sg;
+          else if(sg==='vanish' && toCar<260) want=sg;
+        }
+      }
+    }
     if(!want) continue;
     if(!abReady(q,want)) continue;
+    if(IS_SIG[want] && sigSpent(q.team)) continue;
     if(Math.random() > (AI_ODDS[want]||0.02) * (q.team==='A' && !NET.on ? FOE.abil : 1)) continue;
 
+    if(IS_SIG[want]) G.sigUsed[q.team]=G.playNo;
     fireAbility({man:q, local:false}, null, kit.indexOf(want));
     q.aiCd = 1.4 + Math.random()*1.3;
   }
 }
+
+// one of the cast's own moves a play for each side the computer runs
+function sigSpent(team){ G.sigUsed=G.sigUsed||{}; return G.sigUsed[team]===G.playNo; }
 
 // ---- the CPU quarterback: drop, read the field, throw or scramble -------
 function cpuQB(now){
@@ -2806,7 +3110,8 @@ function deadTick(dt){
       if(!G.celAt) break;
       if(cp.team===G.scoringTeam){
         var dx=G.celAt.x-cp.x, dy=G.celAt.y-cp.y, dm=Math.hypot(dx,dy)||1;
-        if(dm>26){ cp.vx=dx/dm*150; cp.vy=dy/dm*150; }   // mob the scorer
+        var mob=(G.tdKind==='team')?300:150;          // for a team celebration they sprint in
+        if(dm>26){ cp.vx=dx/dm*mob; cp.vy=dy/dm*mob; }   // mob the scorer
         else { cp.cel=Math.max(cp.cel,0.6); }
       }
     }
@@ -3218,7 +3523,7 @@ function driveHuman(seat, IN, dt, now){
   // on defence the AI runs at DEF_SPD, so a human on that side has to as well
   // or he is permanently behind his own team-mates
   var base = onO ? BASE_SPD : DEF_SPD;
-  var mult=(sprinting?SPRINT:1)*(me.burst>0?1.7:1)*me.spd;
+  var mult=(sprinting?SPRINT:1)*(me.burst>0?1.7:1)*me.spd*buffMul(me);
   if(!diving && seat.local){                          // a dive that is over no longer homes...
     G.touchDive=false;
   }
@@ -3251,8 +3556,8 @@ function driveHuman(seat, IN, dt, now){
         // he is slippery for a beat (a juke, a fresh handoff): stay on him
         // instead of sailing past, and the tackle lands when it wears off
         me.vx=hc.vx+hx*4; me.vy=hc.vy+hy*4;
-      } else if(hm<20*YD){
-        var sp=Math.max(Math.hypot(me.vx,me.vy), BASE_SPD*2.7, (G.diveFly||0)*0.85);
+      } else if(hm<TACKLE_REACH*1.6){
+        var sp=Math.max(Math.hypot(me.vx,me.vy), (G.diveFly||0)*0.85);
         var k=Math.min(1,dt*12);
         me.vx+=(hx/hm*sp-me.vx)*k; me.vy+=(hy/hm*sp-me.vy)*k;
       }
@@ -3501,6 +3806,11 @@ function step(dt){
       // the line, which read as the rush bouncing off an invisible wall.
       if(Math.abs(ru.x-blk.x) > BLOCK_R*1.8) continue;
       ru.engaged=(ru.engaged||0)+dt;
+      if(ru.furyUntil && G.gt<ru.furyUntil){          // Stitched Fury: straight through the man
+        blk.stun=Math.max(blk.stun,1.0); blk._pst=blk.stun; blk.down=Math.max(blk.down,1.0);
+        launch(blk, ru.x, ru.y, 140, 3.4); burst(blk.x,blk.y,'#7dff9a');
+        ru.engaged=(ru.shedAt||2.5)+0.01; continue;
+      }
       var youRu=(ru===G.controlled||ru===G.controlled2);
       if(youRu && TOUCH_UI && (G.tchase>0 || G.touchDive)) continue;   // charging on a swipe: he slips the block
       if(ru.engaged > (youRu ? Math.min(ru.shedAt||2.5, 1.0) : (ru.shedAt||2.5))) continue;   // he has beaten the block (you get off it in a second)
@@ -3626,7 +3936,10 @@ function step(dt){
     // a fresh stun is a hit: put him in the air rather than just tipping him over
     if(q.stun > (q._pst||0)+0.5 && !(q.vz>0) && q.z<=0.01 && !REDUCED) q.vz=3.0;
     q._pst=q.stun;
-    if(q.vz){
+    if(q.flyUntil && G.gt<q.flyUntil){               // flying (Peter Pan, the cloud): he stays up
+      q.vz=0; q.z+=((q.flyZ||1.1)-q.z)*Math.min(1,dt*6);
+    }
+    else if(q.vz){
       q.vz-=9*dt; q.z=Math.max(0,q.z+q.vz*dt);
       if(q.z<=0){ q.vz=0; burst(q.x,q.y,'#cfd8cf'); }   // lands in a puff of turf
     }
@@ -3636,6 +3949,15 @@ function step(dt){
     if(q.phase>0) q.phase=Math.max(0,q.phase-dt*1.1);
     if(q.iFrames>0) q.iFrames-=dt;
     if(q.wrapped>0) q.wrapped-=dt;
+    if(!REDUCED){                                    // the moves you can see running
+      if(q.flyUntil && G.gt<q.flyUntil && Math.random()<dt*20)
+        G.fx.push({x:q.x+(Math.random()-0.5)*10, y:q.y-4, vx:(Math.random()-0.5)*20, vy:10, r:1.2+Math.random(),
+                   life:0.5, max:0.5, c:(q.flyZ<1?'#fff4cc':'#fff3a0')});
+      if(q.furyUntil && G.gt<q.furyUntil && Math.random()<dt*14)
+        G.fx.push({x:q.x+(Math.random()-0.5)*14, y:q.y-10-Math.random()*18, vx:(Math.random()-0.5)*60, vy:-24,
+                   r:1.3, life:0.25, max:0.25, c:'#7dff9a'});
+      if(q.wolfUntil && G.gt<q.wolfUntil && Math.random()<dt*8) speedLines(q,'rgba(220,230,255,.55)');
+    }
     if(q.cel>0)  q.cel-=dt;
     if(q.down>0) q.down=Math.max(0,q.down-dt);
   }
@@ -3738,7 +4060,8 @@ function step(dt){
     if(k>=1){
       if(t.kickoff && t.tb){ G.thrown=null; kickoffTouchback(t.punt?20:25); return; }
       if(t.tip){ resolveTip(); return; }              // nobody's ball: first to it
-      var r=t.target, cov=nearestOf(r,G.offense==='H'?'A':'H');
+      var r=t.target, cov=nearestOf(r,G.offense==='H'?'A':'H',true);
+      if(r && ((r.flyUntil && G.gt<r.flyUntil) || r.sureHands)) t.sure=true;   // Peter Pan up in the air, Robin Hood's hands
       var covd=cov?Math.hypot(cov.x-r.x,cov.y-r.y):999;
       var near=Math.hypot(r.x-G.ball.x,r.y-G.ball.y);
       var wasLat=t.lat;
@@ -3836,7 +4159,7 @@ function step(dt){
       for(var wc=0;wc<G.players.length;wc++) G.players[wc].wrapT=0;
       G.wrapCar=car;
     }
-    var grabbers=0, lastT=null, hw=0;   // hw: your own tackles on him
+    var grabbers=0, lastT=null, hw=0, bite=0;   // hw: your own tackles on him; bite: a wolf or a grip on him
     for(var m2=0;m2<G.players.length;m2++){
       var t2=G.players[m2];
       if(t2.team!==defTeam) continue;
@@ -3846,8 +4169,13 @@ function step(dt){
         // already hanging on. A juke or spin shakes him, and so does a back
         // who keeps his legs churning long enough. Your own tackle does not
         // run out: it holds until he is down, unless he spins or jukes free.
-        if(t2.humanWrap) t2.stun=0;
-        if(jking || t2.stun>0){ breakWrap(t2,car); continue; }
+        if(TOUCH_UI && t2===G.controlled && G.touchDive && !t2.humanWrap){   // already on him when you swiped: it is your tackle now
+          t2.humanWrap=true; t2.wrapT=99; G.touchDive=false; car.iFrames=0;
+          car.hp-=25/res; dmgText(car,'-'+Math.round(25/res),'#ffffff'); G.dotAcc=0;
+        }
+        if(t2.humanWrap || t2.gripLock) t2.stun=0;
+        var holdFast = t2.gripLock || (t2.invisUntil && G.gt<t2.invisUntil);   // Grendel's grip, or a man he cannot see
+        if(!holdFast && (jking || t2.stun>0)){ breakWrap(t2,car); continue; }
         t2.wrapT-=dt;
         if(t2.wrapT<=0){
           breakWrap(t2,car);
@@ -3855,6 +4183,7 @@ function step(dt){
           continue;
         }
         grabbers++; lastT=t2; if(t2.humanWrap) hw++;
+        if(t2.gripLock || (t2.wolfUntil && G.gt<t2.wolfUntil)) bite++;
         continue;
       }
       // A touch-screen swipe tackle: when the dive gets to him you hit him
@@ -3906,13 +4235,14 @@ function step(dt){
         return;
       }
       t2.wrapT=(0.85+Math.random()*0.7)*((t2.pwr||1)/res);
+      if(TOUCH_UI && t2===G.controlled){ t2.wrapT=99; t2.humanWrap=true; hw++; G.dotAcc=0; dmgText(car,'-'+Math.round(hit/res),'#ffffff'); }   // your man ran into him: your tackle
       t2.wrapA=Math.atan2(tdy,tdx);
       burst(car.x,car.y-8,'#ffffff');
       G.shake=REDUCED?0:Math.max(G.shake,6);
       grabbers++; lastT=t2;
     }
     if(grabbers>0){
-      var drain=((58*grabbers + 30*hw)/res)*dt;         // your own tackle drains him faster
+      var drain=((58*grabbers + 30*hw + 58*bite)/res)*dt;   // your own tackle drains him faster, a wolf or a grip faster still
       car.hp -= drain;
       var drag=Math.max(0.18, 1-grabbers*0.42);       // dragged down as they hang on
       if(hw){
@@ -4003,29 +4333,54 @@ function postPlay(txt, minHold, then){
   var banner = !!txt && SAY_OK.test(String(txt));
   if(banner) say(txt, 1400);
   var q=G.cardQ; G.cardQ=null; var g0=G;
-  var cardAt = banner ? 1500 : 250;
+  var td=!!G.tdCard; G.tdCard=false;
+  var cardAt = td ? 700 : (banner ? 1500 : 250);    // a touchdown: the card comes up beside him almost at once
   if(q && q.p){
     setTimeout(function(){
       if(G.over) return;
+      if(td){ showCard(q.p, q.act, Math.random()<0.5?'sL':'sR'); return; }   // his dance is already going
       showCard(q.p, q.act);
       if(/PICK|INTERCEPT|FUMBLE|SCOOP|TOUCHDOWN/.test(String(q.act)))
         G.broadcast={p:q.p, until:performance.now()+2100};
       q.p.cel=Math.max(q.p.cel||0, 2.0); q.p.celKind=q.dance||'pump';               // his celebration runs with the card
     }, cardAt);
   }
-  var done = cardAt + (q && q.p ? 2000 : 500);
+  var done = cardAt + (q && q.p ? (td?3100:2000) : 500);
   setTimeout(function(){
     if(G!==g0 || G.over) return;
     if(then) then(); else G.phase='playcall';
   }, Math.max(minHold||0, done));
 }
 function turnover(){ G.offense=G.offense==='H'?'A':'H'; G.down=1; G.toGo=10; }
+// A touchdown celebration: the camera goes in close on the scorer and he
+// does something, different most times: a dance, a dab, a shuffle, a snow
+// angel on his back, or the whole team jumps with him. His card pops up
+// beside him.
+var TD_DANCES=['td','angel','dab','shuffle','team'];
+function pickTdDance(){
+  var k; do { k=TD_DANCES[(Math.random()*TD_DANCES.length)|0]; } while(k===G.lastDance && Math.random()<0.8);
+  G.lastDance=k; return k;
+}
+function startTdDance(p, kind){
+  var now=performance.now();
+  p.cel=4.0; p.celKind=(kind==='team')?'pump':kind; p.celAt=now; p.vx*=0.3; p.vy*=0.3;
+  G.broadcast={p:p, until:now+3900, td:true, wide:(kind==='team')};
+  if(kind==='team'){                                   // everybody jumps together
+    for(var i=0;i<G.players.length;i++){
+      var q=G.players[i];
+      if(q.team===p.team && q!==p){ q.cel=4.0; q.celKind='pump'; q.celAt=now; }
+    }
+  }
+}
 function score(){
+  var scorer=G.carrier;
+  G.tdKind=pickTdDance();
   logPlay(G.ball?G.ball.x:G.los, 'TOUCHDOWN', true);
   if(G.offense==='H') G.scoreH+=6; else G.scoreA+=6;      // the extra point is kicked
   G.scoringTeam=G.offense;
   credit(G.carrier,'TOUCHDOWN');
-  if(G.carrier) G.carrier.cel=1.4;
+  if(scorer) startTdDance(scorer, G.tdKind);
+  G.tdCard=true;
   burst(G.ball.x,G.ball.y,'#ffd23f'); burst(G.ball.x,G.ball.y,'#ffffff');
   say('TOUCHDOWN!',2600); G.shake=REDUCED?0:18; G.clockRunning=false;
   for(var cf=0;cf<44;cf++) confetti(G.ball.x, G.ball.y);
@@ -4033,7 +4388,7 @@ function score(){
   G.phase='dead'; G.carrier=null; G.thrown=null; G.windup=null;
   G.newSeries=false; G.kickReturn=false;
   G.clockRunning=false;
-  postPlay('TOUCHDOWN!', 2700, startPAT);                  // then the extra point
+  postPlay('TOUCHDOWN!', 4000, startPAT);                  // the celebration, then the extra point
 }
 // The try: snapped from the 15, so a 33-yard kick. The scoring side keeps
 // the ball for it; the kickoff that follows is the turnover.
@@ -4246,7 +4601,8 @@ function draw(){
       tx=(x0+x1)/2*0.6+bx*0.4; ty=(y0+y1)/2*0.6+by*0.4;
     }
   }
-  if(TOUCH_UI && VIEW3D && G.phase!=='live' && !actCam) ty-=3*YD;   // a little tilt toward the stands before the snap
+  var tdCam=!!(G.broadcast && G.broadcast.td && G.broadcast.until>performance.now());
+  if(TOUCH_UI && VIEW3D && G.phase!=='live' && !actCam && !tdCam) ty-=3*YD;   // a little tilt toward the stands before the snap
   if(!isFinite(tx)) tx=FW/2;
   if(!isFinite(ty)) ty=FH/2;
   var follow = actCam ? (TOUCH_UI?0.12:0.2) : (VIEW3D ? (TOUCH_UI?0.09:0.15) : 0.11);
@@ -4539,6 +4895,21 @@ function outlinePart(img){
   c.padX=P/w; c.padY=P/h;
   return c;
 }
+// Gear. The passer always wears a towel at his waist and a sleeve on his
+// throwing arm; everyone else's comes from his shirt number, so a man looks
+// the same every play.
+function gearOf(p){
+  var n=p.num||0, line=(p.role==='OL'||p.role==='C'||p.role==='BL'), qb=(p.role==='QB');
+  return { towel: qb || (!line && n%3===0) || (line && n%4===1),
+           sf: qb || n%2===0,                        // a sleeve on the front forearm
+           sb: !qb && n%4===0,                       // and on the back one
+           sc: (n%5===0) ? '#eef0ea' : '#14161b' };  // black mostly, some white
+}
+function sleeve(ex,ey,a,len,w,c){
+  var sx=Math.sin(a), sy=Math.cos(a);
+  ctx.strokeStyle=c; ctx.lineWidth=w; ctx.lineCap='round';
+  ctx.beginPath(); ctx.moveTo(ex+sx*0.8, ey+sy*0.8); ctx.lineTo(ex+sx*len, ey+sy*len); ctx.stroke();
+}
 function drawPart(img,x,y,w,h){
   if(img.padX){ var ex=w*img.padX, ey=h*img.padY; ctx.drawImage(img,x-ex,y-ey,w+2*ex,h+2*ey); }
   else ctx.drawImage(img,x,y,w,h);
@@ -4595,7 +4966,7 @@ function drawSprite(p){
   var STRIPE = p.team==='H' ? '#1f2d54' : FOE.stripe;
   var HELMET = (S.helmetAlt && (p.num%2===1)) ? S.helmetAlt : S.helmet;
   // Torso carries the figure; the helmet must read smaller than the shoulders.
-  var HIP=-16, SHO=-28.5;
+  var HIP=-16, SHO=-28.5, GR=gearOf(p);
   var TH=9.6, WTH=5.6, SHN=7.6, WSHN=3.2, CL=4.5, HCL=2.2;
   var UA=7, HUA=4.16, FA=6.5, HFA=3.5;         // thicker arms for the padded sleeve and glove art
   var sp=Math.hypot(p.vx,p.vy), moving=sp>8 && p.down<=0 && p.stun<=0, ph=p.run;
@@ -4663,6 +5034,14 @@ function drawSprite(p){
       var dw=Math.sin(ct*8);
       AF=1.3+1.3*dw; EF=0.9; AB=1.3-1.3*dw; EB=0.9;
       LF={t: 0.25*dw, s: 0.25*dw-0.35}; LB={t:-0.25*dw, s:-0.25*dw-0.35};
+    } else if(p.celKind==='dab'){
+      var db=Math.sin(ct*3)*0.05;
+      AF=2.2+db; EF=0.15; AB=0.95+db; EB=2.0;          // one arm out high, the other folded across his face
+      LF={t:0.28, s:0.06}; LB={t:-0.22, s:-0.3};       // feet planted
+    } else if(p.celKind==='shuffle'){
+      var sh2=Math.sin(ct*9);                          // side to side, arms pumping
+      LF={t:0.3*sh2, s:0.3*sh2-0.25}; LB={t:-0.3*sh2, s:-0.3*sh2-0.25};
+      AF=0.8+0.7*sh2; EF=1.5; AB=0.8-0.7*sh2; EB=1.5;
     } else if(p.celKind==='flex'){
       // the flex: upper arms out, fists up by the ears, a little shake
       var fs=Math.sin(ct*22)*0.06;
@@ -4686,13 +5065,14 @@ function drawSprite(p){
   ctx.translate(0,bob);
 
   // ---- back leg, then back arm
-  ctx.globalAlpha=0.82;
+  ctx.globalAlpha=0.82*GA;
   var kB=thighBone(-1.8,HIP,LB.t,TH,WTH,PANTS,STRIPE);
   var fB=boneV(S.shin,kB.x,kB.y,LB.s,SHN,WSHN);
   boneH(S.cleat,fB.x-1,fB.y-0.6,LB.s+1.25,CL,HCL);
   var elB=boneH(S.uarm,-3.6,SHO+1,AB,UA,HUA);
   boneH(S.farm,elB.x,elB.y,AB+EB,FA,HFA);   // elbow held near 90 degrees
-  ctx.globalAlpha=1;
+  if(GR.sb) sleeve(elB.x,elB.y,AB+EB,FA*0.7,HFA*1.3,GR.sc);
+  ctx.globalAlpha=GA;
 
   // ---- torso: the widest thing on the figure
   drawPart(TORSO, TORSO===S.torso?-5.4:-6.3, SHO-3.5, TORSO===S.torso?10.8:12.6, 15);
@@ -4712,6 +5092,16 @@ function drawSprite(p){
   var fF=boneV(S.shin,kF.x,kF.y,LF.s,SHN,WSHN);
   boneH(S.cleat,fF.x-1,fF.y-0.6,LF.s+1.25,CL,HCL);
 
+  // ---- the towel tucked in at his waist, flapping behind him when he runs
+  if(GR.towel){
+    var tsw=(moving ? 0.55 : 0.05)+Math.sin((p.run||0)*2+(p.num||0))*(moving?0.22:0.06);
+    ctx.save(); ctx.translate(2.2,HIP-0.6); ctx.rotate(tsw);
+    ctx.fillStyle='#ffffff'; roundRect(-1.6,0,3.2,7.4,0.7); ctx.fill();
+    ctx.strokeStyle='#0a0c10'; ctx.lineWidth=0.7; ctx.stroke();          // outlined, or it vanishes on white pants
+    ctx.fillStyle=(p.team==='H')?'#1f2d54':FOE.stripe; ctx.fillRect(-1.6,5.2,3.2,0.9);
+    ctx.restore();
+  }
+
   // ---- helmet: must sit narrower than the shoulders, or it reads bobblehead
   if(LOOK){ ctx.save(); ctx.scale(-1,1); drawPart(HELMET,-4.8,SHO-10.7+HB,9.2,8.2); ctx.restore(); }
   else drawPart(HELMET,-4.4,SHO-10.7+HB,9.2,8.2);
@@ -4724,10 +5114,12 @@ function drawSprite(p){
                     : (-1.91 + (u-0.32)*5.0);
     var elT=boneH(S.uarm,3.6,SHO+1,ta,UA,HUA);
     boneH(S.farm,elT.x,elT.y,ta+0.35,FA,HFA);
+    if(GR.sf) sleeve(elT.x,elT.y,ta+0.35,FA*0.7,HFA*1.3,GR.sc);
   } else if(!KD && p.arm>0){
     var k=p.arm/0.55;
     var elS=boneH(S.uarm,3.6,SHO+1,1.38*k,UA,HUA);
     boneH(S.farmHand||S.farm,elS.x,elS.y,1.52*k,FA+1.4,HFA+0.5);
+    if(GR.sf) sleeve(elS.x,elS.y,1.52*k,(FA+1.4)*0.62,HFA*1.3,GR.sc);
   } else {
     // upper arm, then the ball, then the forearm over it: the ball sits in
     // the crook of the arm instead of pasted on top of the hand
@@ -4738,6 +5130,7 @@ function drawSprite(p){
       var held=true;
     }
     boneH(S.farm,elF.x,elF.y,fa,FA,HFA);
+    if(GR.sf) sleeve(elF.x,elF.y,fa,FA*0.7,HFA*1.3,GR.sc);
   }
   // mid-throw or mid-stiff-arm the ball rides at his hip
   if(p===G.carrier && !held && !snapPos()) heldBall(p, 4.8, HIP-9, null, false);
@@ -4836,6 +5229,16 @@ function kdMix(a,b,t){
   var o={}; for(var k in a) o[k]=a[k]+(b[k]-a[k])*t; return o;
 }
 function knockPose(p){
+  // a snow angel in the end zone: down on his back, arms and legs sweeping
+  if(p.cel>0 && p.celKind==='angel'){
+    var at=(performance.now()-(p.celAt||0))/1000, aw=Math.sin(at*7);
+    var lie={rot:KD_LIE.rot, drop:KD_LIE.drop, lt:0.05+aw*0.32, ls:0, bt:0.25-aw*0.32, bs:-0.2,
+             af:-1.7+aw*1.15, ef:0.15, ab:-1.7+aw*1.15, eb:0.15};
+    var ak=Math.min(1,at/0.35)*Math.min(1,p.cel/0.4);   // down onto his back, and up again at the end
+    var ap=kdMix(KD_STAND, lie, ak);
+    ap.flat=Math.min(1,Math.abs(ap.rot)/1.45);
+    return ap;
+  }
   var r=Math.max(p.down||0,p.stun||0);
   if(!(r>0)){ p._kd0=0; p._kdLast=0; return null; }
   if(!p._kd0 || r>p._kdLast+0.02){
@@ -4862,29 +5265,36 @@ function knockPose(p){
   return pose;
 }
 
-// A tackler who loses his grip ends up on the grass.
 // is the ball carrier in your tackle right now (see the tackle loop)
 function heldByYou(){
   for(var i=0;i<G.players.length;i++){ var q=G.players[i]; if(q.humanWrap && q.wrapT>0) return true; }
   return false;
 }
+// A tackler who loses his grip ends up on the grass.
 function breakWrap(t,car){
-  t.wrapT=0; t.tackleCd=1.1; t.arm=0; t.humanWrap=false;
+  t.wrapT=0; t.tackleCd=1.1; t.arm=0; t.humanWrap=false; t.gripLock=false;
   t.down=Math.max(t.down||0,0.85);
   var bx=t.x-car.x, by=t.y-car.y, bm=Math.hypot(bx,by)||1;
   t.vx=bx/bm*90; t.vy=by/bm*90;
 }
 
+var GA=1;               // how solid the man being drawn is (the Invisible Man is not)
 var SKIP_FIELD=false;   // the 3D build keeps the field in its own canvas and only repaints what moved
 var GUY_PASS=null;   // 'marks' or 'body' to draw half a player; null draws all of him
 // The outline is baked into every body part once at load (outlinePart), so
 // a player draws in one pass. The per-frame outline pass it replaced cost
 // more than drawing the players and made every input feel late.
-function drawGuy(p){ drawGuyRaw(p); }
+function drawGuy(p){
+  var inv = G && p.invisUntil && G.gt<p.invisUntil;
+  if(inv){ GA = (p.team===mySide()) ? 0.4 : 0.1+0.06*Math.sin(performance.now()/90); ctx.globalAlpha=GA; }
+  drawGuyRaw(p);
+  if(inv){ GA=1; ctx.globalAlpha=1; }
+}
 function drawGuyRaw(p){
   var K=KITS[p.team];
   var ctrl=(p===G.controlled), carry=(p===G.carrier);
-  var lift=p.z*15 + (p.cel>0?Math.abs(Math.sin(p.cel*9))*10:0);
+  var hop=(p.cel>0 && p.celKind!=='dab' && p.celKind!=='shuffle' && p.celKind!=='angel');   // those stay on the ground
+  var lift=p.z*15 + (hop?Math.abs(Math.sin(p.cel*9))*10:0);
   var sp=Math.hypot(p.vx,p.vy), moving=sp>8;
   var ph=p.run;
   var legF=moving?Math.sin(ph):0.18, legB=moving?Math.sin(ph+Math.PI):-0.18;
@@ -4946,12 +5356,12 @@ function drawGuyRaw(p){
     var wsh=Math.sin(performance.now()/1000*1.3+(p.num||1)*1.1)*0.035;   // weight shifting
     ctx.translate(0,STg.drop); ctx.translate(0,-16); ctx.rotate(STg.rot+wsh); ctx.translate(0,16);
   }
-  if(p.phase>0) ctx.globalAlpha=1-p.phase*0.62;
+  ctx.globalAlpha=GA*(p.phase>0 ? 1-p.phase*0.62 : 1);
   if(kd){                            // on the turf, or climbing off it
     ctx.translate(0,kd.drop);
     ctx.translate(0,-16); ctx.rotate(kd.rot); ctx.translate(0,16);
   }
-  if(p.stun>0) ctx.globalAlpha=0.62;
+  if(p.stun>0) ctx.globalAlpha=0.62*GA;
 
   if(SPR.ready){ drawSprite(p); ctx.restore(); if(p.spin>0) swirl(p,lift,true); heroTag(p,lift); return; }
 
@@ -5236,6 +5646,7 @@ function mySide(){ return (NET.on && !NET.host) ? 'A' : 'H'; }
 function iHaveBall(){ return G.offense === mySide(); }
 
 function hud(){
+  stage.classList.toggle('tdcam', !!(G.broadcast && G.broadcast.td && G.broadcast.until>performance.now()));
   elH.textContent=G.scoreH; elA.textContent=G.scoreA;
   var mm=Math.floor(G.clock/60), ss=Math.floor(G.clock%60);
   elClock.textContent=G.training ? 'PRACTICE' : mm+':'+(ss<10?'0':'')+ss;
@@ -5277,7 +5688,9 @@ function ab(i){ return AB[i] || (AB[i]=document.getElementById('ab'+i)); }
 var AB_COL={rocket:'#ff8c2b', perfect:'#7fd8ff', forcefield:'#3fa0ff', dash:'#ff8c2b', stiffarm:'#ffd23f',
   teleport:'#29d3e6', superblock:'#8b93a3', clothesline:'#e0384e', superspeed:'#4fd18b', spin:'#48b8ff',
   slam:'#c0772b', fumblegen:'#b36bff', aagun:'#ff4b4b', bighit:'#ffd23f', pound:'#d9822b', pitch:'#9ad14f',
-  quake:'#ff7a1a', skyhop:'#e8f4ff', afterburner:'#5fc8ff', phase:'#29d3e6', blur:'#b36bff'};
+  quake:'#ff7a1a', skyhop:'#e8f4ff', afterburner:'#5fc8ff', phase:'#29d3e6', blur:'#b36bff',
+  bats:'#8a3fc2', vanish:'#c9d8e6', flight:'#8fe06a', cloud:'#ffd23f', bullseye:'#4fae5a', pumpkin:'#ff7a1a',
+  lightning:'#7fc8ff', moon:'#c0c8d8', grip:'#d8a24a', shadow:'#c9a24a', fury:'#6be07a', frost:'#9fe0ff'};
 // Painted ability icons, parts/icons/<name>.png, used when the file is there.
 var ICON_OK={};
 function iconImg(name, done){
@@ -5424,10 +5837,12 @@ setTimeout(function(){
   HEROES.forEach(function(h){ cardArt('hero-'+h.id); });
 }, 1500);
 
-function showCard(p, action){
+function showCard(p, action, side){
   if(!p) return;
   if(!cardEl) cardEl=document.getElementById('card');
   if(!cardEl) return;
+  cardEl.classList.remove('side','sL','sR');
+  if(side){ cardEl.classList.remove('in'); void cardEl.offsetWidth; cardEl.classList.add('side', side); }
   var POS={QB:'QB',WR:'WR',TE:'TE',RB:'RB',C:'C',OL:'OL',RUSH:'DL',COV:'DB',BL:'OL'};
   document.getElementById('pcPos').textContent=POS[p.role]||p.role;
   document.getElementById('pcNum').textContent='#'+p.num;
@@ -5495,7 +5910,7 @@ function showCard(p, action){
 
   cardEl.classList.add('in');
   if(cardTimer) clearTimeout(cardTimer);
-  cardTimer=setTimeout(function(){ cardEl.classList.remove('in'); }, 2300);
+  cardTimer=setTimeout(function(){ cardEl.classList.remove('in'); }, side?3100:2300);
 }
 
 
@@ -5613,7 +6028,7 @@ function logPlay(atX, label, scored){
   var tackled = (label==='TACKLED' || label==='BIG HIT');
   var firstDown = !scored && !c.pick && !c.kick && gained >= (c.toGo||99);
   var dance = 'pump';
-  if(scored){ dance='td'; }
+  if(scored){ dance=G.tdKind||'td'; }
   else if(sack){ dance='flex'; }
   else if(firstDown && car && car.team===c.team){ star=car; act='FIRST DOWN'; }
   else if(label==='OUT OF BOUNDS' && car && car.team===c.team){ star=car; act='OUT OF BOUNDS'; }
@@ -6715,38 +7130,9 @@ if(TOUCH_UI){
         if(Math.hypot(px,py)>20){                    // a slide, however slow or short (a resting finger is not one)
           var a=screenToWorld(FT.x0,FT.y0), b=screenToWorld(t.clientX,t.clientY);
           var dx=b.x-a.x, dy=b.y-a.y;
-          // A swipe is a tackle, done right where your man is: he leaves his
-          // feet along the swipe. Only the stick moves him around the field.
-          // If the ball carrier is within a few yards and the swipe points
-          // roughly at him, the dive is steered onto him so it lands; further
-          // off, it is a tackle at thin air.
-          var tc=G.carrier, tm=G.controlled, near=false;
-          if(tc && tm && tc.team!==tm.team){
-            var lx=tc.x+tc.vx*0.2-tm.x, ly=tc.y+tc.vy*0.2-tm.y, lm=Math.hypot(lx,ly)||1;
-            var sm=Math.hypot(dx,dy)||1;
-            var cosA=(dx*lx+dy*ly)/(sm*lm), raw=Math.hypot(tc.x-tm.x,tc.y-tm.y);
-            if(raw<4*YD || (raw<18*YD && cosA > -0.3)){ dx=lx; dy=ly; near=true; }   // right on him: any swipe; in the open, anything not away from him
-            else if(raw>=18*YD) hint('TOO FAR TO TACKLE',700);
-          }
           if(Math.hypot(dx,dy)>0.5){
             if(NET.on && !NET.host) netSend({t:'dive', x:Math.round(dx*9), y:Math.round(dy*9)});
-            else if(swipeTackle(dx,dy,'H')!==false){
-              var me3=G.controlled;
-              if(me3 && !near){ me3.vx*=0.42; me3.vy*=0.42; }   // nobody in range: a short lunge at the air
-              if(me3 && near){
-                // A flying tackle: off his feet, fast enough to cover the gap,
-                // steered onto the ball carrier all the way in.
-                var dm3=Math.hypot(dx,dy)||1, rawd=Math.hypot(tc.x-me3.x,tc.y-me3.y);
-                // further out it is a longer leap, but still well under a second
-                var ft=Math.min(0.55, 0.26+Math.max(0,rawd/YD-4)*0.021);
-                var fly=Math.max(BASE_SPD*2.7, rawd/ft);
-                me3.vx=dx/dm3*fly; me3.vy=dy/dm3*fly; me3.z=Math.max(me3.z||0,0.55);
-                me3.vz=Math.max(0,(4.5*ft*ft-0.55)/ft);       // stays in the air the whole way
-                G.diveFly=fly;
-              }
-              G.diveCd=Math.min(G.diveCd,0.45);             // back up for another quickly
-              G.touchDive=near; G.diveUntil=performance.now()+(near?Math.min(1150,420+raw/YD*42):340);
-            }
+            else touchTackle(G.controlled, dx, dy);
           }
           FT.done=true;
         }
