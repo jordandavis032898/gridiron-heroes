@@ -1401,6 +1401,7 @@ function abSpend(p,id){
 // Heroes' side slides in from the left in gold, Rivals' from the right in red.
 function superMoment(p, name){
   if(!p || REDUCED) return;
+  if(NET.on && NET.host && G.players.indexOf(p)>=0) netEv(['super',G.players.indexOf(p),String(name)]);
   G.superAt={p:p, t:performance.now()};
   var el=document.getElementById('superBan');
   if(!el){ el=document.createElement('div'); el.id='superBan'; stage.appendChild(el); }
@@ -1430,7 +1431,7 @@ function whiffMove(me, id, col, mine){
   streak(me.x+(me.face||1)*4,hy, hx+(me.face||1)*12,hy, 'rgba(255,255,255,.85)', 2.4, 0.2);
   flash(hx,hy,col||'rgba(255,210,63,.9)',18);
   shock(hx,hy+14,col||'rgba(255,210,63,.7)',2,22,0.24);
-  if(mine||!NET.on) say(String(ABIL[id]?ABIL[id].name:id).toUpperCase()+'!',600);
+  say(String(ABIL[id]?ABIL[id].name:id).toUpperCase()+'!',600,mine?'H':(me===G.controlled2?'A':undefined));
   abSpend(me,id);
 }
 function fireAbility(seat, IN, slot){
@@ -1453,7 +1454,7 @@ function fireAbility(seat, IN, slot){
     var mx=bx-me.x, my=by-me.y, mm=Math.hypot(mx,my)||1;
     fwd={x:mx/mm, y:my/mm};
   }
-  function tell(t,ms){ if(mine||!NET.on) say(t,ms||600); }
+  function tell(t,ms){ say(t,ms||600,mine?'H':(me===G.controlled2?'A':undefined)); }   // (a person's move is theirs to see; the computer's, both)
   function foeNear(r){
     var best=null,bd=r;
     for(var i=0;i<G.players.length;i++){
@@ -1920,7 +1921,7 @@ function fireSpecial(seat,IN){
       vt.vx=(vt.x-me.x)/(vd||1)*180; vt.vy=(vt.y-me.y)/(vd||1)*180;
     }
     me.vx=fwd.x*BASE_SPD*1.7*(me.pwr||1); me.vy=fwd.y*BASE_SPD*1.7*(me.pwr||1);
-    if(seat.side==='H'||!NET.on||!NET.host) say(tn?'TRUCKED!':'TRUCK',700);
+    say(tn?'TRUCKED!':'TRUCK',700,seat.side);
     return;
   }
 
@@ -2044,7 +2045,7 @@ function switchPlayer(side){
   if(!nxt){ G.switchFlash=0.4; return; }            // (his ring flashes; press again quickly to step down the list)
   if(side==='H') switchTo(nxt);                 // also holds off the automatic switch for a moment
   else { G.controlled2=nxt; }
-  if(side==='H'||!NET.on||!NET.host) say(surname(nxt),600);
+  say(surname(nxt),600,side);
 }
 
 
@@ -2395,7 +2396,7 @@ function swipeTackle(dx,dy,side){
   else G.M2.diveUntil=performance.now()+430;
   streak(mine.x,mine.y-16, mine.x+dx*38, mine.y-16+dy*38,'rgba(255,255,255,.75)',2.2,0.20);
   dust(mine.x,mine.y,7,0.9);
-  if(side==='H'||!NET.on) say('DIVE!',420);
+  say('DIVE!',420,side);
   return true;
 }
 
@@ -2430,7 +2431,7 @@ function handoff(side, auto){
   back.burst=0.45;
   G.handoffAt=null;
   if(G.offense==='H') G.controlled=back; else if(NET.on) G.controlled2=back;
-  if(!auto || G.offense==='H' || !NET.on) say('HANDOFF',450);
+  say('HANDOFF',450,G.offense);
   return true;
 }
 
@@ -3380,11 +3381,11 @@ function localInput(){
 // whatever the guest last sent. Taps latch on arrival and are spent here.
 function remoteInput(){
   var r=NET.remoteIn;
-  if(!r) return {x:0,y:0,sp:0,b1:0,b2:0,b3:0,sw:0,tg:-1,k1:0,k2:0,k3:0};
+  if(!r) return {x:0,y:0,sp:0,b1:0,b2:0,b3:0,sw:0,tg:-1,k1:0,k2:0,k3:0,cp:0,sd:0};
   var out={x:r.x, y:r.y, sp:r.sp, b1:r.b1, b2:r.b2, b3:r.b3, sw:r.sw,
-           k1:r.k1, k2:r.k2, k3:r.k3,
+           k1:r.k1, k2:r.k2, k3:r.k3, cp:r.cp||0, sd:r.sd||0,
            tg:(NET.remoteTarget===undefined?-1:NET.remoteTarget)};
-  r.b1=r.b2=r.b3=r.sw=r.k1=r.k2=r.k3=0;
+  r.b1=r.b2=r.b3=r.sw=r.k1=r.k2=r.k3=r.cp=0; r.sd=0;
   NET.remoteTarget=-1;
   return out;
 }
@@ -3453,7 +3454,7 @@ function driveHuman(seat, IN, dt, now){
       M.power-=26; M.jukeCd=1.05; M.diveUntil=now+400;
       var dv=(a.x||a.y)?a:{x:fwd,y:0};
       me.vx=dv.x*BASE_SPD*2.9; me.vy=dv.y*BASE_SPD*2.9;
-      if(seat.local) say('DIVE!',320);
+      say('DIVE!',320,seat.side);
     }
   } else {
     if(IN.b3 && M.latCd<=0){
@@ -3463,16 +3464,18 @@ function driveHuman(seat, IN, dt, now){
     if(IN.b2) fireSpecial(seat, IN);
     if(M.cpCd>0) M.cpCd-=dt;
     if(seat.local && (touchCPunch || eat('f'))){ touchCPunch=false; carrierPunch(me, M); }
+    else if(!seat.local && IN.cp) carrierPunch(me, M);             // the guest's tap with the ball
     else if(M.cpBuf && !(M.cpCd>0)){ if(now-M.cpBuf<900) carrierPunch(me, M); else M.cpBuf=0; }   // (a tap in the cooldown waits for it)
     // a swipe on a touch screen while carrying: spin out of it along the swipe
-    if(seat.local && touchSpinDir){
-      var sd=touchSpinDir; touchSpinDir=null;
+    var sdIn = seat.local ? touchSpinDir : (IN.sd ? {x:IN.sd[0], y:IN.sd[1]} : null);   // (the guest's swipe comes over the wire)
+    if(sdIn){
+      var sd=sdIn; if(seat.local) touchSpinDir=null;
       if(me===G.carrier && M.power>=JUKE_COST && M.jukeCd<=0){
         M.power-=JUKE_COST; M.jukeCd=0.95; M.jukeUntil=now+JUKE_MS;
         me.spin=1; me.iFrames=Math.max(me.iFrames||0,0.32); me.wrapped=0;
         me.vx=sd.x*BASE_SPD*2.4*(me.agi||1); me.vy=sd.y*BASE_SPD*2.4*(me.agi||1);
         burst(me.x,me.y,'#7fd8ff');
-        say('SPIN!',320);
+        say('SPIN!',320,seat.side);
       }
     }
     if(IN.b1 && M.power>=JUKE_COST && M.jukeCd<=0){
@@ -3571,6 +3574,19 @@ function driveHuman(seat, IN, dt, now){
     me.vx=nvx; me.vy=nvy;
   }
   else { me.vx*=0.90; me.vy*=0.90; }
+}
+
+// particles
+function fxAge(dt){
+  for(var f=G.fx.length-1;f>=0;f--){
+    var e=G.fx[f]; e.life-=dt;
+    if(e.ringed){ e.r+=dt*130; }
+    else if(e.emit){ if(e.p) emitTick(e,dt); }
+    else if(e.shock||e.flash||e.streak||e.gh||e.dome||e.bolt||e.laser||e.crack||e.pow||e.dmg){ /* on a timer */ }
+    else { e.x+=e.vx*dt; e.y+=e.vy*dt; e.vx*=0.93; e.vy*=0.93;
+           if(e.grav){ e.vy+=e.grav*dt; } }
+    if(e.life<=0) G.fx.splice(f,1);
+  }
 }
 
 function step(dt){
@@ -4018,16 +4034,7 @@ function step(dt){
     pp3.x=Math.max(6,Math.min(FW-6,pp3.x));
   }
 
-  // particles
-  for(var f=G.fx.length-1;f>=0;f--){
-    var e=G.fx[f]; e.life-=dt;
-    if(e.ringed){ e.r+=dt*130; }
-    else if(e.emit){ if(e.p) emitTick(e,dt); }
-    else if(e.shock||e.flash||e.streak||e.gh||e.dome||e.bolt||e.laser||e.crack||e.pow||e.dmg){ /* on a timer */ }
-    else { e.x+=e.vx*dt; e.y+=e.vy*dt; e.vx*=0.93; e.vy*=0.93;
-           if(e.grav){ e.vy+=e.grav*dt; } }
-    if(e.life<=0) G.fx.splice(f,1);
-  }
+  fxAge(dt);
 
   cpuQB(now);
   cpuAbilities(dt,now);
@@ -4502,7 +4509,14 @@ function hint(text,ms){
   if(hintTimer) clearTimeout(hintTimer);
   hintTimer=setTimeout(function(){ el.classList.remove('on'); }, ms||900);
 }
-function say(text,ms){
+// only: 'H' the host alone sees it, 'A' the guest alone (a callout about a
+// move one of them made). Online, everything else the host shows goes to the
+// guest's screen too.
+function say(text,ms,only){
+  if(NET.on && NET.host){
+    if(only!=='H') netEv(['say',String(text),ms||700]);
+    if(only==='A') return;
+  }
   if(!SAY_OK.test(String(text))) return;
   elCall.textContent=text; elCall.style.transition=''; elCall.style.opacity='1';
   if(callTimer) clearTimeout(callTimer);
@@ -5955,6 +5969,7 @@ setTimeout(function(){
 
 function showCard(p, action, side){
   if(!p) return;
+  if(NET.on && NET.host && G.players.indexOf(p)>=0) netEv(['card',G.players.indexOf(p),action||'',side||'']);
   if(!cardEl) cardEl=document.getElementById('card');
   if(!cardEl) return;
   cardEl.classList.remove('side','sL','sR');
@@ -7106,7 +7121,7 @@ function tryStartPlay(force){
 // Host only, while one coach is still staring at the sheet.
 function waitTick(){
   if(!G.hostPick) return;
-  say('WAITING ON THE OTHER COACH', 350);
+  say('WAITING ON THE OTHER COACH', 350, 'H');
   if(performance.now() - G.pickAt > 12000) tryStartPlay(true);
 }
 function showOver(){
@@ -7443,6 +7458,7 @@ function netTeardown(){
   try{ if(NET.conn) NET.conn.close(); }catch(e){}
   try{ if(NET.peer) NET.peer.destroy(); }catch(e){}
   NET.on=false; NET.conn=null; NET.peer=null; NET.remoteIn=null; NET.world=null;
+  NET.st=null; NET.lastSt=null; NET.clk=null; NET.ev=[]; NET.evIn=[]; NET.fxIn=[]; NET.first=false; NET.chunk=null;
 }
 
 function netDropped(){
@@ -7559,12 +7575,14 @@ function hostOnline(tries){
       if(d.k1) r.k1=1;
       if(d.k2) r.k2=1;
       if(d.k3) r.k3=1;
+      if(d.cp) r.cp=1;
+      if(d.sd) r.sd=d.sd;
     });
     c.on('open',function(){
-      NET.on=true;
+      NET.on=true; NET.lastSt=null; NET.ev=[];
       elOv.classList.remove('show');
       G=freshGame(); G.phase='playcall';
-      say('THEY ARE IN - YOU ARE THE HEROES',2000);
+      say('THEY ARE IN - YOU ARE THE HEROES',2000,'H');
     });
     c.on('close',netDropped);
     c.on('error',netDropped);
@@ -7589,7 +7607,7 @@ function joinOnline(code){
   });
 
   p.on('open',function(){
-    var c=p.connect(peerId(code),{serialization:'json'});
+    var c=p.connect(peerId(code),{serialization:'json', reliable:true});   // in order: each packet is the changes since the last
     if(!c){ netSay('Could not reach that room.'); return; }
     NET.conn=c;
     c.on('open',function(){
@@ -7600,7 +7618,7 @@ function joinOnline(code){
       PICK_THEN='guest';
       showHeroPick();
     });
-    c.on('data',function(d){ if(d&&d.t==='w') NET.world=d; });
+    c.on('data',function(d){ if(!d) return; if(d.t==='w2') netTake(d); else if(d.t==='wc') netChunk(d); });
     c.on('close',netDropped);
     c.on('error',netDropped);
     setTimeout(function(){
@@ -7628,11 +7646,14 @@ function publishInput(){
   var tk=tapTarget();                       // 4/5/6/7 throw straight to a man
   if(tk>=0) netSend({t:'tgt', i:tk});
   if(tapHike()) netSend({t:'hike'});
+  var cp=touchCPunch||eat('f'); touchCPunch=false;       // a tap with the ball
+  var sd=touchSpinDir; touchSpinDir=null;                  // a swipe with the ball
   netSend({t:'in',
     x:+a.x.toFixed(2), y:+a.y.toFixed(2),
     sp:wantSprint()?1:0,
     b1:tapJuke()?1:0, b2:tapMove()?1:0, b3:tapQ()?1:0, sw:tapSwitch()?1:0,
-    k1:tapAb1()?1:0, k2:tapAb2()?1:0, k3:tapAb3()?1:0
+    k1:tapAb1()?1:0, k2:tapAb2()?1:0, k3:tapAb3()?1:0,
+    cp:cp?1:0, sd:sd?[+sd.x.toFixed(2),+sd.y.toFixed(2)]:0
   });
 }
 
@@ -7670,37 +7691,208 @@ function pickRemoteMan(cycle){
   return pool[0];
 }
 
+// ---- the game over the wire -------------------------------------------------
+// The host runs the game and the guest draws it. Everything on G and on every
+// player goes across, whatever it is, so a new feature shows up on the
+// guest's screen without anyone having to add it here; only drawing caches
+// (anything starting with _) and the few things each screen keeps for itself
+// stay home. Each packet carries only what changed since the one before, with
+// a whole copy every second.
+var NET_MS=33;                                   // thirty a second, in real time
+var NET_GLOCAL={mouse:1, fx:1, lockMan:1, lockT:1, showingStats:1, hostPick:1, pickAt:1,
+  audibleOpen:1, artHold:1, artUntil:1, kickClick:1, tchase:1, tchaseEnd:1, touchDive:1,
+  cardQ:1, tdCard:1, swHint:1, controlled:1, controlled2:1, players:1};
+// the things the guest slides smoothly between packets, besides the players
+var NET_LERP=[['ball',['x','y']], ['thrown',['x','y','h']], ['kick',['x','y','h']], ['loose',['h']]];
+function netEv(e){ if(!NET.on || !NET.host) return; (NET.ev||(NET.ev=[])).push(e); if(NET.ev.length>40) NET.ev.shift(); }
+// a copy that survives JSON: a player becomes his index, numbers are rounded
+function netPlain(v, PL, depth){
+  if(v===null) return null;
+  var t=typeof v;
+  if(t==='number') return isFinite(v) ? Math.round(v*100)/100 : 0;
+  if(t==='string' || t==='boolean') return v;
+  if(t!=='object') return undefined;
+  var pi=PL.indexOf(v); if(pi>=0) return {$p:pi};
+  if(depth>5) return undefined;
+  if(Array.isArray(v)){ var a=[]; for(var i=0;i<v.length;i++){ var x=netPlain(v[i],PL,depth+1); a.push(x===undefined?null:x); } return a; }
+  if(Object.getPrototypeOf(v)!==Object.prototype) return undefined;   // images, canvases
+  var o={}; for(var k in v){ if(k.charAt(0)==='_') continue; var y=netPlain(v[k],PL,depth+1); if(y!==undefined) o[k]=y; }
+  return o;
+}
+function netState(){
+  var PL=G.players, ps=[], g={}, gs={}, i, k;
+  for(i=0;i<PL.length;i++){
+    var p=PL[i], o={};
+    for(k in p){ if(k.charAt(0)==='_') continue; var v=netPlain(p[k],PL,1); if(v!==undefined) o[k]=v; }
+    ps.push(o);
+  }
+  for(k in G){
+    if(NET_GLOCAL[k] || k.charAt(0)==='_') continue;
+    var v2=netPlain(G[k],PL,1); if(v2===undefined) continue;
+    g[k]=v2; gs[k]=JSON.stringify(v2);
+  }
+  g.$me=PL.indexOf(G.controlled2); g.$host=PL.indexOf(G.controlled);   // who each of them is driving
+  gs.$me=String(g.$me); gs.$host=String(g.$host);
+  return {ps:ps, g:g, gs:gs};
+}
+function netDelta(cur, last){
+  var d={g:{}, gx:[], p:{}, px:{}}, k, i;
+  for(k in cur.gs) if(cur.gs[k]!==last.gs[k]) d.g[k]=cur.g[k];
+  for(k in last.gs) if(!(k in cur.gs)) d.gx.push(k);
+  for(i=0;i<cur.ps.length;i++){
+    var a=cur.ps[i], b=last.ps[i], ch=null, rm=null;
+    for(k in a){
+      var va=a[k], vb=b[k];
+      if(va===vb) continue;
+      if(va && vb && typeof va==='object' && typeof vb==='object' && JSON.stringify(va)===JSON.stringify(vb)) continue;
+      (ch||(ch={}))[k]=va;
+    }
+    for(k in b) if(!(k in a)) (rm||(rm=[])).push(k);
+    if(ch) d.p[i]=ch;
+    if(rm) d.px[i]=rm;
+  }
+  return d;
+}
 // host: push the world out
-function publishWorld(dt){
+function publishWorld(){
   if(!NET.on||!NET.host) return;
   if(!NET.conn||!NET.conn.open) return;
-  NET.acc+=dt; if(NET.acc<NET.rate) return; NET.acc=0;
-  var ps=[];
-  for(var i=0;i<G.players.length;i++){
-    var q=G.players[i];
-    ps.push([Math.round(q.x),Math.round(q.y),q.face,+q.run.toFixed(2),
-             q.team==='H'?1:0,q.num,q.role,q.name,
-             Math.round(q.hp),+q.stun.toFixed(2),+q.down.toFixed(2),
-             +q.z.toFixed(2),+q.arm.toFixed(2),+q.spin.toFixed(2),
-             +q.lean.toFixed(2),+q.throwArm.toFixed(2),
-             Math.round(q.vx),Math.round(q.vy),
-             q===G.carrier?1:0, q===G.controlled?1:0, q===G.controlled2?1:0,
-             +(q.stance||0).toFixed(2), q.skin, q.hero?1:0, +(q.cel||0).toFixed(2)]);
+  var now=performance.now();
+  if(now<(NET.pubAt||0)) return;
+  NET.pubAt=Math.max((NET.pubAt||0)+NET_MS, now-NET_MS);   // an even thirty a second, however the frames fall
+  G.netAb=(function(){                                 // what the guest's move buttons show
+    var k=kitFor(G.controlled2), o=[0,0,0];
+    for(var i=0;i<3;i++) o[i]=k[i]?abLeft(G.controlled2,k[i]):0;
+    return o;
+  })();
+  var cur=netState(), last=NET.lastSt;
+  var msg={t:'w2', now:Math.round(now)};
+  if(!last || now-(NET.keyAt||0)>1000 || last.ps.length!==cur.ps.length){ msg.k=1; msg.g=cur.g; msg.ps=cur.ps; NET.keyAt=now; }
+  else msg.d=netDelta(cur,last);
+  NET.lastSt=cur;
+  // new effects go once; the guest runs them out itself
+  var fx=[];
+  for(var i=0;i<G.fx.length;i++){ var e=G.fx[i]; if(e._sent) continue; e._sent=1; var pe=netPlain(e,G.players,1); if(pe) fx.push(pe); }
+  if(fx.length) msg.fx=fx;
+  if(NET.ev && NET.ev.length){ msg.ev=NET.ev; NET.ev=[]; }
+  // PeerJS refuses a message of 16 KB or more (and drops the room over it),
+  // and a whole copy can run past that: send a big one in pieces
+  var str=JSON.stringify(msg);
+  try{
+    if(str.length<6000) NET.conn.send(msg);
+    else {
+      var id=(NET.chunkId=(NET.chunkId||0)+1), n=Math.ceil(str.length/5000);
+      for(var c=0;c<n;c++) NET.conn.send({t:'wc', id:id, i:c, n:n, s:str.substr(c*5000,5000)});
+    }
+  }catch(e){}
+}
+// guest: put a packet that came in pieces back together
+function netChunk(d){
+  var c=NET.chunk;
+  if(!c || c.id!==d.id) c=NET.chunk={id:d.id, parts:[], got:0};
+  if(c.parts[d.i]===undefined){ c.parts[d.i]=d.s; c.got++; }
+  if(c.got===d.n){ NET.chunk=null; try{ netTake(JSON.parse(c.parts.join(''))); }catch(e){} }
+}
+
+// guest: its clock runs on the host's, so every "until" the host sends means
+// the same moment on both screens
+var _realNow=performance.now.bind(performance);
+function guestClock(hostNow){
+  var est=hostNow-_realNow();
+  NET.clk=(NET.clk===null || NET.clk===undefined) ? est : Math.max(est, NET.clk-2);   // the quickest packet is the truest
+  if(!guestClock.on){
+    guestClock.on=true;
+    performance.now=function(){ return _realNow()+((NET.on && !NET.host && NET.clk!=null) ? NET.clk : 0); };
   }
-  try{ NET.conn.send({
-    t:'w', pn:G.playNo, p:ps,
-    b:G.ball?[Math.round(G.ball.x),Math.round(G.ball.y),G.ball.held?1:0]:null,
-    ph:G.phase, lo:Math.round(G.los), dn:G.down, tg:Math.round(G.toGo),
-    sh:G.scoreH, sa:G.scoreA, ck:Math.round(G.clock), pc:Math.round(G.playClock),
-    of:G.offense, cr:G.clockRunning?1:0,
-    p2:Math.round(G.M2.power), s2:Math.round(G.M2.stam),
-    h2:+G.M2.hitCd.toFixed(2), m2:+G.M2.moveCd.toFixed(2),
-    ab:(function(){
-      var k=kitFor(G.controlled2), o=[0,0,0];
-      for(var i=0;i<3;i++) o[i]=k[i]?abLeft(G.controlled2,k[i]):0;
-      return o;
-    })()
-  }); }catch(e){}
+}
+function netTake(d){
+  guestClock(d.now);
+  if(d.k){ if(!NET.st) NET.first=true; NET.st={g:d.g, ps:d.ps}; }
+  else if(NET.st && d.d){
+    var st=NET.st, dd=d.d, k;
+    for(k in dd.g) st.g[k]=dd.g[k];
+    for(var i=0;i<dd.gx.length;i++) delete st.g[dd.gx[i]];
+    for(var pi in dd.p){ var o=st.ps[pi]||(st.ps[pi]={}), ch=dd.p[pi]; for(k in ch) o[k]=ch[k]; }
+    for(var pj in dd.px){ var o2=st.ps[pj]; if(o2) for(var r=0;r<dd.px[pj].length;r++) delete o2[dd.px[pj][r]]; }
+  } else return;                                    // changes to nothing yet: wait for the next whole copy
+  if(d.fx) NET.fxIn=(NET.fxIn||[]).concat(d.fx);
+  if(d.ev) NET.evIn=(NET.evIn||[]).concat(d.ev);
+  var t=_realNow();
+  if(NET.stAt) NET.gap=(NET.gap||NET_MS)+((t-NET.stAt)-(NET.gap||NET_MS))*0.2;
+  NET.stAt=t; NET.stNew=true;
+}
+// a callout said from the host's side, turned round for the guest
+var NET_FLIP=[['YOUR BALL','THEIR BALL'], ['PICKED OFF — RUN IT BACK!','INTERCEPTED!'], ['YOU SCOOP IT — RUN!','THEY SCOOP IT']];
+function guestWords(t){
+  t=String(t);
+  for(var i=0;i<NET_FLIP.length;i++){
+    var a=NET_FLIP[i][0], b=NET_FLIP[i][1];
+    if(t.indexOf(a)>=0) return t.replace(a,b);
+    if(t.indexOf(b)>=0) return t.replace(b,a);
+  }
+  return t;
+}
+function netRevive(){
+  var st=NET.st, PL=G.players, n=st.ps.length, i, k;
+  PL.length=n;
+  for(i=0;i<n;i++) if(!PL[i]) PL[i]={};
+  function rv(v){
+    if(v===null || typeof v!=='object') return v;
+    if(v.$p!==undefined) return PL[v.$p]||null;
+    if(Array.isArray(v)) return v.map(rv);
+    var o={}; for(var kk in v) o[kk]=rv(v[kk]); return o;
+  }
+  for(i=0;i<n;i++){
+    var p=PL[i], src=st.ps[i], ox=p.x, oy=p.y, oz=p.z||0, had=(ox!==undefined);
+    for(k in p) if(k.charAt(0)!=='_' && !(k in src)) delete p[k];
+    for(k in src) p[k]=rv(src[k]);
+    // slide from where he is drawn now to where the host has him
+    var nx=p.x, ny=p.y, nz=p.z||0;
+    if(!had || Math.abs(nx-ox)+Math.abs(ny-oy)>90){ ox=nx; oy=ny; oz=nz; }
+    p._lf=[ox,oy,oz]; p._lt=[nx,ny,nz]; p.x=ox; p.y=oy; p.z=oz;
+  }
+  var keep={};
+  NET_LERP.forEach(function(L){ if(G[L[0]]) keep[L[0]]=G[L[0]]; });
+  for(k in st.g){ if(k.charAt(0)==='$' || NET_GLOCAL[k]) continue; G[k]=rv(st.g[k]); }
+  G.controlled=PL[st.g.$me]||null;                 // the man this guest drives
+  G.controlled2=PL[st.g.$host]||null;
+  NET_LERP.forEach(function(L){
+    var o=G[L[0]], old=keep[L[0]]; if(!o || typeof o!=='object') return;
+    var f=[], t=[];
+    L[1].forEach(function(key){
+      var nv=o[key]; if(typeof nv!=='number'){ f.push(null); t.push(null); return; }
+      var ov=(old && typeof old[key]==='number') ? old[key] : nv;
+      if(Math.abs(nv-ov)>90) ov=nv;
+      f.push(ov); t.push(nv); o[key]=ov;
+    });
+    o._lf=f; o._lt=t;
+  });
+  NET.lerpAt=_realNow();
+  // effects start on this screen and run out here
+  var fx=NET.fxIn||[]; NET.fxIn=[];
+  for(i=0;i<fx.length;i++) G.fx.push(rv(fx[i]));
+  if(G.fx.length>400) G.fx.splice(0,G.fx.length-400);
+  // the moments: callouts, cards, super banners
+  var ev=NET.evIn||[]; NET.evIn=[];
+  for(i=0;i<ev.length;i++){
+    var e=ev[i];
+    if(e[0]==='say') say(guestWords(e[1]), e[2]);
+    else if(e[0]==='card'){ if(PL[e[1]]) showCard(PL[e[1]], e[2], e[3]||null); }
+    else if(e[0]==='super'){ if(PL[e[1]]) superMoment(PL[e[1]], e[2]); }
+  }
+}
+// between packets: everyone slides on toward where the host last had him
+function netSmooth(){
+  var k=Math.min(1, (_realNow()-(NET.lerpAt||0))/Math.max(16, Math.min(120, NET.gap||NET_MS)));
+  var PL=G.players;
+  for(var i=0;i<PL.length;i++){
+    var p=PL[i], a=p._lf, b=p._lt; if(!b) continue;
+    p.x=a[0]+(b[0]-a[0])*k; p.y=a[1]+(b[1]-a[1])*k; p.z=a[2]+(b[2]-a[2])*k;
+  }
+  NET_LERP.forEach(function(L){
+    var o=G[L[0]]; if(!o || !o._lt) return;
+    for(var j=0;j<L[1].length;j++) if(o._lt[j]!==null) o[L[1][j]]=o._lf[j]+(o._lt[j]-o._lf[j])*k;
+  });
 }
 
 // The guest gets its own play sheet, driven off the phase the host reports.
@@ -7716,33 +7908,12 @@ function guestSheet(){
   }
 }
 
-// guest: rebuild a renderable world out of what arrived
+// guest: bring the latest packet in, then slide everyone along
 function consumeWorld(){
-  var w=NET.world; if(!w||!w.p) return false;
-  if(!G) G=freshGame();
-  G.players.length=0; G.carrier=null; G.controlled=null;
-  for(var i=0;i<w.p.length;i++){
-    var a=w.p[i];
-    var q={x:a[0],y:a[1],face:a[2],run:a[3],team:a[4]?'H':'A',num:a[5],role:a[6],
-           name:a[7],hp:a[8],stun:a[9],down:a[10],z:a[11],arm:a[12],spin:a[13],
-           lean:a[14],throwArm:a[15],vx:a[16],vy:a[17],
-           phase:0,burst:0,wrapped:0,iFrames:0,
-           stance:a[21]||0, skin:a[22]||'#c98f63', hero:!!a[23], cel:a[24]||0,
-           spd:1,pwr:1,agi:1,engaged:0,shedAt:2,lane:0,cover:null,
-           pos:'',assign:null,blockIdx:0,aiCd:0,route:null};
-    G.players.push(q);
-    if(a[18]) G.carrier=q;
-    if(a[20]) G.controlled=q;   // highlight the man this guest is driving
-  }
-  if(w.b) G.ball={x:w.b[0],y:w.b[1],held:!!w.b[2]};
-  G.phase=w.ph; G.los=w.lo; G.down=w.dn; G.toGo=w.tg;
-  G.scoreH=w.sh; G.scoreA=w.sa; G.clock=w.ck; G.playClock=w.pc;
-  G.offense=w.of; G.clockRunning=!!w.cr; G.playNo=w.pn|0;
-  G.M2.power=w.p2===undefined?100:w.p2;
-  G.M2.stam=w.s2===undefined?100:w.s2;
-  G.M2.hitCd=w.h2||0; G.M2.moveCd=w.m2||0;
-  G.netAb=w.ab||[0,0,0];
-  G.thrown=null; G.loose=null; G.windup=null; G.fx=G.fx||[];
+  if(!NET.st) return false;
+  if(!G || NET.first){ NET.first=false; G=freshGame(); }   // nothing left over from a game played alone
+  if(NET.stNew){ NET.stNew=false; netRevive(); }
+  netSmooth();
   return true;
 }
 
@@ -7756,8 +7927,8 @@ function frame(ts){
     // guest: render only, no simulation
     try{
       publishInput();
-      if(consumeWorld() && G.players.length) draw();
-      if(G) hud();
+      if(consumeWorld() && G.players.length){ fxAge(dt); draw(); }
+      if(G){ hud(); superSpotTick(); }
       guestSheet();
     }catch(err){
       if(!frame._gerr){ frame._gerr=true; console.error('guest frame error:',err); }
@@ -7787,7 +7958,7 @@ function frame(ts){
       if(G.players.length||G.kick) draw();
       else { ctx.setTransform(dpr,0,0,dpr,0,0); ctx.fillStyle='#0c1114'; ctx.fillRect(0,0,VW,VH); }
       hud();
-      publishWorld(dt);
+      publishWorld();
     }catch(err){
       if(!frame._logged){ frame._logged=true; console.error('frame error:',err); }
       ctx.restore(); ctx.setTransform(dpr,0,0,dpr,0,0);
