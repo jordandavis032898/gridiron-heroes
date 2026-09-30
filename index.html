@@ -490,6 +490,14 @@ var stage=document.getElementById('stage');
 // on-screen stick, hold-to-aim passing, swipe tackles, the ability buttons
 // floating on the right, and a camera framed for a small screen.
 var TOUCH_UI=!!(window.matchMedia && window.matchMedia('(pointer: coarse)').matches);
+// A read-only peek at what the game is doing, for the iPhone app's test reports.
+window.__hm=function(){
+  if(!G) return 'no game';
+  var c=G.carrier, m=G.controlled;
+  return G.phase+' off:'+G.offense+' me:'+(m?(m.pos||m.role):'-')+(m&&m.stun>0?' STUN':'')+(m&&m.down>0?' DOWN':'')+
+    ' carrier:'+(c?(c.role+' '+(m?(Math.hypot(c.x-m.x,c.y-m.y)/YD).toFixed(1)+'yd':'')):'-')+
+    ' chase:'+(G.tchase>0?1:0)+' dive:'+(G.touchDive?1:0)+' diveCd:'+(G.diveCd||0).toFixed(2);
+};
 if(TOUCH_UI) document.documentElement.classList.add('touchui');
 var elClock=document.getElementById('clock'), elDD=document.getElementById('dd'), elPoss=document.getElementById('poss');
 var elH=document.getElementById('scH'), elA=document.getElementById('scA'), elNmH=document.getElementById('nmH');
@@ -1050,7 +1058,7 @@ function mk(team,role,x,y,info){
 
 function setupPlay(playId){
   G.playNo=(G.playNo|0)+1;
-  G.aaArmed=null; G.puntK=null; G.tchase=0;
+  G.aaArmed=null; G.puntK=null; G.tchase=0; G.tchaseEnd=0;
   G.controlled2=null;
   openPlay(playId);
   G.play=playId; G.players=[]; G.thrown=null; G.fx=[]; G.snapT=G.gt;
@@ -3020,7 +3028,10 @@ function driveHuman(seat, IN, dt, now){
   // or he is permanently behind his own team-mates
   var base = onO ? BASE_SPD : DEF_SPD;
   var mult=(sprinting?SPRINT:1)*(me.burst>0?1.7:1)*me.spd;
-  if(!diving && seat.local) G.touchDive=false;       // a dive that is over no longer homes
+  if(!diving && seat.local){                          // a dive that is over no longer homes...
+    if(G.touchDive && (G.tchaseEnd||0)>now && !onO) G.tchase=G.tchaseEnd;   // ...but a missed one keeps charging for the rest of the swipe
+    G.touchDive=false;
+  }
   // A slide on a touch screen from further off: he charges the ball carrier,
   // leading him, and leaves his feet once he is close enough to get there.
   if(seat.local && G.tchase && !diving){
@@ -3032,8 +3043,8 @@ function driveHuman(seat, IN, dt, now){
         G.tchase=0;
         if(swipeTackle(lx2,ly2,'H')!==false){ G.touchDive=true; G.diveUntil=now+640; }
       } else {
-        var cs=DEF_SPD*1.75*(me.spd||1);
-        me.vx+=(lx2/lm2*cs-me.vx)*0.3; me.vy+=(ly2/lm2*cs-me.vy)*0.3;
+        var cs=DEF_SPD*2.05*(me.spd||1);
+        me.vx+=(lx2/lm2*cs-me.vx)*0.45; me.vy+=(ly2/lm2*cs-me.vy)*0.45;
         if(Math.random()<dt*18) speedLines(me,'rgba(255,255,255,.55)');
         return;
       }
@@ -3300,6 +3311,7 @@ function step(dt){
       if(Math.abs(ru.x-blk.x) > BLOCK_R*1.8) continue;
       ru.engaged=(ru.engaged||0)+dt;
       var youRu=(ru===G.controlled||ru===G.controlled2);
+      if(youRu && TOUCH_UI && (G.tchase>0 || G.touchDive)) continue;   // charging on a swipe: he slips the block
       if(ru.engaged > (youRu ? Math.min(ru.shedAt||2.5, 1.0) : (ru.shedAt||2.5))) continue;   // he has beaten the block (you get off it in a second)
       ru.eBlk=blk;
 
@@ -3380,6 +3392,7 @@ function step(dt){
       var dfn=G.players[cj];
       if(dfn.team===G.offense || dfn.stun>0 || dfn.down>0) continue;
       if(dfn.eBlk===ol && (dfn.engaged||0)<=(dfn.shedAt||2.5)) continue;   // the block handles him
+      if(TOUCH_UI && dfn===G.controlled && (G.tchase>0 || G.touchDive)) continue;   // charging on a swipe: he slips round bodies
       var cx=dfn.x-ol.x, cy=dfn.y-ol.y, cd=Math.hypot(cx,cy);
       if(cd>=LINE_COL || cd<0.01) continue;
       var nx=cx/cd, ny=cy/cd;
@@ -3644,6 +3657,24 @@ function step(dt){
         }
         grabbers++; lastT=t2;
         continue;
+      }
+      // A touch-screen swipe tackle: when the charge or the dive gets to him,
+      // he goes down right there. Wrapping him up left it to chance, and a
+      // juke or a spin shook it off, which read as the swipe doing nothing.
+      if(TOUCH_UI && t2===G.controlled && !(t2.stun>0) && ((G.touchDive && tnow<G.diveUntil) || G.tchase>0)){
+        var ttd=Math.hypot(t2.x-car.x,t2.y-car.y);
+        if(ttd < TACKLE_R+14){
+          car.hp=0; car.down=1.5; car.vz=Math.max(car.vz||0,2.8); car.z=Math.max(car.z,0.05);
+          car.vx*=0.2; car.vy*=0.2; t2.vx=car.vx; t2.vy=car.vy; t2.arm=0.5; t2.down=0.6;
+          flash(car.x,car.y-16,'rgba(255,255,255,1)',34);
+          shock(car.x,car.y,'rgba(255,210,63,.9)',4,36,0.3);
+          spokes(car.x,car.y-16,'rgba(255,210,63,.9)',8,8,32);
+          G.shake=REDUCED?0:12; G.tchase=0; G.touchDive=false;
+          credit(t2, car.role==='QB' ? 'SACK' : 'TACKLE');
+          if(G.cur) G.cur.tackler=t2;
+          if(car.role==='QB' && (car.x-G.los)*dir()<0) G.wasSack=true;
+          endPlay(car.x,'TACKLED'); return;
+        }
       }
       if(jking || t2.stun>0 || t2.down>0 || t2.tackleCd>0) continue;
 
@@ -6478,8 +6509,8 @@ if(TOUCH_UI){
             else {
               var far=tc && tm ? Math.hypot(tc.x-tm.x,tc.y-tm.y) : 0;
               if(tc && tm && tc.team!==tm.team && far>3.2*YD){
-                G.tchase=performance.now()+1700;           // too far to dive: charge him, dive when close
-              } else if(swipeTackle(dx,dy,'H')!==false){ G.touchDive=true; G.diveUntil=performance.now()+640; }
+                G.tchase=performance.now()+2200; G.tchaseEnd=G.tchase;   // too far to dive: charge him, dive when close
+              } else if(swipeTackle(dx,dy,'H')!==false){ G.touchDive=true; G.diveUntil=performance.now()+640; G.tchaseEnd=performance.now()+2200; }
             }
           }
           FT.done=true;
