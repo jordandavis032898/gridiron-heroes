@@ -420,7 +420,7 @@ subs.append(('''  ctx.setTransform(dpr,0,0,dpr,0,0);
 subs.append(('''  // depth sort so players nearer the bottom overlap the ones behind them
   var order=G.players.slice().sort(function(a,b){ return a.y-b.y; });
   for(var i=0;i<order.length;i++) drawGuy(order[i]);
-''', '''  if(P3){ ctx.restore(); ctx=realCtx3; SKIP_FIELD=false; blit3D(P3); drawGoalposts(); ctx.save(); }
+''', '''  if(P3){ ctx.restore(); ctx=realCtx3; SKIP_FIELD=false; blit3D(P3); drawGoalposts(); ctx.save(); drawCracks(P3); }
 
   // depth sort so players nearer the bottom overlap the ones behind them
   var order=G.players.concat(P3?sidelineGuys(P3):[]).sort(function(a,b){ return a.y-b.y; });

@@ -1161,7 +1161,7 @@ function fireAbility(seat, IN, slot){
       var dd=Math.hypot(q.x-me.x,q.y-me.y);
       if(dd>rad) continue;
       n++; q.stun=stun; q.wrapped=0; q.down=Math.max(q.down,0.8);
-      q.vx=(q.x-me.x)/(dd||1)*push; q.vy=(q.y-me.y)/(dd||1)*push;
+      launch(q, me.x, me.y, push, 4.0+Math.random()*1.4);
     }
     return n;
   }
@@ -1200,6 +1200,8 @@ function fireAbility(seat, IN, slot){
                r:52,life:0.75,max:0.75});
     shock(me.x,me.y,'rgba(255,255,255,.95)',6,58,0.34);
     shock(me.x,me.y,'rgba(127,216,255,.6)',6,48,0.55);
+    spokes(me.x,me.y-10,'rgba(127,216,255,.85)',12,20,58);
+    emit(me,'swirl',1.2,'#7fd8ff');
     dust(me.x,me.y,14,1.3); G.shake=REDUCED?0:18;
     tell(hit?'FORCEFIELD!':'FORCEFIELD',800);
   }
@@ -1215,6 +1217,7 @@ function fireAbility(seat, IN, slot){
              me.x-fwd.x*(26+dk*8), me.y-fwd.y*(26+dk*8)-12-dk*4,
              'rgba(255,140,43,.65)',1.7,0.26);
     }
+    emit(me,'flame',1.4,'#ff8c2b');
     tell('SUPER DASH!',600);
   }
   else if(id==='stiffarm'){
@@ -1222,7 +1225,8 @@ function fireAbility(seat, IN, slot){
     if(!v){ tell('NOBODY IN REACH',500); return; }   // nothing to put down, no charge
     me.wrapped=0;
     v.stun=1.3; v.down=Math.max(v.down,1.0); v.wrapped=0;
-    v.vx=(v.x-me.x)*5.5; v.vy=(v.y-me.y)*5.5;
+    launch(v, me.x, me.y, 230, 5.4);
+    spokes(v.x,v.y-16,'rgba(255,210,63,.9)',8,8,30);
     me.arm=0.6; G.shake=REDUCED?0:10;
     flash(v.x,v.y-14,'rgba(255,255,255,.95)',24);
     shock(v.x,v.y,'rgba(255,210,63,.9)',3,26,0.26);
@@ -1231,6 +1235,7 @@ function fireAbility(seat, IN, slot){
   }
   else if(id==='teleport'){
     var hop=62;
+    portal(me.x,me.y,'#29d3e6');
     for(var t=0;t<9;t++){
       G.fx.push({x:me.x+fwd.x*hop*(t/9), y:me.y+fwd.y*hop*(t/9)-8,
                  vx:0,vy:-10,life:0.36,max:0.36,r:3.4,c:'#7fd8ff'});
@@ -1240,6 +1245,7 @@ function fireAbility(seat, IN, slot){
     me.iFrames=Math.max(me.iFrames,0.5); me.phase=0.6; me.wrapped=0;
     flash(me.x,me.y-16,'rgba(127,216,255,.95)',30);
     shock(me.x,me.y,'rgba(127,216,255,.9)',2,30,0.30);
+    portal(me.x,me.y,'#29d3e6');
     for(var tg=0;tg<4;tg++){
       G.fx.push({gh:true,x:me.x-fwd.x*hop*(tg/4),y:me.y-fwd.y*hop*(tg/4),
                  face:me.face,c:'#7fd8ff',life:0.26,max:0.26});
@@ -1255,6 +1261,7 @@ function fireAbility(seat, IN, slot){
     shock(me.x,me.y,'rgba(255,255,255,.9)',5,50,0.30);
     shock(me.x,me.y,'rgba(255,210,63,.8)',5,42,0.46);
     dust(me.x,me.y,18,1.5);
+    crack(me.x+(me.face||1)*10,me.y,40,null);
     tell(n2?'PANCAKED!':'SUPER BLOCK',700);
     if(n2) credit(me,'SUPER BLOCK');
   }
@@ -1262,7 +1269,8 @@ function fireAbility(seat, IN, slot){
     var v2=foeNear(40);
     if(!v2) return;
     v2.stun=1.7; v2.down=Math.max(v2.down,1.3); v2.wrapped=0;
-    v2.vx=(v2.x-me.x)*6.5; v2.vy=(v2.y-me.y)*6.5;
+    launch(v2, me.x, me.y, 200, 6.2); v2.spin=1;
+    spokes(v2.x,v2.y-18,'rgba(255,255,255,.9)',7,8,28);
     me.arm=0.7; G.shake=REDUCED?0:14;
     var swy=me.y-20;
     streak(me.x-(me.face||1)*6,swy, v2.x+(me.face||1)*16,swy-2,'rgba(255,255,255,.85)',2.6,0.20);
@@ -1278,6 +1286,7 @@ function fireAbility(seat, IN, slot){
     shock(me.x,me.y,'rgba(79,209,139,.9)',4,32,0.34);
     flash(me.x,me.y-16,'rgba(79,209,139,.8)',26);
     dust(me.x,me.y,8,0.9);
+    emit(me,'bolt',2.6,'rgba(120,255,170,.95)');
     tell('SUPER SPEED!',700);
   }
   else if(id==='spin'){
@@ -1291,6 +1300,7 @@ function fireAbility(seat, IN, slot){
     }
     shock(me.x,me.y,'rgba(127,216,255,.85)',4,26,0.28);
     dust(me.x,me.y,6,0.8);
+    emit(me,'swirl',0.8,'#7fd8ff');
     tell('SPIN MOVE!',600);
   }
 
@@ -1303,6 +1313,7 @@ function fireAbility(seat, IN, slot){
     shock(me.x,me.y,'rgba(255,140,43,.85)',5,46,0.44);
     shock(me.x,me.y,'rgba(255,140,43,.5)',5,36,0.60);
     dust(me.x,me.y,22,1.7);
+    crack(me.x,me.y,58,'rgba(255,140,40,');
     G.shake=REDUCED?0:22;
     tell(n3?'SLAM!':'SLAM',700);
     if(n3) credit(me,'SLAM');
@@ -1323,6 +1334,7 @@ function fireAbility(seat, IN, slot){
              'rgba(255,210,63,.8)',1.8,0.24);
     }
     dust(vic.x,vic.y,10,1.1);
+    spokes(vic.x,vic.y-16,'rgba(255,240,170,.95)',10,6,34);
     tell('STRIPPED!',1100); credit(me,'FORCED FUMBLE');
   }
 
@@ -1401,6 +1413,10 @@ function fireSpecial(seat,IN){
     // stomp: everyone nearby loses their footing
     M.moveCd=1.5; me.z=0.7; G.shake=REDUCED?0:20;
     ring(me.x,me.y,'#ffd23f'); burst(me.x,me.y,'#ffd23f'); burst(me.x,me.y,'#c8a63c');
+    crack(me.x,me.y,72,'rgba(255,120,30,');                     // the ground splits, glowing
+    shock(me.x,me.y,'rgba(255,140,40,.9)',6,70,0.45);
+    shock(me.x,me.y,'rgba(255,210,63,.6)',6,90,0.7);
+    dust(me.x,me.y,26,1.9);
     var n=0, foe=G.offense==='H'?'A':'H';
     for(var i=0;i<G.players.length;i++){
       var q=G.players[i];
@@ -1408,7 +1424,7 @@ function fireSpecial(seat,IN){
       var dd=Math.hypot(q.x-me.x,q.y-me.y);
       if(dd>44) continue;
       n++; q.stun=1.25+Math.random()*0.4;
-      q.vx=(q.x-me.x)/(dd||1)*150; q.vy=(q.y-me.y)/(dd||1)*150;
+      launch(q, me.x, me.y, 150, 4.8+Math.random()*1.6);
     }
     say(n?'EARTHQUAKE!':'EARTHQUAKE',760);
 
@@ -1417,11 +1433,15 @@ function fireSpecial(seat,IN){
     M.jukeUntil=performance.now()+900;
     me.vx=fwd.x*BASE_SPD*2.6; me.vy=fwd.y*BASE_SPD*2.6;
     burst(me.x,me.y,'#f1f1ec');
+    dust(me.x,me.y,14,1.3); shock(me.x,me.y,'rgba(255,255,255,.8)',4,36,0.3);
+    emit(me,'after',0.9,'#e8f4ff');
     say('SKY HOP!',760);
 
   } else if(m==='afterburner'){
     me.burst=2.0; M.moveCd=2.0; M.stam=Math.min(100,M.stam+45);
     ring(me.x,me.y,'#ff8c2b');
+    emit(me,'flame',2.0,'#5fc8ff');                              // blue-white jets
+    flash(me.x,me.y-8,'rgba(95,200,255,.9)',30);
     say('AFTERBURNER!',760);
 
   } else if(m==='phase'){
@@ -1430,6 +1450,7 @@ function fireSpecial(seat,IN){
     M.jukeUntil=performance.now()+780;
     me.vx=fwd.x*BASE_SPD*2.9; me.vy=fwd.y*BASE_SPD*2.9;
     burst(me.x,me.y,'#7fd8ff');
+    emit(me,'swirl',0.9,'#29d3e6');
     say('PHASE SPIN!',760);
 
   } else if(m==='blur'){
@@ -1444,6 +1465,10 @@ function fireSpecial(seat,IN){
     me.y=Math.max(8,Math.min(FH-8,me.y+fwd.y*hop));
     M.jukeUntil=performance.now()+260;
     if(G.carrier===me){ G.ball.x=me.x; G.ball.y=me.y; }
+    for(var bg=1;bg<=5;bg++) G.fx.push({gh:true,x:me.x-fwd.x*hop*(bg/5),y:me.y-fwd.y*hop*(bg/5),
+      face:me.face,c:'#b36bff',life:0.2+bg*0.05,max:0.2+bg*0.05});
+    flash(me.x,me.y-16,'rgba(179,107,255,.95)',30);
+    shock(me.x,me.y,'rgba(179,107,255,.85)',3,30,0.3);
     say('BLUR STEP!',700);
 
   } else if(m==='rocket'){
@@ -1602,6 +1627,107 @@ function speedLines(p,c){
     var px=p.x-Math.cos(a)*10 - Math.sin(a)*o;
     var py=p.y-Math.sin(a)*10 + Math.cos(a)*o - 14;
     streak(px,py,px-Math.cos(a)*len,py-Math.sin(a)*len,c||'rgba(255,255,255,.55)',1.3,0.20);
+  }
+}
+
+// ---- effects that last: they follow a man, or stay on the turf ----------
+// A trail that rides along with him for a while: flames at his feet, a green
+// lightning wake, a spinning whirl, or a line of after-images.
+function emit(p, kind, secs, c){
+  if(REDUCED || !p) return;
+  G.fx.push({emit:kind, p:p, c:c||'#ffffff', life:secs, max:secs, acc:0, t:0});
+}
+function emitTick(e, dt){
+  var p=e.p; e.t+=dt; e.acc+=dt;
+  var r=Math.random;
+  if(e.emit==='flame'){                          // jets at his heels
+    for(var i=0;i<2;i++) G.fx.push({x:p.x-p.vx*0.03+(r()-0.5)*6, y:p.y-4+(r()-0.5)*3,
+      vx:-p.vx*0.35+(r()-0.5)*24, vy:-18-r()*22, r:2+r()*2.6, life:0.32, max:0.32,
+      c:(r()<0.55?e.c:'#fff3c4')});
+    if(e.acc>0.05){ e.acc=0; G.fx.push({gh:true,x:p.x,y:p.y,face:p.face,c:e.c,life:0.26,max:0.26}); }
+  } else if(e.emit==='bolt'){                    // lightning crackling off him
+    if(e.acc>0.06){
+      e.acc=0;
+      var a=Math.atan2(p.vy,p.vx)+Math.PI, x0=p.x+(r()-0.5)*8, y0=p.y-10-r()*14;
+      var x1=x0+Math.cos(a)*9+(r()-0.5)*8, y1=y0+Math.sin(a)*9+(r()-0.5)*8;
+      var x2=x1+Math.cos(a)*9+(r()-0.5)*8, y2=y1+Math.sin(a)*9+(r()-0.5)*8;
+      streak(x0,y0,x1,y1,e.c,1.8,0.14); streak(x1,y1,x2,y2,e.c,1.4,0.14);
+      G.fx.push({gh:true,x:p.x,y:p.y,face:p.face,c:e.c,life:0.24,max:0.24});
+    }
+  } else if(e.emit==='swirl'){                   // a whirl of light round his waist
+    var ang=e.t*22;
+    for(var j=0;j<2;j++){
+      var aa=ang+j*Math.PI;
+      G.fx.push({x:p.x+Math.cos(aa)*11, y:p.y-14+Math.sin(aa)*5,
+        vx:-Math.sin(aa)*70, vy:Math.cos(aa)*30-10, r:1.9, life:0.26, max:0.26, c:e.c});
+    }
+    if(e.acc>0.07){ e.acc=0; G.fx.push({gh:true,x:p.x,y:p.y,face:p.face,c:e.c,life:0.24,max:0.24}); }
+  } else if(e.emit==='after'){                   // after-images
+    if(e.acc>0.045){ e.acc=0; G.fx.push({gh:true,x:p.x,y:p.y,face:p.face,c:e.c,life:0.32,max:0.32}); }
+  }
+}
+// Cracks are on the turf, so they go down before anyone stands on them. The
+// 3D build passes its projection so each one is placed by depth.
+function drawCracks(P){
+  for(var cq=0;cq<G.fx.length;cq++){ var ce2=G.fx[cq]; if(!ce2.crack) continue;
+    if(P) at3D(P,ce2.x,ce2.y);
+    drawCrack(ce2, Math.max(0,ce2.life/ce2.max)); }
+}
+function drawCrack(e,k2){
+  // tapered: thick where it was hit, thin at the tips, with a dark pit
+  ctx.save(); ctx.globalAlpha=1; ctx.lineCap='round';
+  var ka=Math.min(1,k2*1.6);
+  ctx.fillStyle='rgba(22,14,6,'+(0.7*ka).toFixed(3)+')';
+  ctx.beginPath(); ctx.ellipse(e.x,e.y,9,4,0,0,Math.PI*2); ctx.fill();
+  for(var ca=0;ca<e.arms.length;ca++){
+    var ar=e.arms[ca];
+    for(var cb=1;cb<ar.length;cb++){
+      var wdt=5.2*(1-(cb-1)/ar.length);
+      ctx.beginPath(); ctx.moveTo(ar[cb-1][0],ar[cb-1][1]); ctx.lineTo(ar[cb][0],ar[cb][1]);
+      ctx.strokeStyle='rgba(24,15,6,'+(0.9*ka).toFixed(3)+')'; ctx.lineWidth=wdt; ctx.stroke();
+      if(e.glow && k2>0.3){
+        ctx.globalCompositeOperation='lighter';
+        ctx.strokeStyle=e.glow+((k2-0.3)*1.3).toFixed(3)+')'; ctx.lineWidth=wdt*0.45; ctx.stroke();
+        ctx.globalCompositeOperation='source-over';
+      }
+    }
+  }
+  ctx.restore();
+}
+// cracks in the turf that stay a moment, glowing at first
+function crack(x,y,rad,glow){
+  if(REDUCED) return;
+  var arms=[], n=7+((Math.random()*4)|0);
+  for(var i=0;i<n;i++){
+    var a=i/n*Math.PI*2+Math.random()*0.5, len=rad*(0.55+Math.random()*0.5), px=x, py=y, pts=[[x,y]];
+    for(var k=1;k<=4;k++){ a+=(Math.random()-0.5)*0.7; px+=Math.cos(a)*len/4; py+=Math.sin(a)*len/4*0.45; pts.push([px,py]); }
+    arms.push(pts);
+  }
+  G.fx.push({crack:true,x:x,y:y,arms:arms,glow:glow||null,life:1.7,max:1.7});
+}
+// a way in and a way out: a ring that opens, light spiralling into it
+function portal(x,y,c){
+  shock(x,y,c,2,32,0.5);
+  shock(x,y,'rgba(255,255,255,.85)',28,3,0.36);
+  if(REDUCED) return;
+  for(var i=0;i<14;i++){
+    var a=i/14*Math.PI*2;
+    G.fx.push({x:x+Math.cos(a)*26, y:y-12+Math.sin(a)*11, vx:-Math.cos(a)*60-Math.sin(a)*50,
+      vy:-Math.sin(a)*26+Math.cos(a)*22, r:2.2, life:0.42, max:0.42, c:c});
+  }
+}
+// put a man in the air: off his feet, then down
+function launch(q, fx, fy, power, up){
+  var dd=Math.hypot(q.x-fx,q.y-fy)||1;
+  q.vx=(q.x-fx)/dd*power; q.vy=(q.y-fy)/dd*power;
+  q.vz=Math.max(q.vz||0, up||4.6); q.z=Math.max(q.z,0.05);
+  q.wrapped=0;
+}
+// sun-ray spokes out of a hit
+function spokes(x,y,c,n,r0,r1){
+  for(var i=0;i<n;i++){
+    var a=i/n*Math.PI*2+Math.random()*0.3;
+    streak(x+Math.cos(a)*r0, y+Math.sin(a)*r0*0.6, x+Math.cos(a)*r1, y+Math.sin(a)*r1*0.6, c, 2.2, 0.22);
   }
 }
 
@@ -1794,6 +1920,10 @@ function bigHit(me,M){
     say('FUMBLE!',1200); credit(me,'FORCED FUMBLE');
   } else {
     c.hp-=72; c.vx*=0.2; c.vy*=0.2;
+    c.vz=Math.max(c.vz||0,3.6); c.z=Math.max(c.z,0.05);
+    flash(c.x,c.y-18,'rgba(255,255,255,1)',38);
+    shock(c.x,c.y,'rgba(255,210,63,.9)',4,40,0.32);
+    spokes(c.x,c.y-18,'rgba(255,210,63,.95)',10,10,40);
     say('BIG HIT!',700); credit(me,'BIG HIT');
     if(c.hp<=0){ c.down=1.6; endPlay(c.x,'BIG HIT'); }
   }
@@ -1804,6 +1934,7 @@ function groundPound(me,M){
   if(M.power<58||M.hitCd>0) return;
   M.power-=58; M.hitCd=1.3; me.z=0.85;
   G.shake=REDUCED?0:22;
+  crack(me.x,me.y,50,'rgba(255,190,60,');
   ring(me.x,me.y,'#ffd23f');
   burst(me.x,me.y,'#ffd23f'); burst(me.x,me.y,'#ff8c2b');
   var hit=0;
@@ -1813,7 +1944,7 @@ function groundPound(me,M){
     var dd=Math.hypot(q.x-me.x,q.y-me.y);
     if(dd>38) continue;
     hit++; q.stun=1.5;
-    q.vx=(q.x-me.x)/(dd||1)*190; q.vy=(q.y-me.y)/(dd||1)*190;
+    launch(q, me.x, me.y, 190, 4.4+Math.random()*1.2);
   }
   if(G.carrier && Math.hypot(G.carrier.x-me.x,G.carrier.y-me.y)<38){
     if(Math.random()<0.10){
@@ -2124,7 +2255,7 @@ function deadTick(dt){
   for(var f=G.fx.length-1;f>=0;f--){
     var e=G.fx[f]; e.life-=dt;
     if(e.ringed) e.r+=dt*130;
-    else { e.x+=e.vx*dt; e.y+=e.vy*dt; e.vx*=0.93; e.vy*=0.93; }
+    else if(e.vx!==undefined){ e.x+=e.vx*dt; e.y+=e.vy*dt; e.vx*=0.93; e.vy*=0.93; }   // cracks and trails stay put
     if(e.life<=0) G.fx.splice(f,1);
   }
   if(G.thrown){ G.thrown=null; }
@@ -2911,7 +3042,8 @@ function step(dt){
   for(var f=G.fx.length-1;f>=0;f--){
     var e=G.fx[f]; e.life-=dt;
     if(e.ringed){ e.r+=dt*130; }
-    else if(e.shock||e.flash||e.streak||e.gh||e.dome||e.bolt||e.laser){ /* on a timer */ }
+    else if(e.emit){ if(e.p) emitTick(e,dt); }
+    else if(e.shock||e.flash||e.streak||e.gh||e.dome||e.bolt||e.laser||e.crack){ /* on a timer */ }
     else { e.x+=e.vx*dt; e.y+=e.vy*dt; e.vx*=0.93; e.vy*=0.93;
            if(e.grav){ e.vy+=e.grav*dt; } }
     if(e.life<=0) G.fx.splice(f,1);
@@ -2951,6 +3083,11 @@ function step(dt){
       for(var fi=0;fi<3;fi++) G.fx.push({x:G.ball.x+(Math.random()-0.5)*5, y:G.ball.y-t.h+(Math.random()-0.5)*5,
         vx:(Math.random()-0.5)*30, vy:-12-Math.random()*16, life:0.34, max:0.34,
         r:2+Math.random()*2.4, c:['#ff5a1f','#ff9a2a','#ffd23f'][fi]});
+    }
+    if(t.homing && !REDUCED && Math.random()<0.7){
+      G.fx.push({x:G.ball.x+(Math.random()-0.5)*10, y:G.ball.y-t.h+(Math.random()-0.5)*8,
+        vx:(Math.random()-0.5)*20, vy:10+Math.random()*16, r:1.4+Math.random()*1.4, life:0.5, max:0.5,
+        c:(Math.random()<0.5?'#ffd23f':'#ffffff')});
     }
     if(t.trail.length>18) t.trail.shift();
     if(k>=1){
@@ -3480,6 +3617,7 @@ function draw(){
   }
 
   if(!G._p3) drawGoalposts();                     // the 3D build draws them after its ground
+  if(!G._p3) drawCracks(null);                     // on the turf, under the players (the 3D build draws them after its ground)
   // depth sort so players nearer the bottom overlap the ones behind them
   var order=G.players.slice().sort(function(a,b){ return a.y-b.y; });
   for(var i=0;i<order.length;i++) drawGuy(order[i]);
@@ -3503,6 +3641,8 @@ function draw(){
     } else if(e.dome){
       var dr=e.r*(0.5+(1-k2)*0.6);
       addSprite(fxTint(FXI.dome,solidOf(e.c)),e.x,e.y-dr*0.28,dr*2,dr*2,k2*0.9,0,0.8);
+    } else if(e.crack){
+      /* drawn under the players, in drawCracks */
     } else if(e.laser){
       // red glow, orange body, white-hot core, flickering, thinning as it ends
       var fl=0.85+Math.random()*0.3, lw=k2*fl;
@@ -4223,6 +4363,23 @@ function drawBall(){
     ctx.beginPath(); ctx.arc(-4.5,0,2.2,Math.PI-1.05,Math.PI+1.05); ctx.stroke();
   }
 
+  if(t && t.homing && !REDUCED){
+    var flap=Math.sin(t.t*34);
+    ctx.save(); ctx.rotate(-ang);                   // wings stay upright whatever the flight
+    for(var wg=0; wg<2; wg++){
+      var sx2=wg?1:-1;
+      ctx.save(); ctx.scale(sx2,1); ctx.rotate(-0.25-flap*0.35);
+      ctx.beginPath(); ctx.moveTo(1,-2);
+      ctx.quadraticCurveTo(6,-13,16,-15); ctx.quadraticCurveTo(12,-10,14,-8);
+      ctx.quadraticCurveTo(9,-7,10,-4); ctx.quadraticCurveTo(6,-4,4,-1); ctx.closePath();
+      ctx.fillStyle='rgba(255,255,255,.96)'; ctx.fill();
+      ctx.strokeStyle='rgba(140,170,220,.9)'; ctx.lineWidth=0.6; ctx.stroke();
+      ctx.restore();
+    }
+    ctx.strokeStyle='rgba(255,210,63,.95)'; ctx.lineWidth=1.3;         // the halo
+    ctx.beginPath(); ctx.ellipse(0,-10,5.5,1.8,0,0,Math.PI*2); ctx.stroke();
+    ctx.restore();
+  }
   if(spiral){
     // Two seams half a turn apart. One of them is always on the near side, so
     // the spin reads as continuous rotation instead of the laces blinking on
