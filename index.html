@@ -615,6 +615,7 @@ window.__hm=function(){
   if(!G) return 'no game';
   var c=G.carrier, m=G.controlled;
   return G.phase+' off:'+G.offense+' me:'+(m?(m.pos||m.role):'-')+(m&&m.stun>0?' STUN':'')+(m&&m.down>0?' DOWN':'')+
+    (m&&m.wrapped>0?' HELD':'')+(m&&m.punchT>0?' PUNCH':'')+(G.loose?' LOOSE':'')+
     ' carrier:'+(c?(c.role+' '+(m?(Math.hypot(c.x-m.x,c.y-m.y)/YD).toFixed(1)+'yd':'')):'-')+
     ' chase:'+(G.tchase>0?1:0)+' dive:'+(G.touchDive?1:0)+' diveCd:'+(G.diveCd||0).toFixed(2);
 };
@@ -2617,7 +2618,8 @@ var BOX_CANCEL=true, BOX_REDO=0.08;                // your punch knocks his swin
 var BOX_AI_BREAK=0.15, BOX_WRIGGLE=0.002;          // the computer's runner punching back, and spinning out, while held
 var BOX_ASSIST=false, BOX_QB_ASSIST=true;          // the automatic sidestep and stiff arm in a clinch: a passer's only
 var POW_WORDS=['POW','BAM','WHAM','SMACK','THUD','CRACK','BOOM'];
-var AUTO_NEXT=true, AUTO_FAR=true;   // control jumps to the next man up when the runner beats yours, or when yours is out of the play and another can make it
+var AUTO_NEXT=true, AUTO_FAR=true;
+var PUNCH_DUR=0.19, CP_EVERY=0.3;   // a punch's swing, and how soon the ball carrier can throw the next (game seconds)   // control jumps to the next man up when the runner beats yours, or when yours is out of the play and another can make it
 function touchTackle(me,dx,dy){
   if(!G || G.phase!=='live' || !me || me.stun>0 || me.down>0 || G.offense===me.team) return false;
   if(G.diveCd>0) return false;
@@ -2820,8 +2822,17 @@ function fumble(from,vx,vy){
   if(G.cur && from && from.team===G.cur.team) G.cur.fum=true;
   G.carrier=null; G.thrown=null; G.windup=null;
   G.ball.held=false;
-  G.loose={vx:vx,vy:vy,t:0,h:4,vz:150};           // pops up out of his hands
-  if(from) from.stun=1.2;
+  // it squirts clear of the pile, so it reads as a loose ball and a
+  // scramble, not one more body going down in a tackle
+  var ls=Math.hypot(vx,vy);
+  if(ls<150){ var la=ls>1 ? Math.atan2(vy,vx) : Math.random()*Math.PI*2; vx=Math.cos(la)*150; vy=Math.sin(la)*150; }
+  G.loose={vx:vx,vy:vy,t:0,h:4,vz:190};           // pops up out of his hands
+  if(from){
+    from.stun=1.2;
+    for(var fw=0;fw<G.players.length;fw++){ var fq=G.players[fw]; if(fq.wrapT>0){ fq.wrapT=0; fq.boxV=null; } }   // everyone lets go of him
+    flash(from.x, from.y-18, 'rgba(255,255,255,.95)', 30);
+    pow(from.x, from.y-30, '#ffffff', 1.4, 'FUMBLE');
+  }
 }
 
 function recoverBall(p){
@@ -2860,8 +2871,9 @@ function bigHit(me,M){
   // (landPunch). A tenth of his fight, and he snaps back a step.
   var reach=TOUCH_UI ? 4*YD : 2.5*YD;
   M.hitCd=TOUCH_UI ? 0.32 : 0.8; M.power-=45;
-  me.punchT=0.001; me.punchDur=0.27; me.punchHit=false;
+  me.punchT=0.001; me.punchDur=PUNCH_DUR; me.punchHit=false;
   me.punchV=(dd<=reach && c.team!==me.team) ? c : null;   // nobody in reach: a jab at the air
+  if(me.punchV) me.punchFace=(c.x>=me.x)?1:-1;             // turn to him, wherever he is
   if(!me.punchV && TOUCH_UI){ M.hitCd=0.22; }
 }
 // The ball carrier punches: the man hanging on to him first, otherwise the
@@ -2873,8 +2885,8 @@ function carrierPunch(me,M,ai){
   M=M||G;
   if(!me || me!==G.carrier || G.phase!=='live' || G.thrown) return;
   if(M.cpCd>0){ M.cpBuf=performance.now(); return; }
-  M.cpCd=0.5; M.cpBuf=0;
-  var foe=null, bd=3*YD;
+  M.cpCd=CP_EVERY; M.cpBuf=0;
+  var foe=null, bd=4*YD;                             // (four yards, the same reach as a punch on defence)
   for(var i=0;i<G.players.length;i++){
     var q=G.players[i];
     if(q.team===me.team || q.down>0) continue;
@@ -2882,9 +2894,9 @@ function carrierPunch(me,M,ai){
     var qd=Math.hypot(q.x-me.x,q.y-me.y);
     if(qd<bd && !(q.stun>0)){ bd=qd; foe=q; }
   }
-  me.punchT=0.001; me.punchDur=0.24; me.punchV=null; me.punchHit=true;   // the swing (no step: he keeps his feet under him)
-  if(!foe){ return; }
-  me.face=(foe.x>=me.x)?1:-1;
+  me.punchT=0.001; me.punchDur=PUNCH_DUR*0.8; me.punchV=null; me.punchHit=true;   // the swing (no step: he keeps his feet under him)
+  if(!foe){ me.punchFace=0; return; }
+  me.face=me.punchFace=(foe.x>=me.x)?1:-1;           // he turns to the man, even one behind him
   var kx=foe.x-me.x, ky=foe.y-me.y, km=Math.hypot(kx,ky)||1;
   pow((foe.x+me.x)/2, foe.y-18, '#ffd23f', 1.3, powWord()); G.hitStopUntil=performance.now()+50; G.shake=REDUCED?0:7;
   if(foe.wrapT>0){
@@ -2917,9 +2929,10 @@ function boxPunch(t,car){
   var part=(t.boxHit||0)>24 ? t.boxHit*0.5 : (t.boxHit||0);
   t.boxDmg=(t.boxAcc||0) + part/Math.max(0.7,car.pwr||1);
   t.boxAcc=0; t.boxHit=(t.boxHit||0)-part;
+  t.boxFumNow=!!t.boxFum; t.boxFum=false;           // (the first punch of a clinch is the one that can shake it loose)
   t.boxT=BOX_EVERY*(t.humanWrap?BOX_YOU:1)*(0.85+Math.random()*0.3);   // your own man throws them faster
   t.face=(car.x>=t.x)?1:-1;
-  t.punchT=0.001; t.punchDur=0.24; t.punchV=null; t.punchHit=false; t.boxV=car;
+  t.punchT=0.001; t.punchDur=PUNCH_DUR; t.punchV=null; t.punchHit=false; t.boxV=car; t.punchFace=t.face;
 }
 function powWord(){ return POW_WORDS[(Math.random()*POW_WORDS.length)|0]; }
 function boxLand(me,c,dmg){
@@ -2930,15 +2943,16 @@ function boxLand(me,c,dmg){
   dmgText(c,'-'+Math.round(dmg), me.team==='H'?'#ffffff':'#ff8a94');
   c.lean=-0.5; c.sq=0.22;                          // his head snaps back
   if(mine){ G.hitStopUntil=Math.max(G.hitStopUntil||0, performance.now()+55); G.shake=REDUCED?0:Math.max(G.shake,6); }
-  if(c.hp>0 && c.hp<30 && Math.random()<0.025){
+  if(me.boxFumNow && c.hp>0 && c.hp<30 && Math.random()<0.025){
     fumble(c, (c.x-me.x)*5+c.vx*0.4, (c.y-me.y)*5+c.vy*0.4);
     say('FUMBLE!',1100);
   }
+  me.boxFumNow=false;
 }
 // linemen locked up trade jabs: you can see them land, they decide nothing
 function jab(me,v){
   me.face=(v.x>=me.x)?1:-1;
-  me.punchT=0.001; me.punchDur=0.22; me.punchV=null; me.punchHit=false; me.jabV=v;
+  me.punchT=0.001; me.punchDur=PUNCH_DUR*0.9; me.punchV=null; me.punchHit=false; me.jabV=v; me.punchFace=me.face;
 }
 // the frame the fist lands
 function landPunch(me,c){
@@ -2966,20 +2980,20 @@ function punchTick(me,dt){
   var PD=me.punchDur||0.27, PT=me.punchT;
   me.punchT+=dt;
   var v=me.punchV;
-  if(v && !me.punchHit && PT>PD*0.28){
+  if(v && !me.punchHit && PT>PD*0.18){
     var lx=v.x-me.x, ly=v.y-me.y, ld=Math.hypot(lx,ly)||1, stop=15;
     me.face=lx>=0?1:-1; me.lean=0.28;
     var left=Math.max(dt, PD*0.6-PT);
     if(ld>stop){ var st=Math.min(ld-stop, (ld-stop)*dt/left + 0.5); me.x+=lx/ld*st; me.y+=ly/ld*st; }
     if(PT>=PD*0.6 || ld<=stop+1.5){ me.punchHit=true; landPunch(me,v); }
   }
-  if(me.boxV && !me.punchHit && PT>PD*0.42){ me.punchHit=true; var bv=me.boxV; me.boxV=null; boxLand(me, bv, me.boxDmg||0); }
-  if(me.jabV && !me.punchHit && PT>PD*0.42){
+  if(me.boxV && !me.punchHit && PT>PD*0.36){ me.punchHit=true; var bv=me.boxV; me.boxV=null; boxLand(me, bv, me.boxDmg||0); }
+  if(me.jabV && !me.punchHit && PT>PD*0.36){
     me.punchHit=true; var jv=me.jabV; me.jabV=null;
     pow((me.x+jv.x)/2, jv.y-20, '#ffffff', 0.6);
     jv.lean=-0.25;
   }
-  if(me.punchT>=PD){ me.punchT=0; me.punchV=null; me.punchHit=false; me.boxV=null; me.jabV=null; }
+  if(me.punchT>=PD){ me.punchT=0; me.punchV=null; me.punchHit=false; me.boxV=null; me.jabV=null; me.punchFace=0; }
 }
 // a comic-book starburst where a blow lands
 function pow(x,y,c,sz,word){
@@ -3163,7 +3177,7 @@ function aim(p,tx,ty,spd){
 var AI_ODDS = {
   stiffarm:0.018, spin:0.016, clothesline:0.012, superblock:0.012,
   dash:0.014, superspeed:0.012, slam:0.012, rocket:0.020,
-  forcefield:0.018, fumblegen:0.018, teleport:0.014, perfect:0.014,
+  forcefield:0.018, fumblegen:0.007, teleport:0.014, perfect:0.014,   // (fumblegen: a tackle now takes a second, so he is in reach longer)
   aagun:0.011
 };
 
@@ -3728,7 +3742,7 @@ function driveHuman(seat, IN, dt, now){
     // ---- you are on defense: brawler controls
     if(IN.b3) groundPound(me,M);
     if(IN.b2){ if(G.thrown && !G.thrown.tip) swatAt(me); else bigHit(me,M); }
-    else if(M.punchBuf && M.hitCd<=0 && !G.thrown){ if(now-M.punchBuf<450) bigHit(me,M); else M.punchBuf=0; }
+    else if(M.punchBuf && M.hitCd<=0 && !G.thrown){ if(now-M.punchBuf<900) bigHit(me,M); else M.punchBuf=0; }
     if(IN.b1 && M.power>=26 && M.jukeCd<=0){
       M.power-=26; M.jukeCd=1.05; M.diveUntil=now+400;
       var dv=(a.x||a.y)?a:{x:fwd,y:0};
@@ -3743,7 +3757,7 @@ function driveHuman(seat, IN, dt, now){
     if(IN.b2) fireSpecial(seat, IN);
     if(M.cpCd>0) M.cpCd-=dt;
     if(seat.local && (touchCPunch || eat('f'))){ touchCPunch=false; carrierPunch(me, M); }
-    else if(M.cpBuf && !(M.cpCd>0)){ if(now-M.cpBuf<450) carrierPunch(me, M); else M.cpBuf=0; }
+    else if(M.cpBuf && !(M.cpCd>0)){ if(now-M.cpBuf<900) carrierPunch(me, M); else M.cpBuf=0; }   // (a tap in the cooldown waits for it)
     // a swipe on a touch screen while carrying: spin out of it along the swipe
     if(seat.local && touchSpinDir){
       var sd=touchSpinDir; touchSpinDir=null;
@@ -4184,7 +4198,11 @@ function step(dt){
     q.y=Math.max(-SIDE_OUT,Math.min(FH+SIDE_OUT,q.y)); q.x=Math.max(6,Math.min(FW-6,q.x));
     var sp=Math.hypot(q.vx,q.vy);
     q.run += (q.backpedal>0 && q.vx*(q.dropFace||q.face)<0 ? -1:1)*Math.max(sp*0.075, 2.1)*dt;    // idle still animates; backpedal runs it backwards
-    if(q.backpedal>0){
+    if(q.punchT>0 && q.punchFace){
+      q.face=q.punchFace;                             // mid-punch: facing the man he is hitting
+      if(q.backpedal>0) q.backpedal-=dt;
+      if(q.locked>0) q.locked-=dt;
+    } else if(q.backpedal>0){
       // backpedalling: eyes downfield, weight back, never turn his back
       q.backpedal-=dt; q.face=q.dropFace||q.face;
       if(q.pocket>0) q.pocket-=dt;
@@ -4545,7 +4563,7 @@ function step(dt){
       var cs2=Math.hypot(car.vx,car.vy);
       var headOn=cs2>1 && (tdx*car.vx+tdy*car.vy)/(cs2*td) > 0.5;
       if(headOn) hit*=1.3;
-      t2.boxHit=hit; t2.boxAcc=0; t2.boxT=BOX_FIRST*((headOn||diving)?0.6:1);
+      t2.boxHit=hit; t2.boxAcc=0; t2.boxT=BOX_FIRST*((headOn||diving)?0.6:1); t2.boxFum=true;
       t2.wrapT=(1.5+Math.random()*0.8)*((t2.pwr||1)/res);   // long enough to finish him most of the time
       if(TOUCH_UI && t2===G.controlled){   // your man ran into him: your tackle
         t2.wrapT=99; t2.humanWrap=true; hw++; G.dotAcc=0;
@@ -5476,14 +5494,14 @@ function drawSprite(p){
     if(GR.sf) sleeve(elT.x,elT.y,ta+0.35,FA*0.7,HFA*1.3,GR.sc);
   } else if(!KD && p.punchT>0){
     var pu=p.punchT/(p.punchDur||0.27), pa, pe;
-    if(pu<0.28){ var pw=pu/0.28; pa=0.2-1.15*pw; pe=0.6+1.35*pw; }                       // wind up: fist cocked back
-    else if(pu<0.6){ var ps=(pu-0.28)/0.32; ps=1-(1-ps)*(1-ps); pa=-0.95+2.5*ps; pe=1.95-1.9*ps; }   // strike: straight out
+    if(pu<0.18){ var pw=pu/0.18; pa=0.2-1.15*pw; pe=0.6+1.35*pw; }                       // wind up: a flick of the shoulder
+    else if(pu<0.6){ var ps=(pu-0.18)/0.42; ps=1-(1-ps)*(1-ps)*(1-ps); pa=-0.95+2.5*ps; pe=1.95-1.9*ps; }   // strike: straight out, fast
     else { var pr=(pu-0.6)/0.4; pa=1.55-1.3*pr; pe=0.05+0.85*pr; }                        // and back
     var elP=boneH(S.uarm,3.6,SHO+1,pa,UA,HUA);
     var fist=boneH(S.farm,elP.x,elP.y,pa+pe,FA,HFA);
     if(GR.sf) sleeve(elP.x,elP.y,pa+pe,FA*0.7,HFA*1.3,GR.sc);
-    if(pu>0.26 && pu<0.72){                          // the blow: a fist you can pick out, and the air it moved
-      var wk=Math.max(0,1-Math.abs((pu-0.46)/0.26));
+    if(pu>0.18 && pu<0.72){                          // the blow: a fist you can pick out, and the air it moved
+      var wk=Math.max(0,1-Math.abs((pu-0.42)/0.3));
       ctx.save(); ctx.globalAlpha=wk; ctx.lineCap='round';
       ctx.strokeStyle='rgba(255,255,255,.95)'; ctx.lineWidth=1.5;
       ctx.beginPath();
@@ -7531,7 +7549,8 @@ if(TOUCH_UI){
     FT.first=(G.phase==='live') ? pickOnScreen(t.clientX,t.clientY) : null;   // who the finger went down on
     // A pass starts on a receiver (or his tab on the edge). A finger put down
     // anywhere else is not a throw: a slide is a spin, a tap is nothing.
-    if(canAim() && pickOnScreen(t.clientX,t.clientY)){ FT.mode='aim'; ftAim(t); }
+    var held=G.carrier && G.carrier===G.controlled && G.carrier.wrapped>0;   // held: every tap is a punch
+    if(!held && canAim() && pickOnScreen(t.clientX,t.clientY)){ FT.mode='aim'; ftAim(t); }
     else if(canAim()) FT.mode='spin';
     else if(!iHaveBall()) FT.mode='tackle';         // swipe tackles, tap punches or switches
     else if(G.thrown){ FT.mode=null; }                // your pass is in the air: a tap does not switch you
