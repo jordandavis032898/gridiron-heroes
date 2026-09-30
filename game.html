@@ -617,6 +617,7 @@ window.__hm=function(){
   var c=G.carrier, m=G.controlled;
   return G.phase+' off:'+G.offense+' me:'+(m?(m.pos||m.role):'-')+(m&&m.stun>0?' STUN':'')+(m&&m.down>0?' DOWN':'')+
     (m&&m.wrapped>0?' HELD':'')+(m&&m.punchT>0?' PUNCH':'')+(G.loose?' LOOSE':'')+
+    (m?' spd:'+Math.round(Math.hypot(m.vx,m.vy)):'')+
     ' carrier:'+(c?(c.role+' '+(m?(Math.hypot(c.x-m.x,c.y-m.y)/YD).toFixed(1)+'yd':'')):'-')+
     ' chase:'+(G.tchase>0?1:0)+' dive:'+(G.touchDive?1:0)+' diveCd:'+(G.diveCd||0).toFixed(2);
 };
@@ -2470,6 +2471,17 @@ function fumble(from,vx,vy){
   }
 }
 
+// The kicking team gets to a kick the receivers never touched: it is dead
+// right there and it is the receiving team's ball (in their end zone, a
+// touchback).
+function downKick(p){
+  var x=G.ball.x, d=dir(), own=(d>0)?EZ:FW-EZ;         // the receiving team's own goal line
+  G.loose=null; G.ball.held=false;
+  burst(x, G.ball.y, '#eef3e8');
+  if((x-own)*d < 0){ G.kickReturn=false; kickoffTouchback(20); return; }
+  say('DOWNED AT THE '+yardLineLabel(x), 1300);
+  endPlay(x, 'DOWNED');
+}
 function recoverBall(p){
   G.loose=null; G.ball.held=true;
   var wasOff=G.offense;
@@ -3421,8 +3433,15 @@ function driveHuman(seat, IN, dt, now){
   // on defence the AI runs at DEF_SPD, so a human on that side has to as well
   // or he is permanently behind his own team-mates
   var base = onO ? BASE_SPD : DEF_SPD;
-  if(!onO && DEF_CHASE && G.carrier && G.carrier.team!==me.team) base=DEF_SPD*Math.max(1, (me.role==='RUSH'?1.10:0.96)*openChase());   // as fast as the computer runs a man in his spot
-  var mult=(sprinting?SPRINT:1)*(me.burst>0?1.4:1)*me.spd*buffMul(me);   // a burst is 1.4x (1.7x broke away three times in four)
+  if(!onO && DEF_CHASE){
+    // as fast as the computer runs a man in his spot (it runs every defender
+    // at these, whatever his own rating)
+    var aiSp=1.02;                                                    // in coverage
+    if(G.thrown && !G.thrown.lat) aiSp=1.18;                        // breaking on the ball
+    else if(G.carrier && G.carrier.team!==me.team) aiSp=Math.max(aiSp, (me.role==='RUSH'?1.10:0.96)*openChase());   // the chase
+    base=DEF_SPD*aiSp;
+  }
+  var mult=(sprinting?SPRINT:1)*(me.burst>0?1.4:1)*(onO ? me.spd : Math.max(1,me.spd||1))*buffMul(me);   // a burst is 1.4x (1.7x broke away three times in four); on defence his rating only ever helps
   // In a clinch the ball carrier is held where he stands and boxes his way
   // out. (The hold used to be applied after he had already moved each frame,
   // so however many men were on him he crept on at a quarter of his speed.)
@@ -4014,6 +4033,14 @@ function step(dt){
       }
       G.thrown=null;
       if(wasLat && !caught){
+        if(t.kickoff){
+          // a punt or a kickoff that comes down untouched: the receiving team
+          // may pick it up and run, but if the kicking team gets to it first
+          // it is dead there, their ball (G.offense is already the receivers)
+          G.ball.held=false; G.loose={vx:t.tx>t.x?60:-60, vy:(Math.random()-0.5)*50, t:0, kick:true, recv:G.offense};
+          say(t.punt?'THE PUNT HITS THE TURF':'THE KICK HITS THE TURF',1100);
+          return;
+        }
         // a dropped pitch is a live ball, same as real football
         G.ball.held=false; G.loose={vx:(Math.random()-0.5)*220,vy:(Math.random()-0.5)*220,t:0};
         say('PITCH ON THE GROUND!',1100); G.shake=REDUCED?0:10;
@@ -4049,7 +4076,10 @@ function step(dt){
       for(var lb=0;lb<G.players.length;lb++){
         var pl=G.players[lb];
         if(pl.stun>0) continue;
-        if((G.loose.h||0)<7 && Math.hypot(pl.x-G.ball.x,pl.y-G.ball.y)<12){ recoverBall(pl); return; }
+        if((G.loose.h||0)<7 && Math.hypot(pl.x-G.ball.x,pl.y-G.ball.y)<12){
+          if(G.loose.kick && pl.team!==G.loose.recv){ downKick(pl); return; }   // the kicking team downs it: no return
+          recoverBall(pl); return;
+        }
       }
     }
     if(G.loose.t>6){ endPlay(G.ball.x,'DEAD BALL'); return; }
