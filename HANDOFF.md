@@ -147,6 +147,28 @@ lands about 9 yards behind. While it is up, `frame()` keeps calling `step()`
 (the kick is marked `live`), so rushers and blockers play on. A made kick ends
 with the kicking team mobbing the kicker.
 
+**Touch screens and the iPhone app.** `TOUCH_UI` (pointer: coarse) turns on the
+phone layout and controls; the desktop build is unchanged. The iPhone app is an
+Expo project at `C:\Users\jorda\apps\hail-mythery` that shows this page in a
+WebView (in Expo Go it loads the PC's copy on port 8777; a real build loads the
+live site). On touch:
+- Joystick on the left only; pushed all the way it sprints.
+- Offence, QB behind the line: hold a finger on a receiver to build the lock,
+  lift to throw. A receiver off the screen shows as an edge tab (`edgeMarkers`)
+  that can be tapped. Carrying the ball: swipe to spin (`touchSpinDir`).
+- Defence: swipe to dive (it homes on the carrier, `G.touchDive`), tap the field
+  to punch (big hit / swat), tap a team-mate to switch to him (also pre-snap).
+- The moves are icon buttons, bottom centre (`#legend` moved into the stage,
+  plus `ab4` special and `ab5` pitch/pound), with a cooldown sweep. Painted icons
+  come from `parts/icons/<name>.png` (prompts in `parts/ICON-PROMPTS.md`,
+  originals in `parts/_icons_full`, not published); without one the line
+  drawing shows on a coloured disc.
+- Before the snap: `#preBar` with Play Art, Audible and Timeout (3 a game,
+  `callTimeout`, key O on desktop).
+- Camera on a phone: tighter framing, a zoom floor, no punch-in while passing.
+- `dash.png` was pulled: the generated cleat carried a real brand's logo. Any
+  generated art must be checked for real logos before it is published.
+
 ---
 
 ## Systems
