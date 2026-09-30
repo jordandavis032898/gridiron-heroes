@@ -636,7 +636,7 @@ function freshGame(){
 }
 
 // ================================================================ input
-var keys=Object.create(null), touchVec={x:0,y:0}, touchJuke=false, touchSprint=false, touchMove=false, touchQ=false, touchSwitch=false;
+var keys=Object.create(null), touchVec={x:0,y:0}, touchJuke=false, touchSprint=false, touchMove=false, touchQ=false, touchSwitch=false, touchCPunch=false;
 var touchAb=[false,false,false], touchJukeDir=null, touchSpinDir=null;
 window.addEventListener('keydown',function(e){
   var k=e.key.toLowerCase();
@@ -1882,7 +1882,7 @@ function fireAbility(seat, IN, slot){
   // ---- the line --------------------------------------------------------
   else if(id==='superblock'){
     var n2=flatten(46,1.5,195);
-    me.z=0.5; G.shake=REDUCED?0:16;
+    me.z=0.05; me.vz=3.0; G.shake=REDUCED?0:16;   // a hop into the block, not a float
     flash(me.x,me.y-10,'rgba(255,210,63,.85)',40);
     shock(me.x,me.y,'rgba(255,255,255,.9)',5,50,0.30);
     shock(me.x,me.y,'rgba(255,210,63,.8)',5,42,0.46);
@@ -1946,7 +1946,7 @@ function fireAbility(seat, IN, slot){
 
   // ---- tight end and the front ----------------------------------------
   else if(id==='slam'){
-    me.z=0.9;
+    me.z=0.05; me.vz=4.0;                            // up, and down on them
     var n3=flatten(44,1.6,205);
     flash(me.x,me.y-8,'rgba(255,210,63,.9)',44);
     shock(me.x,me.y,'rgba(255,255,255,.95)',5,56,0.28);
@@ -2231,7 +2231,7 @@ function fireSpecial(seat,IN){
 
   if(m==='quake'){
     // stomp: everyone nearby loses their footing
-    M.moveCd=1.5; me.z=0.7; G.shake=REDUCED?0:20;
+    M.moveCd=1.5; me.z=0.05; me.vz=3.6; G.shake=REDUCED?0:20;
     ring(me.x,me.y,'#ffd23f'); burst(me.x,me.y,'#ffd23f'); burst(me.x,me.y,'#c8a63c');
     crack(me.x,me.y,72,'rgba(255,120,30,');                     // the ground splits, glowing
     shock(me.x,me.y,'rgba(255,140,40,.9)',6,70,0.45);
@@ -2249,7 +2249,7 @@ function fireSpecial(seat,IN){
     say(n?'EARTHQUAKE!':'EARTHQUAKE',760);
 
   } else if(m==='skyhop'){
-    M.moveCd=1.6; me.z=1.6;
+    M.moveCd=1.6; me.z=0.05; me.vz=5.6;              // a real leap: up and over, and back down
     M.jukeUntil=performance.now()+900;
     me.vx=fwd.x*BASE_SPD*2.6; me.vy=fwd.y*BASE_SPD*2.6;
     burst(me.x,me.y,'#f1f1ec');
@@ -2585,7 +2585,7 @@ var SWIPE={x:0,y:0,t:0};
 //  - nobody: he skids a couple of yards on the grass and gets up.
 // It is a dive, not a sprint: he is flat out and low the whole way. Your own
 // team is never hit.
-var TACKLE_REACH=3.5*YD, SLIDE_REACH=7*YD;
+var TACKLE_REACH=3.5*YD, SLIDE_REACH=9*YD;
 function touchTackle(me,dx,dy){
   if(!G || G.phase!=='live' || !me || me.stun>0 || me.down>0 || G.offense===me.team) return false;
   if(G.diveCd>0) return false;
@@ -2618,7 +2618,7 @@ function touchTackle(me,dx,dy){
   if(best===car && car){
     // the slide: fast enough to cover the gap in about a third of a second
     var tx=car.x+car.vx*0.2-me.x, ty=car.y+car.vy*0.2-me.y, td=Math.hypot(tx,ty)||1;
-    var T=Math.max(0.16, Math.min(0.34, 0.12+td/YD*0.03));
+    var T=Math.max(0.16, Math.min(0.4, 0.12+td/YD*0.03));
     var sp=Math.max(BASE_SPD*1.6, (td-TACKLE_R*0.5)/T);
     me.face=tx>=0?1:-1; me.vx=tx/td*sp; me.vy=ty/td*sp;
     G.touchDive=true; G.diveFly=sp;
@@ -2661,7 +2661,7 @@ function swipeTackle(dx,dy,side){
     if(lm<9*YD && (dx*lx+dy*ly)/lm > 0.82){ dx=lx/lm; dy=ly/lm; }
   }
   mine.vx=dx*BASE_SPD*3.1; mine.vy=dy*BASE_SPD*3.1;
-  mine.z=0.4;
+  mine.z=0.05; mine.vz=2.4;
   if(side==='H') G.diveUntil=performance.now()+430;
   else G.M2.diveUntil=performance.now()+430;
   streak(mine.x,mine.y-16, mine.x+dx*38, mine.y-16+dy*38,'rgba(255,255,255,.75)',2.2,0.20);
@@ -2832,6 +2832,45 @@ function bigHit(me,M){
   me.punchV=(dd<=reach && c.team!==me.team) ? c : null;   // nobody in reach: a jab at the air
   if(!me.punchV && TOUCH_UI){ M.hitCd=0.22; }
 }
+// The ball carrier punches: the man hanging on to him first, otherwise the
+// nearest defender within three yards. On a man who has hold of him it breaks
+// the grip about one time in four (a special move's grab less, a person's
+// never); otherwise it loosens him and stops the drain for a beat. On a man
+// who is only closing in (a rusher on the passer), it knocks him back.
+function carrierPunch(me,M){
+  M=M||G;
+  if(!me || me!==G.carrier || G.phase!=='live' || G.thrown) return;
+  if(M.cpCd>0){ M.cpBuf=performance.now(); return; }
+  M.cpCd=0.5; M.cpBuf=0;
+  var foe=null, bd=3*YD;
+  for(var i=0;i<G.players.length;i++){
+    var q=G.players[i];
+    if(q.team===me.team || q.down>0) continue;
+    if(q.wrapT>0){ foe=q; break; }
+    var qd=Math.hypot(q.x-me.x,q.y-me.y);
+    if(qd<bd && !(q.stun>0)){ bd=qd; foe=q; }
+  }
+  me.punchT=0.001; me.punchDur=0.24; me.punchV=null; me.punchHit=true;   // the swing (no step: he keeps his feet under him)
+  if(!foe){ return; }
+  me.face=(foe.x>=me.x)?1:-1;
+  var kx=foe.x-me.x, ky=foe.y-me.y, km=Math.hypot(kx,ky)||1;
+  pow((foe.x+me.x)/2, foe.y-18, '#ffd23f'); G.hitStopUntil=performance.now()+50; G.shake=REDUCED?0:7;
+  if(foe.wrapT>0){
+    var breakChance = foe.humanWrap ? 0 : ((foe.strongGrab||foe.gripLock) ? 0.15 : 0.27);   // tuned in simulation: about half of grabs broken when you keep punching
+    if(Math.random()<breakChance){
+      breakWrap(foe, me);
+      foe.stun=Math.max(foe.stun,0.6); foe._pst=foe.stun; launch(foe, me.x, me.y, 130, 2.6);
+      me.iFrames=Math.max(me.iFrames||0,0.3);
+      if(me===G.controlled) hint('BROKE FREE',700);
+    } else {
+      foe.wrapT=Math.max(0.25, foe.wrapT-0.2); G.drainPause=G.gt+0.12;   // rocked: the grip loosens a little
+      foe.lean=-0.4; foe.sq=0.2;
+    }
+  } else {
+    foe.stun=Math.max(foe.stun,0.22); foe._pst=foe.stun;                    // shoved back a step, not out of the play
+    launch(foe, me.x, me.y, 85, 1.8);
+  }
+}
 // the frame the fist lands
 function landPunch(me,c){
   if(!c || G.carrier!==c || G.phase!=='live') return;
@@ -2876,7 +2915,7 @@ function pow(x,y,c){
 function groundPound(me,M){
   M=M||G;
   if(M.power<58||M.hitCd>0) return;
-  M.power-=58; M.hitCd=1.3; me.z=0.85;
+  M.power-=58; M.hitCd=1.3; me.z=0.05; me.vz=3.9;
   G.shake=REDUCED?0:22;
   crack(me.x,me.y,50,'rgba(255,190,60,');
   ring(me.x,me.y,'#ffd23f');
@@ -3266,7 +3305,8 @@ function deadTick(dt){
       if(Math.random()<dt*26) ghost(q);
       if(Math.random()<dt*20) speedLines(q, q.team==='H'?'rgba(255,210,63,.5)':'rgba(255,138,148,.5)');
     }
-    if(q.z>0)      q.z=Math.max(0,q.z-dt*1.7);
+    if(q.vz){ q.vz-=9*dt; q.z=Math.max(0,q.z+q.vz*dt); if(q.z<=0) q.vz=0; }
+    else if(q.z>0) q.z=Math.max(0,q.z-dt*1.7);
     if(q.spin>0)   q.spin=Math.max(0,q.spin-dt*2.1);
     if(q.arm>0)    q.arm=Math.max(0,q.arm-dt*1.9);
     if(q.cel>0)    q.cel-=dt;
@@ -3622,6 +3662,9 @@ function driveHuman(seat, IN, dt, now){
       else { M.latCd=1.4; lateral(seat.side); }
     }
     if(IN.b2) fireSpecial(seat, IN);
+    if(M.cpCd>0) M.cpCd-=dt;
+    if(seat.local && (touchCPunch || eat('f'))){ touchCPunch=false; carrierPunch(me, M); }
+    else if(M.cpBuf && !(M.cpCd>0)){ if(now-M.cpBuf<450) carrierPunch(me, M); else M.cpBuf=0; }
     // a swipe on a touch screen while carrying: spin out of it along the swipe
     if(seat.local && touchSpinDir){
       var sd=touchSpinDir; touchSpinDir=null;
@@ -4073,6 +4116,7 @@ function step(dt){
     q._pst=q.stun;
     if(q.flyUntil && G.gt<q.flyUntil){               // flying (Peter Pan, the cloud): he stays up
       q.vz=0; q.z+=((q.flyZ||1.1)-q.z)*Math.min(1,dt*6);
+      if((q.flyZ||1.1)>=1) q.lean+=(0.9-q.lean)*Math.min(1,dt*8);   // flying: laid out forward
     }
     else if(q.vz){
       q.vz-=9*dt; q.z=Math.max(0,q.z+q.vz*dt);
@@ -4406,7 +4450,8 @@ function step(dt){
       grabbers++; lastT=t2;
     }
     if(grabbers>0){
-      var drain=((68*grabbers + 50*hw + 58*bite + 25*strong)/res)*dt;   // your own tackle drains him faster, a move's too, a wolf or a grip faster still
+      var drain=((68*grabbers + 50*hw + 58*bite + 25*strong)/res)*dt;
+      if(G.drainPause && G.gt<G.drainPause) drain=0;     // rocked by his punch   // your own tackle drains him faster, a move's too, a wolf or a grip faster still
       car.hp -= drain;
       var drag=Math.max(0.18, 1-grabbers*0.42);       // dragged down as they hang on
       if(strong) drag=Math.min(drag,0.3);             // a grab from a special move stops him like yours does
@@ -5238,11 +5283,24 @@ function drawSprite(p){
   // the passer in the pocket: both hands on the ball at his chest
   var POCKET = !KD && p===G.carrier && p.role==='QB' && p.pocket>0 && !(p.throwArm>0);
   if(POCKET){ AF=0.25; EF=2.15; AB=0.2; EB=2.2; }
+  // Off the ground (a leap, a slam, a flight, the cloud) he is never running.
+  var AIR = !KD && (p.z||0)>0.22 && !(p.cel>0) && !(p.stance>0);
+  if(AIR){
+    var flying = p.flyUntil && G && G.gt<p.flyUntil;
+    if(flying && (p.flyZ||1.1)>=1){                     // flying: laid out, arms reaching ahead
+      AF=2.7; EF=0.1; AB=2.4; EB=0.2; LF={t:-0.35,s:-0.15}; LB={t:-0.75,s:-0.25};
+    } else if(flying){                                  // riding the cloud: crouched, arms out for balance
+      AF=1.3; EF=0.4; AB=-1.1; EB=0.4; LF={t:0.95,s:-1.0}; LB={t:0.35,s:-1.3};
+    } else {                                            // a jump: knees up, arms up on the way, out on the way down
+      var goingUp=(p.vz||0)>0;
+      AF=goingUp?2.3:1.2; EF=0.5; AB=goingUp?2.0:-0.6; EB=0.5; LF={t:1.1,s:-1.3}; LB={t:0.45,s:-1.5};
+    }
+  }
 
   // When he changes what he is doing (stops, starts, sets, catches, gets
   // up) the limbs ease over for a moment instead of snapping to the new pose.
-  var pmode = KD ? 'kd' : (p.stance>0 ? 'st' : (p.cel>0 ? 'cel' : (p.locked>0 ? 'lk' :
-              (p.catchT>0 ? 'ct' : (POCKET ? 'pk' : (moving ? 'run' : 'idle'))))));
+  var pmode = KD ? 'kd' : (AIR ? 'air' : (p.stance>0 ? 'st' : (p.cel>0 ? 'cel' : (p.locked>0 ? 'lk' :
+              (p.catchT>0 ? 'ct' : (POCKET ? 'pk' : (moving ? 'run' : 'idle')))))));
   var pnow=performance.now();
   if(p._pm!==pmode){ if(p._pa && pmode!=='kd' && p._pm!=='kd'){ p._pb0=pnow; p._pf=p._pa; } p._pm=pmode; }
   if(p._pb0 && p._pf && pnow-p._pb0<140){
@@ -5522,6 +5580,12 @@ function drawGuyRaw(p){
   ctx.ellipse(p.x, p.y+lay*5, (8.5+lay*8)*sh, (3.4+lay*1.2)*sh,
               0, 0, Math.PI*2);
   ctx.fill();
+  if(p.flyUntil && G && G.gt<p.flyUntil && (p.flyZ||1.1)<1){   // Sun Wukong's cloud, under his feet
+    var cly=p.y-lift+3, cwob=Math.sin(performance.now()/120)*0.8;
+    ctx.fillStyle='rgba(255,246,214,.96)'; ctx.strokeStyle='rgba(214,170,70,.75)'; ctx.lineWidth=1.1;
+    [[-10,1,6],[-4,-2,7.5],[4,-1.5,7],[10,1,5.5],[0,2.5,8.5]].forEach(function(c){
+      ctx.beginPath(); ctx.ellipse(p.x+c[0], cly+c[1]+cwob, c[2], c[2]*0.55, 0, 0, Math.PI*2); ctx.fill(); ctx.stroke(); });
+  }
   if(ctrl){
     // red and pulsing when the ball carrier is close enough to tackle or punch
     var inR = G.phase==='live' && G.carrier && G.carrier.team!==p.team &&
@@ -7380,6 +7444,10 @@ if(TOUCH_UI){
            !(NET.on && !NET.host) && handoffTarget()===tg && handoff('H')){ /* handed off */ }
         else if(NET.on && !NET.host) netSend({t:'thr', x:Math.round(tx), y:Math.round(ty)});
         else throwAt(tx,ty,'H');                     // the lock you built is what it is worth
+      }
+      if(FT.mode==='spin' && !FT.done && G && G.phase==='live' && G.carrier && G.carrier===G.controlled &&
+         Math.hypot(t.clientX-FT.x0,t.clientY-FT.y0)<22 && performance.now()-FT.t0<380){
+        touchCPunch=true;                              // a tap with the ball: punch whoever is on you
       }
       if(FT.mode==='tackle' && !FT.done && G && G.phase==='live' &&
          Math.hypot(t.clientX-FT.x0,t.clientY-FT.y0)<22 && performance.now()-FT.t0<380){
