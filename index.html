@@ -87,6 +87,8 @@
   .howgo .card{flex:1;}
   .howgo #howPlay{flex:2; border-color:var(--gold);}
   .howgo #howPlay .t{font-size:18px;}
+  .how .card .d i{font-style:normal; font-size:.85em; color:var(--gold); letter-spacing:.04em;}
+  .movelist{max-height:calc(100vh - 150px); overflow-y:auto;}   /* a long list scrolls inside the page */
   .stats{display:flex; gap:7px; margin-top:6px;}
   .stat{flex:1;}
   .stat .sl{font-size:9px; letter-spacing:.12em; color:var(--muted); text-transform:uppercase;}
@@ -385,6 +387,7 @@
   html.touchin .how .card{padding:5px 8px 6px;}
   html.touchin .how .card .d{font-size:10.5px; line-height:1.22; margin-top:2px;}
   html.touchin .howgo{margin-top:6px;}
+  html.touchin .movelist{max-height:calc(100vh - 178px);}   /* room for BACK under it on a phone */
   html.touchui #seeStats, html.touchui #toSheet{padding:6px 8px;}
   html.touchui #stage:has(.overlay.show) #preBar{visibility:hidden;}
 
@@ -5669,6 +5672,12 @@ function drawSnap(P){
 // The ball in a man's grip. It sways with his stride so it has weight, and
 // when he is wrapped up or nearly spent it rattles in his hands: the lower
 // his footing, the harder it shakes. That is the tell that it could come out.
+// screen pixels per world unit where the canvas is drawing now (the 3D view
+// scales each spot by how far off it is), for marks that keep one size on screen
+function pxScale(){
+  var t=ctx.getTransform ? ctx.getTransform() : null;
+  return t ? Math.max(0.05, Math.hypot(t.a,t.b)/(dpr||1)) : 1;
+}
 function heldBall(p, x, y, fa, pocket){
   var sway=Math.sin((p.run||0)*2), hp=(p.hp===undefined?100:p.hp);
   var shake=Math.min(1.3, Math.max(0,(60-hp)/45) + (p.wrapped>0?0.55:0));
@@ -5676,6 +5685,7 @@ function heldBall(p, x, y, fa, pocket){
   ctx.translate(x + (Math.random()-0.5)*shake*2.4, y + sway*0.5 + (Math.random()-0.5)*shake*2.4);
   var rot = pocket ? -1.25 : (fa===null ? -0.45 : Math.atan2(Math.cos(fa),Math.sin(fa)));
   ctx.rotate(rot + sway*0.10 + (Math.random()-0.5)*shake*0.7);
+  ctx.scale(1.55,1.55);                          // (it was a speck once the camera pulled back)
   ctx.fillStyle='#7a4a28'; ctx.beginPath(); ctx.ellipse(0,0,4,2.5,0,0,Math.PI*2); ctx.fill();
   ctx.strokeStyle='#0a0c10'; ctx.lineWidth=0.5; ctx.stroke();
   ctx.fillStyle='rgba(0,0,0,.22)';
@@ -5855,6 +5865,15 @@ function drawGuyRaw(p){
       roundRect(bx2-1.2,by2-1.2,bw+2.4,bh+2.4,1.6); ctx.fill();
       ctx.fillStyle = hpv>55?'#4fd18b' : (hpv>25?'#ffd23f':'#e0384e');
       roundRect(bx2,by2,bw*(hpv/100),bh,1.2); ctx.fill();
+    }
+    // the ball: a gold marker over whoever has it, the same size on screen
+    // however far out the camera is, so you can always find it
+    if(G.phase==='live' && p===G.carrier){
+      var u=1/pxScale(), bob=Math.sin(performance.now()/160)*2*u;
+      var mx=p.x, my=p.y-50-lift-(hpv<100?6:0)-7*u+bob, mw=10*u, mh=13*u;
+      ctx.fillStyle='#ffd23f'; ctx.strokeStyle='rgba(8,12,16,.92)'; ctx.lineWidth=2.4*u; ctx.lineJoin='round';
+      ctx.beginPath(); ctx.moveTo(mx-mw,my-mh); ctx.lineTo(mx+mw,my-mh); ctx.lineTo(mx,my); ctx.closePath();
+      ctx.stroke(); ctx.fill();
     }
   }
   }
@@ -6064,6 +6083,11 @@ function drawBall(){
       ctx.beginPath(); ctx.moveTo(a0.x,a0.y); ctx.lineTo(a1.x,a1.y); ctx.stroke();
     }
   }
+  // a gold ring on the turf under it, one size on screen, so a pass in the
+  // air or a ball on the ground can always be found
+  var ru=1/pxScale(), rp=1+0.12*Math.sin(performance.now()/120);
+  ctx.strokeStyle='rgba(255,210,63,.95)'; ctx.lineWidth=2.6*ru;
+  ctx.beginPath(); ctx.ellipse(G.ball.x,G.ball.y,16*ru*rp,6.4*ru*rp,0,0,Math.PI*2); ctx.stroke();
   // ground shadow tracks the ball while it hangs
   if(hh>0.5){
     ctx.fillStyle='rgba(0,0,0,'+(0.30-Math.min(0.2,hh/140)).toFixed(3)+')';
@@ -6248,6 +6272,8 @@ function setAb(i,cap,key,ready,live,cd,icon,frac,img){
     var sv=e.querySelector('svg');
     if(sv){ sv.innerHTML=icon; e.dataset.icon=icon; }
   }
+  var tip = (img && ABIL[img]) ? ABIL[img].name+': '+ABIL[img].desc : (img && img.indexOf('move-')===0 ? HERO.moveName+': '+HERO.desc : '');
+  if(e.title!==tip) e.title=tip;                   // what it does, when you point at it
   e.querySelector('.cap').textContent = (cd&&cd>0.05) ? (cd.toFixed(1)+'s') : cap;
   e.querySelector('.key').textContent=key;
   var ok = !!ready && !!live && !(cd>0.05);
@@ -6737,6 +6763,36 @@ function howSections(){
                         ['The top buttons','are play art, audible, timeout and the menu.']]
   ];
 }
+// What every move does, by who has it: the heroes' specials, the moves each
+// position carries, and the cast's own signature moves.
+function showMoves(mode){
+  var POSN={QB:'QB',RB:'RB',WR:'WR',TE:'TE',OL:'line',C:'line',DE:'DE',LB:'LB',CB:'CB',S:'S'};
+  function who(id){
+    var w=[]; for(var pos in KITS_AB) if(KITS_AB[pos].indexOf(id)>=0 && w.indexOf(POSN[pos])<0) w.push(POSN[pos]);
+    return w.join(', ');
+  }
+  var NAMES={};
+  for(var sk in SUPPORT) if(SUPPORT[sk] && SUPPORT[sk].card) NAMES[SUPPORT[sk].card]=SUPPORT[sk].name;
+  DEFENDERS.forEach(function(d){ if(d.card) NAMES[d.card]=d.name; });
+  function line(nm, tag, what){ return '<div class="d"><b>'+nm+'</b>'+(tag?' <i>'+tag+'</i>':'')+' '+what+'</div>'; }
+  function card(title, body){ return '<div class="card"><div class="pos">'+title+'</div>'+body+'</div>'; }
+  var heroes=''; HEROES.forEach(function(h){ heroes+=line(h.moveName, h.name, h.desc); });
+  function list(ids){ return ids.map(function(id){ return line(ABIL[id].name, who(id), ABIL[id].desc); }).join(''); }
+  var sig=''; for(var c in SIG_MOVE){ var id=SIG_MOVE[c]; sig+=line(ABIL[id].name, NAMES[c]||c, ABIL[id].desc); }
+  var html='<h2>The moves</h2><p class="sub">What each one does \u00b7 your man\u2019s are on '+
+    (TOUCH_IN?'the round buttons':'Q, E and R, or the round buttons')+'</p>'+
+    '<div class="movelist"><div class="grid3 how">'+
+      card('Hero specials'+(TOUCH_IN?'':' \u00b7 K'), heroes)+
+      card('Quarterback', list(['rocket','perfect','forcefield']))+
+      card('Ball carriers', list(['dash','stiffarm','teleport','superspeed','spin']))+
+      card('Hitters', list(['superblock','clothesline','slam','fumblegen','aagun']))+
+      card('Signature moves', sig)+
+    '</div></div><div class="howgo"><button class="card" id="movBack" type="button"><div class="k">BACK</div><div class="t">How to play</div></button></div>';
+  elSheet.innerHTML=html; elOv.classList.add('show');
+  var b=document.getElementById('movBack');
+  b.addEventListener('click',function(){ showHowTo(mode); });
+  if(!TOUCH_IN) b.focus();
+}
 function showHowTo(mode){
   var pause=(mode==='pause');
   var who = PICK_THEN==='host' ? 'You are the Heroes' : PICK_THEN==='guest' ? 'You are the Rivals'
@@ -6748,13 +6804,15 @@ function showHowTo(mode){
     html+='</div>';
   });
   html+='</div><div class="howgo">';
-  if(pause) html+='<button class="card" id="howBack" type="button"><div class="k">BACK</div><div class="t">To the pause menu</div></button>';
-  else html+='<button class="card" id="howPlay" type="button"><div class="k">LET\u2019S PLAY</div><div class="t">'+HERO.name+'</div></button>'+
+  var moves='<button class="card" id="howMoves" type="button"><div class="k">ALL MOVES</div><div class="t">What each one does</div></button>';
+  if(pause) html+=moves+'<button class="card" id="howBack" type="button"><div class="k">BACK</div><div class="t">To the pause menu</div></button>';
+  else html+='<button class="card" id="howPlay" type="button"><div class="k">LET\u2019S PLAY</div><div class="t">'+HERO.name+'</div></button>'+moves+
     '<button class="card" id="howHero" type="button"><div class="k">CHANGE HERO</div><div class="t">Pick another</div></button>'+
     '<button class="card" id="howBack" type="button"><div class="k">BACK</div><div class="t">'+
       (PICK_THEN==='host'?'Do not host after all':PICK_THEN==='solo'?'Pick another team':'Back to the menu')+'</div></button>';
   html+='</div>';
   elSheet.innerHTML=html; elOv.classList.add('show');
+  document.getElementById('howMoves').addEventListener('click',function(){ showMoves(mode); });
   var back=document.getElementById('howBack');
   if(pause){
     back.addEventListener('click',function(){ if(G) G.paused=false; askQuit(); });
@@ -7537,25 +7595,47 @@ function waitTick(){
   if(performance.now() - G.pickAt > 12000) tryStartPlay(true);
 }
 function showOver(){
-  var w=G.scoreH>G.scoreA?(HERO.name.split(' ')[1].toUpperCase()+' WINS'):
+  // Online the guest gets one too (it used to sit on the last frame with no
+  // way out), and the host's choices are for the two of them.
+  var online=NET.on, guest=online && !NET.host, w, sub;
+  if(online){
+    var mine=guest?G.scoreA:G.scoreH, theirs=guest?G.scoreH:G.scoreA;
+    w = mine>theirs ? 'YOU WIN' : mine<theirs ? 'THEY WIN' : 'TIE GAME';
+    sub = 'Final \u00b7 Heroes '+G.scoreH+', Rivals '+G.scoreA;
+  } else {
+    w = G.scoreH>G.scoreA?(HERO.name.split(' ')[1].toUpperCase()+' WINS'):
         G.scoreH<G.scoreA?(FOE.short+' WIN'):'TIE GAME';
-  elSheet.innerHTML='<h2>'+w+'</h2><p class="sub">Final · Heroes '+G.scoreH+', '+FOE.name+' '+G.scoreA+'</p>'+
-    '<div class="grid2">'+
-    '<button class="card" id="again" type="button"><div class="k">ENTER</div>'+
-    '<div class="t">RUN IT BACK</div><div class="d">Same hero, fresh clock.</div></button>'+
-    '<button class="card" id="swap" type="button"><div class="k">H</div>'+
-    '<div class="t">NEW HERO</div><div class="d">Pick somebody else.</div></button>'+
-    '<button class="card" id="overStats" type="button"><div class="k">STATS</div>'+
-    '<div class="t">BOX SCORE</div><div class="d">How the game was actually won.</div></button>'+
-    '<button class="card" id="toMenu" type="button"><div class="k">MENU</div>'+
-    '<div class="t">MAIN MENU</div><div class="d">A new mode or a new team.</div></button></div>';
+    sub = 'Final \u00b7 Heroes '+G.scoreH+', '+FOE.name+' '+G.scoreA;
+  }
+  var again='<button class="card" id="again" type="button"><div class="k">ENTER</div>'+
+      '<div class="t">RUN IT BACK</div><div class="d">'+(online?'A rematch for both of you, fresh clock.':'Same hero, fresh clock.')+'</div></button>';
+  var stats='<button class="card" id="overStats" type="button"><div class="k">STATS</div>'+
+      '<div class="t">BOX SCORE</div><div class="d">How the game was actually won.</div></button>';
+  var menu='<button class="card" id="toMenu" type="button"><div class="k">'+(online?'LEAVE':'MENU')+'</div>'+
+      '<div class="t">MAIN MENU</div><div class="d">'+(online?'Ends the room for both of you.':'A new mode or a new team.')+'</div></button>';
+  var cards;
+  if(guest) cards='<div class="card" style="cursor:default"><div class="k">REMATCH</div><div class="t">UP TO THE HOST</div>'+
+      '<div class="d">If they run it back, the next game starts right here.</div></div>'+stats+menu;
+  else if(online) cards=again+stats+menu;
+  else cards=again+'<button class="card" id="swap" type="button"><div class="k">H</div>'+
+      '<div class="t">NEW HERO</div><div class="d">Pick somebody else.</div></button>'+stats+menu;
+  elSheet.innerHTML='<h2>'+w+'</h2><p class="sub">'+sub+'</p><div class="grid2">'+cards+'</div>';
   elOv.classList.add('show');
   document.getElementById('toMenu').addEventListener('click',quitToMenu);
   var os=document.getElementById('overStats');
   if(os) os.addEventListener('click',function(){ G.showingStats=true; showStats(); });
-  document.getElementById('again').addEventListener('click',start);
-  document.getElementById('swap').addEventListener('click',function(){ G=freshGame(); PICK_THEN='solo'; showHeroPick(); });
-  document.getElementById('again').focus();
+  var ag=document.getElementById('again');
+  if(ag) ag.addEventListener('click',function(){ if(online) netRematch(); else start(); });
+  var sw=document.getElementById('swap');
+  if(sw) sw.addEventListener('click',function(){ G=freshGame(); PICK_THEN='solo'; showHeroPick(); });
+  if(!TOUCH_IN) (ag || document.getElementById('toMenu')).focus();
+}
+// host: the same two of you again, from the first play call like the first game
+function netRematch(){
+  if(!NET.on || !NET.host) return;
+  NET.guestPick=null; NET.lastSt=null;
+  G=freshGame(); G.phase='playcall';
+  elOv.classList.remove('show');
 }
 function start(){
   var keepH=G?G.scoreH:0;
@@ -7631,9 +7711,9 @@ window.addEventListener('keydown',function(e){
       else if(akk==='escape') closeAudible();
     }
   }
-  if(G.phase==='over'){
-    if(e.key==='Enter') start();
-    if(e.key.toLowerCase()==='h'){ G=freshGame(); showHeroPick(); }
+  if(G.phase==='over' && !(NET.on && !NET.host)){    // (the guest's screen runs no game of its own)
+    if(e.key==='Enter'){ if(NET.on) netRematch(); else start(); }
+    if(e.key.toLowerCase()==='h' && !NET.on){ G=freshGame(); showHeroPick(); }
   }
 });
 
@@ -7901,10 +7981,14 @@ function netSay(t){
 }
 
 function netTeardown(){
-  try{ if(NET.conn) NET.conn.close(); }catch(e){}
-  try{ if(NET.peer) NET.peer.destroy(); }catch(e){}
+  // offline first: closing fires the connection's own close event, which
+  // used to run netDropped a second time (two messages, two trips to the menu)
+  var c=NET.conn, p=NET.peer;
   NET.on=false; NET.conn=null; NET.peer=null; NET.remoteIn=null; NET.world=null;
+  try{ if(c) c.close(); }catch(e){}
+  try{ if(p) p.destroy(); }catch(e){}
   NET.st=null; NET.lastSt=null; NET.clk=null; NET.ev=[]; NET.evIn=[]; NET.fxIn=[]; NET.first=false; NET.chunk=null;
+  NET.inAt=0; NET.stAt=0; NET.quietSaid=0; keepAlive();
 }
 
 function netDropped(){
@@ -8002,6 +8086,7 @@ function hostOnline(tries){
     NET.conn=c;
     c.on('data',function(d){
       if(!d) return;
+      NET.inAt=_realNow();                         // the guest is still there
       if(d.t==='play'){
         if(G && d.pn===G.playNo){ NET.guestPick=d.id; tryStartPlay(); }
         return;
@@ -8025,7 +8110,7 @@ function hostOnline(tries){
       if(d.sd) r.sd=d.sd;
     });
     c.on('open',function(){
-      NET.on=true; NET.lastSt=null; NET.ev=[];
+      NET.on=true; NET.lastSt=null; NET.ev=[]; keepAlive();   // (already in the background: keep playing)
       elOv.classList.remove('show');
       G=freshGame(); G.phase='playcall';
       say('THEY ARE IN - YOU ARE THE HEROES',2000,'H');
@@ -8057,7 +8142,7 @@ function joinOnline(code){
     if(!c){ netSay('Could not reach that room.'); return; }
     NET.conn=c;
     c.on('open',function(){
-      NET.on=true;
+      NET.on=true; keepAlive();
       if(!G) G=freshGame();
       say('YOU ARE THE RIVALS',2000);
       NET.choosing=true;
@@ -8346,6 +8431,11 @@ function guestSheet(){
   if(!G) return;
   if(NET.choosing) return;          // the guest is picking a hero; leave it alone
   if(G.showingStats) return;
+  if(G.phase==='over'){                            // the final whistle: its own result screen
+    if(!NET.overUp){ NET.overUp=true; showOver(); }
+    return;
+  }
+  NET.overUp=false;
   if(G.phase==='playcall'){
     if(!NET.sentPick && !elOv.classList.contains('show')) showPlaycall();
   } else {
@@ -8365,7 +8455,11 @@ function consumeWorld(){
 
 // ================================================================ loop
 var last=0;
-function frame(ts){
+function frame(ts){ tick(ts); requestAnimationFrame(frame); }
+// One pass of the game. The animation frame runs it; online, while this tab
+// is hidden (the browser stops animation frames there), the keep-alive below
+// does, so the host switching windows no longer freezes the game for both.
+function tick(ts){
   if(!last) last=ts;
   var dt=Math.max(0,Math.min(0.05,(ts-last)/1000))*GAME_SPEED; last=ts;   // never backwards
   if(G && G.hitStopUntil && performance.now()<G.hitStopUntil) dt=0;   // hit-stop: the moment of contact holds for a beat
@@ -8380,7 +8474,7 @@ function frame(ts){
       if(!frame._gerr){ frame._gerr=true; console.error('guest frame error:',err); }
       ctx.setTransform(dpr,0,0,dpr,0,0);
     }
-    requestAnimationFrame(frame);
+    netWatch();
     return;
   }
   if(G){
@@ -8409,8 +8503,36 @@ function frame(ts){
       if(!frame._logged){ frame._logged=true; console.error('frame error:',err); }
       ctx.restore(); ctx.setTransform(dpr,0,0,dpr,0,0);
     }
+    netWatch();
   }
-  requestAnimationFrame(frame);
+}
+// Online, a hidden tab keeps playing: a worker's timer (the browser keeps
+// those running in the background) drives the game in place of the frames.
+var KEEP=null;
+function keepAlive(){
+  var want=document.hidden && NET.on;
+  if(want && !KEEP){
+    try{
+      KEEP=new Worker(URL.createObjectURL(new Blob(['setInterval(function(){ postMessage(0); }, 16);'],{type:'text/javascript'})));
+      KEEP.onmessage=function(){ if(document.hidden && NET.on) tick(_realNow()); else keepAlive(); };
+    }catch(e){ KEEP=null; }
+  } else if(!want && KEEP){ KEEP.terminate(); KEEP=null; }
+}
+document.addEventListener('visibilitychange', keepAlive);
+// Online, the other screen going quiet is said out loud instead of looking
+// like a freeze (the guest sends its stick every frame, the host the game
+// thirty times a second), and after half a minute of nothing the room is over.
+var NET_QUIET=2500, NET_GONE=30000;
+function netWatch(){
+  if(!NET.on) return;
+  var t=_realNow(), heard=NET.host ? NET.inAt : NET.stAt;
+  if(!heard) return;                                 // nothing heard yet: still connecting
+  var q=t-heard;
+  if(q>NET_GONE){ netDropped(); return; }
+  if(q>NET_QUIET && t-(NET.quietSaid||0)>900){
+    NET.quietSaid=t;
+    say(NET.host ? 'WAITING ON THE OTHER PLAYER' : 'WAITING ON THE HOST', 1000, 'H');   // (each screen says its own)
+  }
 }
 
 // a small window into the sim, for diagnosing input problems
@@ -8739,6 +8861,7 @@ function askQuit(){
   if(!TOUCH_IN) document.getElementById('qStay').focus();
 }
 function quitToMenu(){
+  if(NET.on) netTeardown();                        // online: the other screen hears the room close
   if(G && G.audibleOpen) closeAudible();
   G=freshGame(); G.phase='intro';
   elOv.classList.remove('show');
