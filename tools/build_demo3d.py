@@ -226,7 +226,11 @@ function sidelineGuys(P){
 function STAND_OFF(){ return TOUCH_UI ? VH*0.08 : VH*0.08; }   // how far the field sits below centre (a phone keeps it high: less stand, more field)
 function setupProj(sx,sy){
   var want=BASE3*CAM3.z, fit=camFit(camPoints(),cam.x,cam.y);
-  var tgt=Math.max(TOUCH_UI?BASE3*0.62:0.35, Math.min(want,fit));   // a phone never pulls out so far the players turn into ants
+  // How far out the camera may pull scales with the screen's height: a phone
+  // held sideways has under 400 pixels for the field, and with a fixed floor
+  // half the play hung off the bottom of it (players get smaller, never cut)
+  var floor=BASE3*0.62*Math.max(0.5, Math.min(1, VH/700));
+  var tgt=Math.max(floor, Math.min(want,fit));
   if(!CAM3.S) CAM3.S=tgt;
   // pull out fast so nothing leaves the frame, push in gently
   CAM3.S += (tgt-CAM3.S)*(tgt<CAM3.S?(TOUCH_UI?0.12:0.3):((G && G.brawlUntil>performance.now())?0.1:(TOUCH_UI?0.035:0.06)));
