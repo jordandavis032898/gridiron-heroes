@@ -619,7 +619,7 @@ var DEFENDERS = [
   {name:'Fenrir', player:'Fen Lokison', title:'Frost Fang',                num:97, skin:'#a9744c', stars:4, sig:'Chain Breaker',      card:'fenrir'},           // DE
   {name:'Beowulf', player:'Bo Geatson', title:'Ironbeard',               num:54, skin:'#d8a87e', stars:5, sig:'Grendel Grip',       card:'beowulf'},          // LB
   {name:'The Werewolf', player:'Luke Lycan', title:'Moon Howler',          num:52, skin:'#7a5035', stars:4, sig:'Full Moon Burst',    card:'werewolf'},         // LB
-  {name:'Dracula', player:'Drake Carfax', title:'Bat Cloud',               num:2,  skin:'#e6e0d8', stars:5, sig:'Bat Blink',          card:'dracula'},          // CB
+  {name:'Dracula', player:'Drake Carfax', title:'Prince of Darkness',             num:2,  skin:'#e6e0d8', stars:5, sig:'Bat Blink',          card:'dracula'},          // CB
   {name:'The Invisible Man', player:'Ghost Griffin', title:'Vanishing Act',     num:24, skin:'#e6bd97', stars:4, sig:"Now You Don't",      card:'invisible-man'},    // CB
   {name:'Zeus', player:'Zeke Olympus', title:'Sky Hammer',                  num:31, skin:'#c98f63', stars:5, sig:'Lightning Strike',   card:'zeus'}              // S
 ];
@@ -5953,7 +5953,7 @@ var cardEl=null, cardTimer=null;
 // Card portraits load on first use and are remembered; a missing file is
 // remembered too, so it is only asked for once.
 var CARD_ART={};
-var CARD_VER=6;          // bump when the card pictures change, so browsers drop the old ones
+var CARD_VER=7;          // bump when the card pictures change, so browsers drop the old ones
 function cardArt(key){
   if(!key) return null;
   var c=CARD_ART[key];
