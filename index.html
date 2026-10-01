@@ -58,39 +58,6 @@
   #stage{touch-action:none;}
 
   .overlay{position:absolute; inset:0; display:none; align-items:center; justify-content:center; padding:16px; z-index:5; overflow-y:auto;}
-  /* the controls card: once on your first game, and from the pause menu */
-  #ctrlCard{z-index:12; background:rgba(6,10,16,.74);}
-  #ctrlCard .cc{width:100%; max-width:760px; margin:auto; padding:16px 18px 14px; border-radius:6px;
-    background:linear-gradient(180deg,#1b2b4c 0%,#111d35 100%); border:1px solid rgba(255,210,63,.5);
-    box-shadow:0 14px 44px rgba(0,0,0,.6);}
-  #ctrlCard h2{font-family:'Anton',Impact,sans-serif; font-size:26px; margin:0; letter-spacing:.04em; color:var(--gold); line-height:1.05;}
-  #ctrlCard .sub{font-size:12px; color:#9fb0cf; margin:2px 0 12px; letter-spacing:.08em; text-transform:uppercase; font-weight:600;}
-  #ctrlCard .cols{display:grid; grid-template-columns:1fr 1fr; gap:10px 22px;}
-  #ctrlCard h3{margin:0 0 4px; padding-bottom:4px; border-bottom:1px solid rgba(255,255,255,.14);
-    font:700 12px 'Barlow Condensed',sans-serif; letter-spacing:.16em; color:#ffffff; text-transform:uppercase;}
-  #ctrlCard .cr{display:flex; gap:10px; align-items:center; margin:7px 0;}
-  #ctrlCard .ci{flex:0 0 36px; height:36px; border-radius:50%; border:2px solid var(--gold); background:rgba(255,210,63,.10);
-    display:flex; align-items:center; justify-content:center;}
-  #ctrlCard .ci svg{width:20px; height:20px; stroke:#ffd23f; fill:none; stroke-width:2.2; stroke-linecap:round; stroke-linejoin:round;}
-  #ctrlCard .ci.k{flex:0 0 64px; border-radius:18px;}
-  #ctrlCard .ci kbd{font-size:11px; padding:0; border:0; background:none; color:#ffd23f; white-space:nowrap; font-weight:700;}
-  #ctrlCard .cr b{display:block; font:700 13px 'Barlow Condensed',sans-serif; letter-spacing:.08em; color:#ffffff; text-transform:uppercase;}
-  #ctrlCard .cr span{display:block; font-size:12.5px; color:#c9d4e6; line-height:1.3;}
-  #ctrlCard .go{display:block; width:100%; margin-top:12px; padding:10px 0; border:0; border-radius:4px; cursor:pointer;
-    background:var(--gold); color:#111a2c; font-family:'Anton',Impact,sans-serif; font-size:18px; letter-spacing:.08em;}
-  #ctrlCard .go:focus-visible{outline:2px solid #ffffff; outline-offset:2px;}
-  html.touchui #ctrlCard{padding:4px 10px; align-items:flex-start;}
-  html.touchui #ctrlCard .cc{padding:8px 14px 8px; max-width:720px;}
-  html.touchui #ctrlCard h2{font-size:19px; display:inline-block; margin-right:10px;}
-  html.touchui #ctrlCard .sub{display:inline-block; margin:0 0 4px; font-size:10px;}
-  html.touchui #ctrlCard h3{font-size:11px; margin-bottom:1px; padding-bottom:2px;}
-  html.touchui #ctrlCard .cr{margin:3px 0; gap:8px;}
-  html.touchui #ctrlCard .ci{flex-basis:26px; height:26px; border-width:1.6px;}
-  html.touchui #ctrlCard .ci svg{width:15px; height:15px;}
-  html.touchui #ctrlCard .cr b{font-size:11.5px;}
-  html.touchui #ctrlCard .cr span{font-size:10.5px; line-height:1.18;}
-  html.touchui #ctrlCard .go{margin-top:6px; padding:6px 0; font-size:15px;}
-  @media (max-width:520px){ #ctrlCard .cols{grid-template-columns:1fr;} }
   .overlay.show{display:flex;}
   .sheet{
     background:rgba(12,17,20,.95); border:1px solid var(--line); border-radius:4px;
@@ -111,6 +78,15 @@
   .card .t{font-family:'Anton',sans-serif; font-size:15px; margin:3px 0 1px; letter-spacing:.02em;}
   .card .pos{font-size:11px; color:var(--gold); letter-spacing:.12em; font-weight:700; text-transform:uppercase;}
   .card .d{font-size:12.5px; color:var(--muted); line-height:1.35; margin-top:4px;}
+  /* how to play: one card a section, the control in bold */
+  .how .card{cursor:default; padding:9px 11px 10px;}
+  .how .card .pos{margin-bottom:1px;}
+  .how .card .d{margin-top:4px;}
+  .how .card .d b{color:var(--chalk); font-weight:700;}
+  .howgo{display:flex; gap:8px; margin-top:10px;}
+  .howgo .card{flex:1;}
+  .howgo #howPlay{flex:2; border-color:var(--gold);}
+  .howgo #howPlay .t{font-size:18px;}
   .stats{display:flex; gap:7px; margin-top:6px;}
   .stat{flex:1;}
   .stat .sl{font-size:9px; letter-spacing:.12em; color:var(--muted); text-transform:uppercase;}
@@ -406,6 +382,9 @@
   html.touchui .pc .card .d{display:none;}
   html.touchui .pc .card canvas.pd{margin:4px 0 0;}
   html.touchui .sheet .card .t{font-size:13px;}
+  html.touchin .how .card{padding:5px 8px 6px;}
+  html.touchin .how .card .d{font-size:10.5px; line-height:1.22; margin-top:2px;}
+  html.touchin .howgo{margin-top:6px;}
   html.touchui #seeStats, html.touchui #toSheet{padding:6px 8px;}
   html.touchui #stage:has(.overlay.show) #preBar{visibility:hidden;}
 
@@ -6663,7 +6642,7 @@ function showStart(){
   showFront('main');
 }
 
-function showHeroPick(){
+function showHeroPick(fromHow){
   var html='<h2>Pick your hero</h2><p class="sub">'+
     (PICK_THEN==='host'?'You are the Heroes. This is your signature move'
      :PICK_THEN==='guest'?'You are the Rivals. This is your signature move'
@@ -6683,32 +6662,18 @@ function showHeroPick(){
   html += '<div style="margin-top:10px">'+
     '<button class="card" id="pickBack" type="button" style="width:100%">'+
       '<div class="k">BACK</div>'+
-      '<div class="t">'+(PICK_THEN==='host'?'Do not host after all':PICK_THEN==='solo'?'Pick another team':'Back to the menu')+'</div>'+
+      '<div class="t">'+(fromHow?'How to play':PICK_THEN==='host'?'Do not host after all':PICK_THEN==='solo'?'Pick another team':'Back to the menu')+'</div>'+
     '</button></div>';
   elSheet.innerHTML=html; elOv.classList.add('show');
   document.getElementById('pickBack').addEventListener('click',function(){
+    if(fromHow){ showHowTo(); return; }                // back to how to play
     var solo=(PICK_THEN==='solo');
     NET.choosing=false; PICK_THEN='solo';
     netTeardown();
     if(solo) showFront('team'); else showStart();   // one step back: the team you play
   });
   Array.prototype.forEach.call(elSheet.querySelectorAll('.card:not(#pickBack)'),function(b){
-    b.addEventListener('click',function(){
-      HERO=heroById(b.getAttribute('data-id'));
-      // the guest's hero plays for the Rivals, so it belongs on that side of
-      // the scoreboard, not in the Heroes slot
-      var nmEl=(PICK_THEN==='guest')?document.querySelector('.team.away .nm'):elNmH;
-      if(nmEl) nmEl.textContent=HERO.name.split(' ')[1].toUpperCase();
-      elMvName.textContent=HERO.moveName;
-      if(PICK_THEN==='host'){ hostOnline(); }
-      else if(PICK_THEN==='guest'){
-        netSend({t:'hero', id:HERO.id});
-        NET.choosing=false; PICK_THEN='solo';
-        elOv.classList.remove('show');
-        say('YOU ARE THE RIVALS \u2014 '+HERO.name.split(' ')[1].toUpperCase(),1600);
-      }
-      else start();
-    });
+    b.addEventListener('click',function(){ pickHero(heroById(b.getAttribute('data-id'))); });
   });
   var f=elSheet.querySelector('.card'); if(f) f.focus();
 }
@@ -6717,52 +6682,94 @@ function bar(lbl,v){
   return '<div class="stat"><div class="sl">'+lbl+'</div><div class="sb"><i style="width:'+pct+'%"></i></div></div>';
 }
 
-// ---- the controls card ------------------------------------------------------
-// The controls changed a lot (a tap punches, a swipe tackles or spins, SWITCH
-// changes your man), so the first game on a device opens with this card over
-// the first play call. The pause menu has it too.
-var CTRL_KEY='hm_controls_v1';
-function ctrlSeen(){ try{ return localStorage.getItem(CTRL_KEY)==='1'; }catch(e){ return true; } }
-function controlsCard(){
-  var old=document.getElementById('ctrlCard'); if(old) old.parentNode.removeChild(old);
-  var IC={
-    stick:'<circle cx="12" cy="12" r="9"/><circle cx="14.6" cy="9.4" r="3.8" fill="#ffd23f"/>',
-    tap:'<circle cx="12" cy="15" r="2.8" fill="#ffd23f"/><path d="M7.2 10.6a6.6 6.6 0 0 1 9.6 0M4.4 7.4a10.6 10.6 0 0 1 15.2 0"/>',
-    swipe:'<path d="M3 12h15M13.5 7l5 5-5 5"/><path d="M3 7.5h5M3 16.5h5"/>',
-    aim:'<circle cx="12" cy="12" r="7.5"/><circle cx="12" cy="12" r="2.4" fill="#ffd23f"/><path d="M12 1.5v4M12 18.5v4M1.5 12h4M18.5 12h4"/>',
-    sw:'<path d="M4 8h13l-3.5-3.5M20 16H7l3.5 3.5"/>',
-    star:'<path d="M12 3l2.4 5.6L20 10l-4.3 3.9 1.2 5.9L12 17l-4.9 2.8 1.2-5.9L4 10l5.6-1.4z"/>'
-  };
-  function row(icon, key, what){
-    var svg=icon.charAt(0)==='<', ic = svg ? '<svg viewBox="0 0 24 24">'+icon+'</svg>' : '<kbd>'+icon+'</kbd>';
-    return '<div class="cr"><div class="ci'+(svg?'':' k')+'">'+ic+'</div><div><b>'+key+'</b><span>'+what+'</span></div></div>';
+// the pause menu's CONTROLS: the how to play page below
+function controlsCard(){ showHowTo('pause'); }
+
+// ---- how to play ---------------------------------------------------------------
+// Every control for this screen, a computer's or a phone's. It opens before
+// each game, where the hero pick used to be (your last hero plays unless you
+// change him), and from the pause menu.
+var HERO_KEY='hm_hero';
+try{ var savedHero=localStorage.getItem(HERO_KEY); if(savedHero && heroById(savedHero)) HERO=heroById(savedHero); }catch(e){}
+function pickHero(h){
+  HERO=h||HERO;
+  try{ localStorage.setItem(HERO_KEY, HERO.id); }catch(e){}
+  // the guest's hero plays for the Rivals, so it belongs on that side of the
+  // scoreboard, not in the Heroes slot
+  var nmEl=(PICK_THEN==='guest')?document.querySelector('.team.away .nm'):elNmH;
+  if(nmEl) nmEl.textContent=HERO.name.split(' ')[1].toUpperCase();
+  elMvName.textContent=HERO.moveName;
+  if(PICK_THEN==='host'){ hostOnline(); }
+  else if(PICK_THEN==='guest'){
+    netSend({t:'hero', id:HERO.id});
+    NET.choosing=false; PICK_THEN='solo';
+    elOv.classList.remove('show');
+    say('YOU ARE THE RIVALS \u2014 '+HERO.name.split(' ')[1].toUpperCase(),1600);
   }
-  // one game on every screen; a computer's mouse does what a thumb does
-  var T=TOUCH_IN;
-  var stickK=T?'Stick':'WASD', stickW=T?'Run with your left thumb.':'Run. The arrow keys work too.';
-  var tap=T?'Tap':'Click', swipe=T?'Swipe':'Drag';
-  var off = row(IC.stick,stickK,stickW)+
-            (T ? row(IC.aim,'Hold on a receiver','Aim a pass, then lift to throw. Hold longer for a better ball.')+
-                 row(IC.tap,'Tap','Punch. Breaks a grab and knocks a rusher back.')
-               : row(IC.aim,'Click','Throw to the receiver you point at. Point at him a moment first for a better ball.')+
-                 row(IC.tap,'Right click','Punch. Breaks a grab and knocks a rusher back. A runner can click too.'))+
-            row(IC.swipe,swipe,T?'Spin away from a tackler.':'Spin away from a tackler, the quarterback too.')+
-            row(IC.star,'Move buttons','Your heroes\u2019 special moves.'+(T?'':' Or Q, E and R.'));
-  var def = row(IC.stick,stickK,stickW)+
-            row(IC.tap,T?'Tap':'Click','Punch the ball carrier, or swat a pass in the air.'+(T?'':' Right click works too.'))+
-            row(IC.swipe,swipe,'Slide tackle. Reaches up to 9 yards.')+
-            row(IC.sw,'Switch','Take the defender best placed to make the play. It pulses when your man is out of it.'+(T?'':' Or Shift.'));
-  stage.insertAdjacentHTML('beforeend',
-    '<div class="overlay show" id="ctrlCard" role="dialog" aria-label="Controls"><div class="cc">'+
-      '<h2>HOW TO PLAY</h2><p class="sub">One touch, one job</p>'+
-      '<div class="cols"><div><h3>With the ball</h3>'+off+'</div><div><h3>On defense</h3>'+def+'</div></div>'+
-      '<button class="go" id="ctrlGo" type="button">LET\u2019S PLAY</button>'+
-    '</div></div>');
-  var card=document.getElementById('ctrlCard'), go=document.getElementById('ctrlGo');
-  function close(){ try{ localStorage.setItem(CTRL_KEY,'1'); }catch(e){} if(card.parentNode) card.parentNode.removeChild(card); }
-  go.addEventListener('click', close);
-  go.addEventListener('touchend', function(ev){ ev.preventDefault(); close(); }, {passive:false});
-  card.addEventListener('touchstart', function(ev){ ev.stopPropagation(); }, {passive:true});
+  else start();
+}
+function howSections(){
+  if(!TOUCH_IN) return [
+    ['Move', ['WASD','to run. The arrow keys work too.']],
+    ['Quarterback', ['Click a receiver','to throw to him. Click near him and the closest man gets it.'],
+                    ['Point at him','a moment first for a better ball.'],
+                    ['Drag','to spin away from a rusher.'], ['Right click','to punch a rusher off you.']],
+    ['With the ball', ['Click','to punch. It breaks a grab.'], ['Drag','to spin away from a tackler.'],
+                      ['Run plays','hand off on their own.']],
+    ['Defense', ['Drag','toward the ball carrier to slide tackle, up to 9 yards.'],
+                ['Click','to punch him, or to swat a pass in the air.'],
+                ['Shift','to switch to the defender best placed to make the play.']],
+    ['Moves', ['Q E R','for your man\u2019s moves, or click the round buttons.'], ['K','for your hero\u2019s special when you have him.']],
+    ['Before the snap', ['Space','to hike, or click the field.'], ['Click one of your men','on defense to take him.'],
+                        ['Hold C','for play art. X audibles, O calls a timeout, Esc is the menu.']]
+  ];
+  return [
+    ['Move', ['Stick','to run, with your left thumb.']],
+    ['Quarterback', ['Hold on a receiver','to aim, then lift to throw. Hold longer for a better ball.'],
+                    ['Swipe','to spin away from a rusher.'], ['Tap','to punch a rusher off you.']],
+    ['With the ball', ['Tap','to punch. It breaks a grab.'], ['Swipe','to spin away from a tackler.'],
+                      ['Run plays','hand off on their own.']],
+    ['Defense', ['Swipe','toward the ball carrier to slide tackle, up to 9 yards.'],
+                ['Tap','to punch him, or to swat a pass in the air.'],
+                ['SWITCH','to take the defender best placed to make the play.']],
+    ['Moves', ['The round buttons','along the bottom are your man\u2019s moves, and your hero\u2019s special when you have him.']],
+    ['Before the snap', ['Tap the field','to hike.'], ['Tap one of your men','on defense to take him.'],
+                        ['The top buttons','are play art, audible, timeout and the menu.']]
+  ];
+}
+function showHowTo(mode){
+  var pause=(mode==='pause');
+  var who = PICK_THEN==='host' ? 'You are the Heroes' : PICK_THEN==='guest' ? 'You are the Rivals'
+          : (MODE.training?'Training':'Live match')+' vs the '+FOE.name;
+  var html='<h2>How to play</h2><p class="sub">'+(pause?'':who+' \u00b7 ')+(TOUCH_IN?'on your phone':'on a computer')+'</p><div class="grid3 how">';
+  howSections().forEach(function(sec){
+    html+='<div class="card"><div class="pos">'+sec[0]+'</div>';
+    for(var i=1;i<sec.length;i++) html+='<div class="d"><b>'+sec[i][0]+'</b> '+sec[i][1]+'</div>';
+    html+='</div>';
+  });
+  html+='</div><div class="howgo">';
+  if(pause) html+='<button class="card" id="howBack" type="button"><div class="k">BACK</div><div class="t">To the pause menu</div></button>';
+  else html+='<button class="card" id="howPlay" type="button"><div class="k">LET\u2019S PLAY</div><div class="t">'+HERO.name+'</div></button>'+
+    '<button class="card" id="howHero" type="button"><div class="k">CHANGE HERO</div><div class="t">Pick another</div></button>'+
+    '<button class="card" id="howBack" type="button"><div class="k">BACK</div><div class="t">'+
+      (PICK_THEN==='host'?'Do not host after all':PICK_THEN==='solo'?'Pick another team':'Back to the menu')+'</div></button>';
+  html+='</div>';
+  elSheet.innerHTML=html; elOv.classList.add('show');
+  var back=document.getElementById('howBack');
+  if(pause){
+    back.addEventListener('click',function(){ if(G) G.paused=false; askQuit(); });
+    if(!TOUCH_IN) back.focus();
+    return;
+  }
+  back.addEventListener('click',function(){
+    var solo=(PICK_THEN==='solo');
+    NET.choosing=false; PICK_THEN='solo';
+    netTeardown();
+    if(solo) showFront('team'); else showStart();      // one step back: the team you play
+  });
+  document.getElementById('howHero').addEventListener('click',function(){ showHeroPick(true); });
+  var go=document.getElementById('howPlay');
+  go.addEventListener('click',function(){ pickHero(HERO); });
   if(!TOUCH_IN) go.focus();
 }
 function showPlaycall(){
@@ -6804,7 +6811,6 @@ function showPlaycall(){
   var tb=document.getElementById('toSheet');
   if(tb) tb.addEventListener('click',function(){ callTimeout(); });
   var f=elSheet.querySelector('.card'); if(f) f.focus();
-  if(!ctrlSeen() && !document.getElementById('ctrlCard')) controlsCard();
 }
 // ---- the playbook chalkboard ----------------------------------------------
 // Each card draws its play from the same formation and route shapes the
@@ -7912,7 +7918,7 @@ function netDropped(){
 function showOnline(){
   if(!netReady()){
     say('MULTIPLAYER LIBRARY DID NOT LOAD',2000);
-    PICK_THEN='solo'; showHeroPick(); return;
+    PICK_THEN='solo'; showHowTo(); return;
   }
   var html='<h2>Two players</h2>'+
     '<p class="sub">One hosts, one joins. Same field, one ball.</p><div class="grid3">'+
@@ -7942,7 +7948,7 @@ function showOnline(){
   });
   // the host is the Heroes, so the host picks the hero before opening a room
   document.getElementById('netHost').addEventListener('click',function(){
-    PICK_THEN='host'; showHeroPick();
+    PICK_THEN='host'; showHowTo();
   });
   document.getElementById('netJoinCard').addEventListener('click',function(){
     document.getElementById('netForm').style.display='flex';
@@ -8056,7 +8062,7 @@ function joinOnline(code){
       say('YOU ARE THE RIVALS',2000);
       NET.choosing=true;
       PICK_THEN='guest';
-      showHeroPick();
+      showHowTo();
     });
     c.on('data',function(d){ if(!d) return; if(d.t==='w2') netTake(d); else if(d.t==='wc') netChunk(d); });
     c.on('close',netDropped);
@@ -8570,7 +8576,7 @@ function frontMenu(which){
     drawTeamMan(b.querySelector('canvas'), t);
     b.addEventListener('click', function(){
       applyFoe(t); hideFront();
-      PICK_THEN='solo'; showHeroPick();
+      PICK_THEN='solo'; showHowTo();
     });
   });
   var first=m.querySelector('.fb'); if(first && !TOUCH_IN) first.focus();
