@@ -517,6 +517,7 @@
     <button class="ab" id="ab1" type="button"><span class="ring"><svg viewBox="0 0 24 24"><path d="M5 19l5-6-3-2 5-6"/><path d="M12 5h3v3"/></svg><span class="key">SP</span></span><span class="cap">Juke</span></button>
     <button class="ab" id="ab2" type="button"><span class="ring"><svg viewBox="0 0 24 24"><path d="M13 3l-5 9h4l-2 9 8-11h-4z"/></svg><span class="key">SH</span></span><span class="cap">Sprint</span></button>
     <button class="ab" id="ab3" type="button"><span class="ring"><svg viewBox="0 0 24 24"><path d="M12 3l2.4 5.6L20 10l-4.3 3.9 1.2 5.9L12 17l-4.9 2.8 1.2-5.9L4 10l5.6-1.4z"/></svg><span class="key">E</span></span><span class="cap">Special</span></button>
+    <button class="ab" id="ab6" type="button"><span class="ring"><svg viewBox="0 0 24 24"></svg><span class="key">T</span></span><span class="cap"></span></button>
   </div>
   <div id="card">
     <div class="pcTop"><span class="pcPos" id="pcPos">DE</span><span class="pcName" id="pcName">NAME</span><span class="pcBadge" id="pcStars"></span></div>
@@ -639,7 +640,7 @@ var DEFENDERS = [
   {name:'Beowulf', player:'Bo Geatson', title:'Ironbeard',               num:54, skin:'#d8a87e', stars:5, sig:'Grendel Grip',       card:'beowulf'},          // LB
   {name:'The Werewolf', player:'Luke Lycan', title:'Moon Howler',          num:52, skin:'#7a5035', stars:4, sig:'Full Moon Burst',    card:'werewolf'},         // LB
   {name:'Dracula', player:'Drake Carfax', title:'Prince of Darkness',             num:2,  skin:'#e6e0d8', stars:5, sig:'Bat Blink',          card:'dracula'},          // CB
-  {name:'The Invisible Man', player:'Ghost Griffin', title:'Vanishing Act',     num:24, skin:'#e6bd97', stars:4, sig:"Now You Don't",      card:'invisible-man'},    // CB
+  {name:'The Invisible Man', player:'Ghost Griffin', title:'The Unseen',        num:24, skin:'#e6bd97', stars:5, sig:"Now You Don't",      card:'invisible-man'},    // CB
   {name:'Zeus', player:'Zeke Olympus', title:'Sky Hammer',                  num:31, skin:'#c98f63', stars:5, sig:'Lightning Strike',   card:'zeus'}              // S
 ];
 
@@ -772,7 +773,7 @@ function freshGame(){
 
 // ================================================================ input
 var keys=Object.create(null), touchVec={x:0,y:0}, touchJuke=false, touchSprint=false, touchMove=false, touchQ=false, touchSwitch=false, touchCPunch=false;
-var touchAb=[false,false,false], touchJukeDir=null, touchSpinDir=null;
+var touchAb=[false,false,false,false], touchJukeDir=null, touchSpinDir=null;
 window.addEventListener('keydown',function(e){
   var k=e.key.toLowerCase();
   if(!e.repeat) pressed[k]=true;        // latched; a lost keyup must not kill the key
@@ -815,6 +816,7 @@ function eligibleReceivers(){
 function tapAb1(){ if(eat('q')){return true;} if(touchAb[0]){touchAb[0]=false;return true;} return false; }
 function tapAb2(){ if(eat('e')){return true;} if(touchAb[1]){touchAb[1]=false;return true;} return false; }
 function tapAb3(){ if(eat('r')){return true;} if(touchAb[2]){touchAb[2]=false;return true;} return false; }
+function tapAb4(){ if(eat('t')){return true;} if(touchAb[3]){touchAb[3]=false;return true;} return false; }
 function tapSwitch(){ if(eat('shift')||eat('tab')){return true;} if(touchSwitch){touchSwitch=false;return true;} return false; }   // (the moves have Q, E and R)
 function tapHike(){ if(eat(' ')||eat('enter')){return true;} return false; }
 
@@ -1321,7 +1323,7 @@ function releaseThrow(best){
 var ABIL = {
   rocket:     {name:'Rocket Pass', cd:5, desc:'Flat bullet. Nobody gets there in time.'},
   perfect:    {name:'Perfect Pass',cd:6, desc:'Guided. It follows him, cannot be defended, and he catches it in stride.'},
-  forcefield: {name:'Forcefield',  cd:6, desc:'Blast the pocket clear and shrug off the next hit.'},
+  forcefield: {name:'Forcefield',  cd:6, desc:'A shield for 3 seconds. Nobody can grab you, and anyone who runs into it bounces off.'},
   dash:       {name:'Super Dash',  cd:5, desc:'Explode forward.'},
   stiffarm:   {name:'Stiff Arm',   cd:4, desc:'Put the nearest man down and keep going.'},
   teleport:   {name:'Teleport',    cd:6, desc:'Blink clean past the man in front of you.'},
@@ -1344,13 +1346,24 @@ var ABIL = {
   grip:       {name:'Grendel Grip',    cd:5, desc:'Lunge and lock on. Nobody breaks this tackle.'},
   shadow:     {name:'Shadow Hunt',     cd:5, desc:'Sink into the ground and rise behind the ball carrier.'},
   fury:       {name:'Stitched Fury',   cd:5, desc:'Nobody can block you. Straight through them.'},
-  frost:      {name:'Frost Howl',      cd:5, desc:'Freeze everyone around you.'}
+  frost:      {name:'Frost Howl',      cd:5, desc:'Freeze everyone around you.'},
+  // the line's own (a lineman carries four moves, everyone else three)
+  guard:      {name:'Bodyguard',       cd:5, desc:'Run with your ball carrier. The next two men who try to tackle him get thrown off.'},
+  swim:       {name:'Swim Move',       cd:4, desc:'Swim over your blocker, put him down, and burst at the ball.'},
+  claywall:   {name:'Clay Wall',       cd:5, desc:'A wall of clay rises in front of you. Nobody gets through it for 3.5 seconds.'},
+  boomshove:  {name:'Sonic Boom Shove',cd:5, desc:'One shove with a boom behind it. Everyone in front of you is thrown back.'},
+  eyeslam:    {name:'One-Eye Slam',    cd:5, desc:'Leap onto the nearest man and slam down. Everyone around the landing goes down.'},
+  duskride:   {name:'Dusk Ride',       cd:6, desc:'Ride the black horse for 2 seconds: faster, nobody can bring you down, and anyone in the way is trampled.'}
 };
 // Each of the cast has a move nobody else has, keyed by his card.
 var SIG_MOVE = { dracula:'bats', 'invisible-man':'vanish', 'peter-pan':'flight', 'sun-wukong':'cloud',
   'robin-hood':'bullseye', 'headless-horseman':'pumpkin', zeus:'lightning', werewolf:'moon', beowulf:'grip',
-  anubis:'shadow', 'frankenstein-monster':'fury', fenrir:'frost' };
+  anubis:'shadow', 'frankenstein-monster':'fury', fenrir:'frost',
+  golem:'claywall', minotaur:'boomshove', cyclops:'eyeslam' };
+// and a second one on top for the Dusk Rider, who never got to ride
+var EXTRA_MOVE = { 'headless-horseman':'duskride' };
 var IS_SIG={}; for(var sgk in SIG_MOVE) IS_SIG[SIG_MOVE[sgk]]=true;
+for(var exk in EXTRA_MOVE) IS_SIG[EXTRA_MOVE[exk]]=true;
 
 
 // Each ability draws its own icon. The bar used to show a fixed squiggle, a
@@ -1381,29 +1394,41 @@ var AB_ICON = {
   grip:       '<path d="M6 11.4V8a1.6 1.6 0 0 1 3.2 0v2M9.2 10V7a1.6 1.6 0 0 1 3.2 0v3M12.4 10V7.6a1.6 1.6 0 0 1 3.2 0v3.4M15.6 11V9.6a1.6 1.6 0 0 1 3.2 0V14a6 6 0 0 1-6 6h-1.4A6 6 0 0 1 6 14z"/>',
   shadow:     '<circle cx="12" cy="6" r="3.2"/><path d="M12 9.2V21.4M7 13.2h10"/>',
   fury:       '<path d="M3 12h18"/><path d="M6.6 8.6v6.8M10.2 8.6v6.8M13.8 8.6v6.8M17.4 8.6v6.8"/>',
-  frost:      '<path d="M12 2v20M3.4 7l17.2 10M3.4 17L20.6 7"/><path d="M9.6 3.8L12 6.2l2.4-2.4M9.6 20.2L12 17.8l2.4 2.4"/>'
+  frost:      '<path d="M12 2v20M3.4 7l17.2 10M3.4 17L20.6 7"/><path d="M9.6 3.8L12 6.2l2.4-2.4M9.6 20.2L12 17.8l2.4 2.4"/>',
+  guard:      '<path d="M12 3l7 2.6v5.6c0 4.6-3 7.6-7 8.8-4-1.2-7-4.2-7-8.8V5.6z"/><circle cx="12" cy="9.4" r="2.2"/><path d="M8.6 16c.8-2 2-3 3.4-3s2.6 1 3.4 3"/>',
+  swim:       '<path d="M3 18c3-7.4 7-11.4 12-11.4 2.6 0 4.4 1.2 5 3"/><path d="M16.4 4.4L20 9.4l-5 1"/><path d="M4 21.4h16"/>',
+  claywall:   '<rect x="3" y="5" width="18" height="15" rx="1"/><path d="M3 10h18M3 15h18M9 5v5M15 5v5M6 10v5M12 10v5M18 10v5M9 15v5M15 15v5"/>',
+  boomshove:  '<path d="M4 4.6c0 3.4 2 5.4 5 5.4M20 4.6c0 3.4-2 5.4-5 5.4"/><path d="M9 10h6v3.6a3 3 0 0 1-6 0z"/><path d="M5 18c2.4 2 11.6 2 14 0M7.4 21.2c2.2 1 7 1 9.2 0"/>',
+  eyeslam:    '<path d="M2 9c3-4.4 17-4.4 20 0-3 4.4-17 4.4-20 0z"/><circle cx="12" cy="9" r="2.4"/><path d="M4 19.4c4 2 12 2 16 0M12 14.4v3.6M8 15.4l1.4 2.4M16 15.4l-1.4 2.4"/>',
+  duskride:   '<path d="M6 3v8.4a6 6 0 0 0 12 0V3"/><path d="M4 3h4M16 3h4"/><path d="M8.6 8.4h.01M15.4 8.4h.01M8.4 13.4h.01M15.6 13.4h.01"/><path d="M2 21h6M16 21h6M9 19.6h6"/>'
 };
 
 var KITS_AB = {
   QB:['rocket','perfect','forcefield'],
   RB:['dash','stiffarm','teleport'],
-  OL:['superblock','clothesline'],
-  C: ['superblock','clothesline'],
+  OL:['superblock','guard','clothesline'],
+  C: ['superblock','guard','clothesline'],
   WR:['superspeed','spin'],
   TE:['stiffarm','slam'],
-  DE:['clothesline','slam'],
+  DE:['swim','clothesline','slam'],
   LB:['dash','fumblegen'],
   CB:['aagun'],
   S: ['aagun']
 };
 
 // defenders are identified by pos (DE/LB/CB/S), the offence by role
+// The line carries four: its three and his own move on top. Everyone else
+// has three, his own move in the last of them.
+var LINE_POS={OL:1, C:1, DE:1};
 function kitFor(p){
   if(!p) return [];
-  var k=KITS_AB[p.pos] || KITS_AB[p.role] || [];
+  var pk=KITS_AB[p.pos] ? p.pos : p.role;
+  var k=KITS_AB[pk] || [];
   var sg=p.card && SIG_MOVE[p.card];                 // his own move takes the last slot
-  if(!sg) return k;
-  return k.length>=3 ? k.slice(0,2).concat([sg]) : k.concat([sg]);
+  var ex=p.card && EXTRA_MOVE[p.card];
+  if(sg) k = (k.length>=3 && !LINE_POS[pk]) ? k.slice(0,2).concat([sg]) : k.concat([sg]);
+  if(ex) k = k.concat([ex]);
+  return k;
 }
 // speed from a move: a wolf, a cloud, a flight, or frozen stiff
 function buffMul(p){
@@ -1550,8 +1575,11 @@ function fireAbility(seat, IN, slot){
     tell('PERFECT PASS ARMED',800);
   }
   else if(id==='forcefield'){
+    // a blast to clear the pocket, then a shield that stays up three seconds
+    // (moveTick): nobody can grab him and anyone who runs into it bounces off
     var hit=flatten(52,1.3,210);
     me.iFrames=Math.max(me.iFrames,1.4);
+    me.shieldUntil=G.gt+3;
     flash(me.x,me.y-16,'rgba(127,216,255,.95)',46);
     G.fx.push({dome:true,x:me.x,y:me.y+4,c:'rgba(127,216,255,.95)',
                r:52,life:0.75,max:0.75});
@@ -1668,6 +1696,147 @@ function fireAbility(seat, IN, slot){
     dust(v2.x,v2.y,8,1.0);
     tell('CLOTHESLINE!',700); credit(me,'CLOTHESLINE');
     if(onCar && v2.hp<=0){ v2.down=1.6; if(G.cur) G.cur.tackler=me; endPlay(v2.x,'TACKLED'); }   // only if it finishes him
+  }
+
+  else if(id==='guard'){
+    // Bodyguard: he runs with whoever has the ball, and the next two men who
+    // come in to tackle him are thrown off (moveTick does the shoving)
+    var gc2 = (G.carrier && G.carrier.team===me.team && G.carrier!==me) ? G.carrier : null;
+    if(!gc2){ whiffMove(me,id,'rgba(255,210,63,.95)',mine); return; }
+    me.guardUntil=G.gt+3.5; me.guardLeft=2; me._guardMine=mine; me._gside=(me.y<gc2.y?-1:1)*9;
+    me.burst=Math.max(me.burst||0,0.6);
+    streak(me.x,me.y-18,gc2.x,gc2.y-18,'rgba(255,210,63,.75)',2,0.35);
+    shock(gc2.x,gc2.y,'rgba(255,210,63,.85)',4,30,0.4);
+    flash(me.x,me.y-16,'rgba(255,210,63,.9)',22);
+    emit(me,'swirl',3.5,'#ffd23f');
+    tell('BODYGUARD!',700);
+  }
+  else if(id==='swim'){
+    // Swim Move: an arm over the man blocking him, who goes down, and a burst
+    // at the ball
+    var sb=(me.eBlk && (me.engaged||0)>0 && (me.engaged||0)<=(me.shedAt||2.5)) ? me.eBlk : null;
+    if(!sb){
+      for(var swi=0;swi<G.players.length;swi++){
+        var swq=G.players[swi];
+        if(swq.team===me.team || (swq.role!=='OL' && swq.role!=='C' && swq.role!=='BL') || swq.down>0) continue;
+        if(Math.hypot(swq.x-me.x,swq.y-me.y) < LINE_COL+12){ sb=swq; break; }
+      }
+    }
+    var st2=(G.carrier && G.carrier.team!==me.team) ? G.carrier : G.ball;
+    var sx3=(st2?st2.x:me.x+fwd.x*50)-me.x, sy3=(st2?st2.y:me.y+fwd.y*50)-me.y, sm3=Math.hypot(sx3,sy3)||1;
+    if(IN && (IN.x||IN.y)){ var im3=Math.hypot(IN.x,IN.y)||1; sx3=IN.x/im3; sy3=IN.y/im3; sm3=1; }
+    me.engaged=(me.shedAt||2.5)+0.01; me.slipUntil=G.gt+0.7; me.burst=Math.max(me.burst||0,0.7);
+    me.vx=sx3/sm3*DEF_SPD*2.1; me.vy=sy3/sm3*DEF_SPD*2.1; me.throwArm=1; me.wrapped=0;
+    if(sb){
+      sb.beat=0.7; sb.stun=Math.max(sb.stun,0.9); sb._pst=sb.stun; sb.down=Math.max(sb.down,0.8);
+      launch(sb, me.x, me.y, 120, 3.0);
+      var ax4=sb.x, ay4=sb.y-26;
+      streak(me.x,me.y-20,ax4,ay4-6,'rgba(255,255,255,.9)',2.6,0.22);
+      streak(ax4,ay4-6,ax4+sx3/sm3*22,ay4+4,'rgba(255,255,255,.7)',2.2,0.26);
+      flash(sb.x,sb.y-16,'rgba(255,255,255,.95)',22);
+      credit(me,'SWIM MOVE');
+    }
+    shock(me.x,me.y,'rgba(255,255,255,.8)',3,26,0.26);
+    dust(me.x,me.y,8,1.0);
+    tell('SWIM MOVE!',600);
+  }
+  else if(id==='claywall'){
+    // The Golem: a wall of clay comes up between him and the other side, and
+    // nobody gets through it till it crumbles (the wall itself is in moveTick)
+    var cside=(me.team===G.offense)?d:-d;
+    if(G.carrier && G.carrier.team!==me.team) cside=(G.carrier.x>=me.x)?1:-1;   // on defence: between him and the runner
+    var cwx=me.x+cside*1.3*YD, chalf=3.5*YD;
+    G._walls=G._walls||[];
+    G._walls.push({x:cwx, y:me.y, half:chalf, side:cside, team:me.team, until:G.gt+3.5, play:G.playNo});
+    for(var cw=-3;cw<=3;cw++){
+      G.fx.push({clay:true, x:cwx+(Math.random()-0.5)*2, y:me.y+cw*YD, w:17, h:16+Math.random()*4, life:3.5, max:3.5,
+                 c:['#946640','#8a5d39','#9c6d44'][(cw+3)%3]});
+      dust(cwx, me.y+cw*YD, 3, 0.7);
+    }
+    shock(cwx,me.y,'rgba(190,140,80,.85)',4,40,0.4);
+    G.shake=REDUCED?0:12;
+    tell('CLAY WALL!',700); credit(me,'CLAY WALL');
+  }
+  else if(id==='boomshove'){
+    // The Minotaur: horns down, one shove, and a boom goes out in front of
+    // him that throws back everyone it reaches
+    var bfx=fwd.x, bfy=fwd.y, bfm=Math.hypot(bfx,bfy)||1; bfx/=bfm; bfy/=bfm;
+    var bn=0;
+    for(var bsi=0;bsi<G.players.length;bsi++){
+      var bq2=G.players[bsi];
+      if(bq2.team===me.team || bq2===G.carrier) continue;
+      var bdx=bq2.x-me.x, bdy=bq2.y-me.y, bdd=Math.hypot(bdx,bdy);
+      if(bdd>7*YD) continue;
+      if(bdd>18 && (bdx*bfx+bdy*bfy)/bdd < 0.5) continue;      // in front of him, or right on him
+      if(bq2.wrapT>0 && G.carrier) breakWrap(bq2,G.carrier);
+      bq2.stun=Math.max(bq2.stun,1.4); bq2._pst=bq2.stun; bq2.down=Math.max(bq2.down,1.0);
+      launch(bq2, me.x-bfx*20, me.y-bfy*20, 260, 4.6); bn++;
+    }
+    me.vx=bfx*BASE_SPD*1.6; me.vy=bfy*BASE_SPD*1.6; me.arm=0.7; me.lean=0.4;
+    for(var bk2=1;bk2<=4;bk2++){
+      shock(me.x+bfx*bk2*20, me.y+bfy*bk2*20, 'rgba(255,230,180,.85)', 4, 12+bk2*9, 0.26+bk2*0.05);
+    }
+    for(var bl2=-2;bl2<=2;bl2++){
+      var ba2=Math.atan2(bfy,bfx)+bl2*0.22;
+      streak(me.x+Math.cos(ba2)*14, me.y-14+Math.sin(ba2)*8, me.x+Math.cos(ba2)*7*YD, me.y-14+Math.sin(ba2)*7*YD*0.6,
+             'rgba(255,240,200,.7)',2,0.26);
+    }
+    flash(me.x+bfx*16,me.y-16,'rgba(255,240,200,.95)',36);
+    dust(me.x,me.y,14,1.3);
+    G.shake=REDUCED?0:18;
+    tell(bn?'SONIC BOOM SHOVE!':'SONIC BOOM',700);
+    if(bn) credit(me,'SONIC BOOM');
+  }
+  else if(id==='eyeslam'){
+    // The Cyclops: his eye fixes on the nearest man, he leaps, and comes down
+    // on him; everyone round the landing goes down
+    var et=null, etd=6*YD;
+    for(var esi=0;esi<G.players.length;esi++){
+      var eq=G.players[esi];
+      if(eq.team===me.team || eq===G.carrier || eq.down>0) continue;
+      var eqd=Math.hypot(eq.x-me.x,eq.y-me.y);
+      if(eqd<etd){ etd=eqd; et=eq; }
+    }
+    var efx=fwd.x, efy=fwd.y, efm=Math.hypot(efx,efy)||1;
+    var tx3=et ? et.x : me.x+efx/efm*2.5*YD, ty3=et ? et.y : me.y+efy/efm*2.5*YD;
+    tx3=Math.max(6,Math.min(FW-6,tx3)); ty3=Math.max(8,Math.min(FH-8,ty3));
+    G.fx.push({laser:true, x:me.x+(me.face||1)*2, y:me.y-33, x2:tx3, y2:ty3-6, life:0.3, max:0.3});   // the eye
+    var lx3=tx3-me.x, ly3=ty3-me.y, lm3=Math.hypot(lx3,ly3)||1;
+    for(var eg=1;eg<=4;eg++) G.fx.push({gh:true,x:me.x+lx3*(eg/5),y:me.y+ly3*(eg/5),face:me.face,
+      c:(me.team==='H'?'#7fa0ff':'#ff8a94'),life:0.2+eg*0.04,max:0.2+eg*0.04});
+    if(lm3>12){ me.x=tx3-lx3/lm3*10; me.y=ty3-ly3/lm3*10; }
+    me.face=lx3>=0?1:-1; me.z=0.05; me.vz=4.5; me.vx=0; me.vy=0;
+    var en=0;
+    for(var esj=0;esj<G.players.length;esj++){
+      var ev=G.players[esj];
+      if(ev.team===me.team || ev===G.carrier) continue;
+      if(Math.hypot(ev.x-tx3,ev.y-ty3) > 4*YD) continue;
+      if(ev.wrapT>0 && G.carrier) breakWrap(ev,G.carrier);
+      ev.stun=Math.max(ev.stun,2.0); ev._pst=ev.stun; ev.down=Math.max(ev.down,1.4);
+      launch(ev, tx3, ty3, 230, 5.2); en++;
+    }
+    flash(tx3,ty3-8,'rgba(255,200,120,.95)',50);
+    shock(tx3,ty3,'rgba(255,255,255,.95)',5,62,0.3);
+    shock(tx3,ty3,'rgba(255,140,43,.85)',5,52,0.46);
+    shock(tx3,ty3,'rgba(255,90,40,.5)',5,40,0.62);
+    dust(tx3,ty3,26,1.9);
+    crack(tx3,ty3,70,'rgba(255,120,40,');
+    G.shake=REDUCED?0:24;
+    tell(en?'ONE-EYE SLAM!':'ONE-EYE SLAM',700);
+    if(en) credit(me,'ONE-EYE SLAM');
+  }
+  else if(id==='duskride'){
+    // The Headless Horseman calls up his black horse and rides: quicker,
+    // nobody can bring him down, and anyone in the way is trampled (moveTick)
+    me.rideUntil=G.gt+2; me.buffUntil=G.gt+2; me.buffSpd=1.45; me._rideMine=mine; me._hoofT=0;
+    me.iFrames=Math.max(me.iFrames||0,0.3); me.wrapped=0;
+    portal(me.x,me.y,'#3dbb5a');
+    emit(me,'flame',2,'#59ff8a');
+    flash(me.x,me.y-16,'rgba(120,255,150,.95)',30);
+    shock(me.x,me.y,'rgba(80,220,120,.85)',3,34,0.36);
+    dust(me.x,me.y,12,1.2);
+    G.shake=REDUCED?0:10;
+    tell('DUSK RIDE!',800);
   }
 
   // ---- receivers -------------------------------------------------------
@@ -2930,7 +3099,7 @@ var AI_ODDS = {
   stiffarm:0.018, spin:0.016, clothesline:0.012, superblock:0.012,
   dash:0.014, superspeed:0.012, slam:0.012, rocket:0.020,
   forcefield:0.018, fumblegen:0.007, teleport:0.014, perfect:0.014,   // (fumblegen: a tackle now takes a second, so he is in reach longer)
-  aagun:0.011
+  aagun:0.011, guard:0.014, swim:0.02
 };
 
 // The computer now plays out of the same kits the player does, rather than a
@@ -2983,7 +3152,9 @@ function cpuAbilities(dt,now){
           else if(nd>54 && kit.indexOf('superspeed')>=0) want='superspeed';
         }
       } else if(q.route==='block'||q.route==='lead'){
-        if(nd<36){
+        var cn=nearestOf(car,foe), cnd=cn?Math.hypot(cn.x-car.x,cn.y-car.y):999;
+        if(kit.indexOf('guard')>=0 && car.role!=='QB' && toCar<8*YD && cnd<4*YD) want='guard';   // a runner with a man closing on him
+        else if(nd<36){
           if(kit.indexOf('superblock')>=0 && Math.random()<0.5) want='superblock';
           else if(kit.indexOf('clothesline')>=0)               want='clothesline';
           else if(kit.indexOf('slam')>=0)                      want='slam';
@@ -2993,7 +3164,8 @@ function cpuAbilities(dt,now){
         else if(nd<22 && kit.indexOf('spin')>=0)  want='spin';
       }
     } else {
-      if(G.thrown && kit.indexOf('aagun')>=0 &&
+      if(kit.indexOf('swim')>=0 && q.eBlk && (q.engaged||0)>0.35 && (q.engaged||0)<=(q.shedAt||2.5)) want='swim';
+      else if(G.thrown && kit.indexOf('aagun')>=0 &&
          Math.hypot(G.thrown.tx-q.x,G.thrown.ty-q.y) < 24*YD){
         want='aagun';
       }
@@ -3003,16 +3175,20 @@ function cpuAbilities(dt,now){
       else if(toCar>74 && toCar<190 && kit.indexOf('dash')>=0) want='dash';
     }
 
-    if(!want){
-      var sg=kit[kit.length-1];
-      if(sg && IS_SIG[sg] && !sigSpent(q.team)){
-        var handing = car.role==='QB' && G.handoffAt!=null;   // about to give it to the back: not worth a move
-        if(handing){}
-        else if(q.team===G.offense){
+    if(!want && !sigSpent(q.team) && !(car.role==='QB' && G.handoffAt!=null)){   // (about to give it to the back: not worth a move)
+      for(var si=kit.length-1; si>=0 && !want; si--){
+        var sg=kit[si];
+        if(!IS_SIG[sg] || !abReady(q,sg)) continue;
+        if(q.team===G.offense){
           if(q===car){
             if(sg==='pumpkin' && nd<120) want=sg;
+            else if(sg==='duskride' && nd>24 && nd<110) want=sg;
             else if((sg==='cloud'||sg==='flight') && nd<55) want=sg;
             else if(sg==='bullseye' && nd<90) want=sg;
+          } else if(q.route==='block'||q.route==='lead'){
+            if(sg==='claywall' && nd<60 && toCar<9*YD) want=sg;
+            else if(sg==='boomshove' && nd<48) want=sg;
+            else if(sg==='eyeslam' && nd<60) want=sg;
           }
         } else {
           if(sg==='bats' && toCar>70 && toCar<320) want=sg;
@@ -3033,6 +3209,100 @@ function cpuAbilities(dt,now){
     if(IS_SIG[want]) G.sigUsed[q.team]=G.playNo;
     fireAbility({man:q, local:false}, null, kit.indexOf(want));
     q.aiCd = 1.4 + Math.random()*1.3;
+  }
+}
+
+// Moves that last a few seconds after the button: the quarterback's
+// forcefield, a bodyguard, the Horseman's ride and the Golem's wall.
+var SHIELD_R=40;
+function moveTick(dt){
+  if(G.phase!=='live') return;
+  var d=dir();
+  for(var i=0;i<G.players.length;i++){
+    var p=G.players[i];
+    var foeT=(p.team==='H')?'A':'H', human=(p===G.controlled||p===G.controlled2);
+
+    // the forcefield: a dome round him; whoever runs into it bounces off
+    if(p.shieldUntil && G.gt<p.shieldUntil){
+      p.iFrames=Math.max(p.iFrames||0,0.05);
+      for(var j=0;j<G.players.length;j++){
+        var q=G.players[j];
+        if(q.team!==foeT || q.down>0) continue;
+        if(Math.hypot(q.x-p.x,q.y-p.y) > SHIELD_R) continue;
+        if(q.wrapT>0 && G.carrier) breakWrap(q,G.carrier);
+        q.stun=Math.max(q.stun,0.8); q._pst=q.stun; q.down=Math.max(q.down,0.6);
+        launch(q, p.x, p.y, 170, 3.4);
+        flash((p.x+q.x)/2,(p.y+q.y)/2-14,'rgba(127,216,255,.95)',20);
+        shock(p.x,p.y,'rgba(127,216,255,.7)',SHIELD_R*0.6,SHIELD_R,0.22);
+      }
+    }
+
+    // Bodyguard: with the ball carrier, shoving off whoever comes in
+    if(p.guardUntil && G.gt<p.guardUntil){
+      var g=(G.carrier && G.carrier.team===p.team && G.carrier!==p) ? G.carrier : null;
+      if(p.stun>0 || p.down>0) p.guardUntil=0;
+      else if(g){
+        if(!human){                                    // the computer's runs a step in front of him
+          var gv=Math.hypot(g.vx,g.vy), gfx=gv>20?g.vx/gv:(p.team===G.offense?d:-d), gfy=gv>20?g.vy/gv:0;
+          var gtx=g.x+gfx*16, gty=g.y+gfy*16+(p._gside||8);
+          var gmx=gtx-p.x, gmy=gty-p.y, gmm=Math.hypot(gmx,gmy), gsp=BASE_SPD*1.35*(p.spd||1);
+          if(gmm>4){ p.vx=gmx/gmm*Math.min(gsp,gmm*8); p.vy=gmy/gmm*Math.min(gsp,gmm*8); }
+        }
+        if(Math.hypot(g.x-p.x,g.y-p.y) < 5*YD){
+          for(var j2=0;j2<G.players.length;j2++){
+            var t=G.players[j2];
+            if(t.team!==foeT || t.down>0 || t.stun>0) continue;
+            if(Math.hypot(t.x-g.x,t.y-g.y) > TACKLE_R+12) continue;
+            if(!p._guardMine && (t===G.controlled||t===G.controlled2)) continue;   // the computer's guard leaves your man alone
+            if(t.wrapT>0) breakWrap(t,g);
+            t.stun=Math.max(t.stun,1.1); t._pst=t.stun; t.down=Math.max(t.down,0.9);
+            launch(t, g.x, g.y, 200, 4.4);
+            p.arm=0.6;
+            streak(p.x,p.y-18,t.x,t.y-16,'rgba(255,210,63,.9)',2.4,0.2);
+            pow(t.x,t.y-16,'#ffd23f');
+            G.shake=REDUCED?0:8;
+            credit(p,'BODYGUARD');
+            if(--p.guardLeft<=0){ p.guardUntil=0; break; }
+          }
+        }
+      }
+    }
+
+    // the Dusk Ride: hoofbeats, and anyone in the way is trampled
+    if(p.rideUntil && G.gt<p.rideUntil){
+      p.iFrames=Math.max(p.iFrames||0,0.05);
+      p._hoofT=(p._hoofT||0)-dt;
+      if(p._hoofT<=0){ p._hoofT=0.09; dust(p.x,p.y,2,0.5); G.fx.push({gh:true,x:p.x,y:p.y,face:p.face,c:'#59ff8a',life:0.28,max:0.28}); }
+      for(var j3=0;j3<G.players.length;j3++){
+        var u=G.players[j3];
+        if(u.team!==foeT || u.down>0 || u.stun>0) continue;
+        if(!p._rideMine && (u===G.controlled||u===G.controlled2)) continue;   // the computer's ride does not run over your man
+        if(Math.hypot(u.x-p.x,u.y-p.y) > 20) continue;
+        if(u.wrapT>0) breakWrap(u,p);
+        u.stun=Math.max(u.stun,1.1); u._pst=u.stun; u.down=Math.max(u.down,0.9);
+        launch(u, p.x, p.y, 210, 4.6);
+        pow(u.x,u.y-14,'#7dff9a'); dust(u.x,u.y,6,0.9);
+        credit(p,'TRAMPLED');
+      }
+    }
+  }
+
+  // the Golem's walls: nobody from the other side gets through
+  var W=G._walls;
+  if(W && W.length){
+    for(var w=W.length-1;w>=0;w--){
+      var wl=W[w];
+      if(G.gt>wl.until || wl.play!==G.playNo){ W.splice(w,1); continue; }
+      for(var j4=0;j4<G.players.length;j4++){
+        var v=G.players[j4];
+        if(v.team===wl.team) continue;
+        if(Math.abs(v.y-wl.y) > wl.half+6) continue;
+        var rel=(v.x-wl.x)*wl.side;
+        if(rel < -6 || rel >= 10) continue;          // already through it, or not at it yet
+        v.x=wl.x+wl.side*10;
+        if(v.vx*wl.side<0) v.vx=0;
+      }
+    }
   }
 }
 
@@ -3420,17 +3690,17 @@ function localInput(){
   return {x:a.x, y:a.y, sp:wantSprint()?1:0,
           b1:tapJuke()?1:0, b2:tapMove()?1:0, b3:tapQ()?1:0,
           sw:tapSwitch()?1:0, tg:tapTarget(),
-          k1:tapAb1()?1:0, k2:tapAb2()?1:0, k3:tapAb3()?1:0};
+          k1:tapAb1()?1:0, k2:tapAb2()?1:0, k3:tapAb3()?1:0, k4:tapAb4()?1:0};
 }
 
 // whatever the guest last sent. Taps latch on arrival and are spent here.
 function remoteInput(){
   var r=NET.remoteIn;
-  if(!r) return {x:0,y:0,sp:0,b1:0,b2:0,b3:0,sw:0,tg:-1,k1:0,k2:0,k3:0,cp:0,sd:0};
+  if(!r) return {x:0,y:0,sp:0,b1:0,b2:0,b3:0,sw:0,tg:-1,k1:0,k2:0,k3:0,k4:0,cp:0,sd:0};
   var out={x:r.x, y:r.y, sp:r.sp, b1:r.b1, b2:r.b2, b3:r.b3, sw:r.sw,
-           k1:r.k1, k2:r.k2, k3:r.k3, cp:r.cp||0, sd:r.sd||0,
+           k1:r.k1, k2:r.k2, k3:r.k3, k4:r.k4||0, cp:r.cp||0, sd:r.sd||0,
            tg:(NET.remoteTarget===undefined?-1:NET.remoteTarget)};
-  r.b1=r.b2=r.b3=r.sw=r.k1=r.k2=r.k3=r.cp=0; r.sd=0;
+  r.b1=r.b2=r.b3=r.sw=r.k1=r.k2=r.k3=r.k4=r.cp=0; r.sd=0;
   NET.remoteTarget=-1;
   return out;
 }
@@ -3534,6 +3804,7 @@ function driveHuman(seat, IN, dt, now){
   if(IN.k1) fireAbility(seat, IN, 0);
   if(IN.k2) fireAbility(seat, IN, 1);
   if(IN.k3) fireAbility(seat, IN, 2);
+  if(IN.k4) fireAbility(seat, IN, 3);
   M.power=100; M.stam=100;                        // no meters: moves are held back by cooldowns
 
   var jk=now<M.jukeUntil, diving=now<M.diveUntil;
@@ -3627,7 +3898,7 @@ function fxAge(dt){
     var e=G.fx[f]; e.life-=dt;
     if(e.ringed){ e.r+=dt*130; }
     else if(e.emit){ if(e.p) emitTick(e,dt); }
-    else if(e.shock||e.flash||e.streak||e.gh||e.dome||e.bolt||e.laser||e.crack||e.pow||e.dmg){ /* on a timer */ }
+    else if(e.shock||e.flash||e.streak||e.gh||e.dome||e.bolt||e.laser||e.crack||e.pow||e.dmg||e.clay){ /* on a timer */ }
     else { e.x+=e.vx*dt; e.y+=e.vy*dt; e.vx*=0.93; e.vy*=0.93;
            if(e.grav){ e.vy+=e.grav*dt; } }
     if(e.life<=0) G.fx.splice(f,1);
@@ -3868,6 +4139,7 @@ function step(dt){
     for(var r2=0;r2<G.players.length;r2++){
       var ru=G.players[r2];
       if(ru.team===G.offense||ru.stun>0) continue;
+      if(ru.slipUntil && G.gt<ru.slipUntil) continue;  // a swim move: over him and gone
       if(blk.assign && ru!==blk.assign) continue;
       var dy2=Math.abs(ru.y-blk.y);
       if(dy2>BLOCK_R) continue;                       // he is around the edge
@@ -3965,6 +4237,7 @@ function step(dt){
       var dfn=G.players[cj];
       if(dfn.team===G.offense || dfn.stun>0 || dfn.down>0) continue;
       if(dfn.eBlk===ol && (dfn.engaged||0)<=(dfn.shedAt||2.5)) continue;   // the block handles him
+      if(dfn.slipUntil && G.gt<dfn.slipUntil) continue;
       if(TOUCH_UI && dfn===G.controlled && (G.tchase>0 || G.touchDive)) continue;   // charging on a swipe: he slips round bodies
       var cx=dfn.x-ol.x, cy=dfn.y-ol.y, cd=Math.hypot(cx,cy);
       if(cd>=LINE_COL || cd<0.01) continue;
@@ -3979,6 +4252,8 @@ function step(dt){
       }
     }
   }
+
+  moveTick(dt);
 
   // integrate + animation state
   for(var j=0;j<G.players.length;j++){
@@ -4865,6 +5140,22 @@ function draw(){
     } else if(e.dome){
       var dr=e.r*(0.5+(1-k2)*0.6);
       addSprite(fxTint(FXI.dome,solidOf(e.c)),e.x,e.y-dr*0.28,dr*2,dr*2,k2*0.9,0,0.8);
+    } else if(e.clay){
+      // a mud brick of the Golem's wall: it comes up out of the turf, stands,
+      // and crumbles. A row of them, one a yard, is the wall.
+      var cage=e.max-e.life, cup=Math.min(1,cage/0.22), cbw=e.w||17, cbh=(e.h||18)*cup, ctop=cbw*0.3;
+      ctx.globalAlpha=Math.min(1,e.life/0.35);
+      ctx.fillStyle='rgba(0,0,0,.3)';
+      ctx.beginPath(); ctx.ellipse(e.x,e.y+1,cbw*0.68,cbw*0.24,0,0,Math.PI*2); ctx.fill();
+      ctx.fillStyle=e.c||'#946640'; ctx.fillRect(e.x-cbw/2,e.y-cbh,cbw,cbh);            // the face
+      ctx.fillStyle='rgba(40,22,10,.30)'; ctx.fillRect(e.x-cbw/2,e.y-cbh*0.42,cbw,cbh*0.42);   // wet at the foot
+      ctx.fillStyle='#c39563'; ctx.fillRect(e.x-cbw/2,e.y-cbh-ctop*cup,cbw,ctop*cup);          // the top
+      ctx.strokeStyle='rgba(40,22,10,.9)'; ctx.lineWidth=1.1;
+      ctx.strokeRect(e.x-cbw/2,e.y-cbh-ctop*cup,cbw,cbh+ctop*cup);
+      ctx.beginPath(); ctx.moveTo(e.x-cbw/2,e.y-cbh); ctx.lineTo(e.x+cbw/2,e.y-cbh); ctx.stroke();
+      ctx.fillStyle='rgba(60,34,16,.6)';                                              // thumb marks in the clay
+      ctx.beginPath(); ctx.arc(e.x-cbw*0.2,e.y-cbh*0.66,1.5,0,6.3); ctx.fill();
+      ctx.beginPath(); ctx.arc(e.x+cbw*0.22,e.y-cbh*0.36,1.3,0,6.3); ctx.fill();
     } else if(e.crack){
       /* drawn under the players, in drawCracks */
     } else if(e.laser){
@@ -5502,6 +5793,25 @@ function drawGuy(p){
   if(inv){ GA = (p.team===mySide()) ? 0.4 : 0.1+0.06*Math.sin(performance.now()/90); ctx.globalAlpha=GA; }
   drawGuyRaw(p);
   if(inv){ GA=1; ctx.globalAlpha=1; }
+  if(G && p.shieldUntil && G.gt<p.shieldUntil && GUY_PASS!=='marks') drawShield(p);
+}
+// The forcefield: a glass bubble over him for as long as it lasts, fading
+// out in its last moments. Drawn with the man, so it goes where he goes.
+function drawShield(p){
+  var left=p.shieldUntil-G.gt, a=Math.min(1,left/0.4), R=SHIELD_R, H=R*1.15;
+  var flick=0.9+0.1*Math.sin(G.gt*18);
+  ctx.save(); ctx.globalAlpha=a*flick; ctx.globalCompositeOperation='source-over';
+  var gr=ctx.createRadialGradient(p.x-R*0.25, p.y-H*0.65, R*0.1, p.x, p.y-H*0.35, R*1.15);
+  gr.addColorStop(0,'rgba(220,245,255,.22)'); gr.addColorStop(0.6,'rgba(127,216,255,.14)'); gr.addColorStop(1,'rgba(127,216,255,.42)');
+  ctx.fillStyle=gr;
+  ctx.beginPath(); ctx.ellipse(p.x,p.y,R,H,0,Math.PI,Math.PI*2); ctx.ellipse(p.x,p.y,R,R*0.4,0,0,Math.PI); ctx.fill();
+  ctx.lineWidth=2; ctx.strokeStyle='rgba(170,235,255,.9)';
+  ctx.beginPath(); ctx.ellipse(p.x,p.y,R,H,0,Math.PI,Math.PI*2); ctx.stroke();
+  ctx.lineWidth=1.4; ctx.strokeStyle='rgba(127,216,255,.65)';
+  ctx.beginPath(); ctx.ellipse(p.x,p.y,R,R*0.4,0,0,Math.PI*2); ctx.stroke();
+  ctx.lineWidth=2.4; ctx.strokeStyle='rgba(255,255,255,.55)';            // the shine on the glass
+  ctx.beginPath(); ctx.ellipse(p.x,p.y,R*0.78,H*0.84,0,Math.PI*1.18,Math.PI*1.42); ctx.stroke();
+  ctx.restore();
 }
 function drawGuyRaw(p){
   var K=KITS[p.team];
@@ -5937,7 +6247,8 @@ var AB_COL={rocket:'#ff8c2b', perfect:'#7fd8ff', forcefield:'#3fa0ff', dash:'#ff
   slam:'#c0772b', fumblegen:'#b36bff', aagun:'#ff4b4b', bighit:'#ffd23f', pound:'#d9822b', pitch:'#9ad14f',
   quake:'#ff7a1a', skyhop:'#e8f4ff', afterburner:'#5fc8ff', phase:'#29d3e6', blur:'#b36bff',
   bats:'#8a3fc2', vanish:'#c9d8e6', flight:'#8fe06a', cloud:'#ffd23f', bullseye:'#4fae5a', pumpkin:'#ff7a1a',
-  lightning:'#7fc8ff', moon:'#c0c8d8', grip:'#d8a24a', shadow:'#c9a24a', fury:'#6be07a', frost:'#9fe0ff'};
+  lightning:'#7fc8ff', moon:'#c0c8d8', grip:'#d8a24a', shadow:'#c9a24a', fury:'#6be07a', frost:'#9fe0ff',
+  guard:'#ffd23f', swim:'#e8f4ff', claywall:'#a8794c', boomshove:'#ffcf8a', eyeslam:'#ff7a3a', duskride:'#3dbb5a'};
 // Painted ability icons, parts/icons/<name>.png, used when the file is there.
 var ICON_OK={};
 function iconImg(name, done){
@@ -6045,14 +6356,14 @@ function abilities(onD){
   if(TOUCH_UI) touchExtras(onD, live);
   var me = G.controlled;                 // on the guest this is its own man
   var kit = kitFor(me);
-  var KEYS=['Q','E','R'];
-  var net = (NET.on && !NET.host) ? (G.netAb||[0,0,0]) : null;
-  for(var i=0;i<3;i++){
+  var KEYS=['Q','E','R','T'], EL=[1,2,3,6];          // (4 and 5 are the hero's special and the pitch)
+  var net = (NET.on && !NET.host) ? (G.netAb||[0,0,0,0]) : null;
+  for(var i=0;i<4;i++){
     var id=kit[i];
-    if(TOUCH_UI){ var ae=ab(i+1); if(ae) ae.style.display = id ? '' : 'none'; }   // no empty circles
-    if(!id){ setAb(i+1,'\u2014',KEYS[i],false,false); continue; }
-    var left = Math.min(net ? net[i] : abLeft(me,id), ABIL[id].cd);
-    setAb(i+1, left>0 ? (left+(left===1?' PLAY':' PLAYS')) : ABIL[id].name,
+    var ae=ab(EL[i]); if(ae) ae.style.display = id ? '' : 'none';   // no empty circles (a fourth only for the line)
+    if(!id){ setAb(EL[i],'\u2014',KEYS[i],false,false); continue; }
+    var left = Math.min(net ? (net[i]||0) : abLeft(me,id), ABIL[id].cd);
+    setAb(EL[i], left>0 ? (left+(left===1?' PLAY':' PLAYS')) : ABIL[id].name,
           KEYS[i], left===0, live, 0, AB_ICON[id], left/Math.max(1,ABIL[id].cd), id);
   }
 }
@@ -6062,7 +6373,7 @@ var cardEl=null, cardTimer=null;
 // Card portraits load on first use and are remembered; a missing file is
 // remembered too, so it is only asked for once.
 var CARD_ART={};
-var CARD_VER=9;          // bump when the card pictures change, so browsers drop the old ones
+var CARD_VER=10;          // bump when the card pictures change, so browsers drop the old ones
 function cardArt(key){
   if(!key) return null;
   var c=CARD_ART[key];
@@ -6494,7 +6805,7 @@ function howSections(){
     ['Defense', ['Drag','toward the ball carrier to slide tackle, up to 9 yards.'],
                 ['Click','to punch him, or to swat a pass in the air.'],
                 ['Shift','to switch to the defender best placed to make the play.']],
-    ['Moves', ['Q E R','for your man\u2019s moves, or click the round buttons.'], ['K','for your hero\u2019s special when you have him.']],
+    ['Moves', ['Q E R','for your man\u2019s moves, or click the round buttons. Linemen have a fourth on T.'], ['K','for your hero\u2019s special when you have him.']],
     ['Before the snap', ['Space','to hike, or click the field.'], ['Click one of your men','on defense to take him.'],
                         ['Hold C','for play art. X audibles, O calls a timeout.'],
                         ['P or Esc','pauses the game. You get 50 seconds to call each play.']]
@@ -6508,7 +6819,7 @@ function howSections(){
     ['Defense', ['Swipe','toward the ball carrier to slide tackle, up to 9 yards.'],
                 ['Tap','to punch him, or to swat a pass in the air.'],
                 ['SWITCH','to take the defender best placed to make the play.']],
-    ['Moves', ['The round buttons','along the bottom are your man\u2019s moves, and your hero\u2019s special when you have him.']],
+    ['Moves', ['The round buttons','along the bottom are your man\u2019s moves (linemen have four), and your hero\u2019s special when you have him.']],
     ['Before the snap', ['Tap the field','to hike.'], ['Tap one of your men','on defense to take him.'],
                         ['The top buttons','are play art, audible, timeout and the menu.'],
                         ['The pause button','top right pauses. You get 50 seconds to call each play.']]
@@ -6530,13 +6841,15 @@ function showMoves(mode){
   var heroes=''; HEROES.forEach(function(h){ heroes+=line(h.moveName, h.name, h.desc); });
   function list(ids){ return ids.map(function(id){ return line(ABIL[id].name, who(id), ABIL[id].desc); }).join(''); }
   var sig=''; for(var c in SIG_MOVE){ var id=SIG_MOVE[c]; sig+=line(ABIL[id].name, NAMES[c]||c, ABIL[id].desc); }
+  for(var c2 in EXTRA_MOVE){ var id2=EXTRA_MOVE[c2]; sig+=line(ABIL[id2].name, NAMES[c2]||c2, ABIL[id2].desc); }
   var html='<h2>The moves</h2><p class="sub">What each one does \u00b7 your man\u2019s are on '+
-    (TOUCH_IN?'the round buttons':'Q, E and R, or the round buttons')+'</p>'+
+    (TOUCH_IN?'the round buttons':'Q, E and R (and T on the line), or the round buttons')+'</p>'+
     '<div class="movelist"><div class="grid3 how">'+
       card('Hero specials'+(TOUCH_IN?'':' \u00b7 K'), heroes)+
       card('Quarterback', list(['rocket','perfect','forcefield']))+
       card('Ball carriers', list(['dash','stiffarm','teleport','superspeed','spin']))+
-      card('Hitters', list(['superblock','clothesline','slam','fumblegen','aagun']))+
+      card('The line', list(['superblock','guard','swim','clothesline','slam']))+
+      card('Hitters', list(['fumblegen','aagun']))+
       card('Signature moves', sig)+
     '</div></div><div class="howgo"><button class="card" id="movBack" type="button"><div class="k">BACK</div><div class="t">How to play</div></button></div>';
   elSheet.innerHTML=html; elOv.classList.add('show');
@@ -7801,7 +8114,8 @@ if(TOUCH_UI){
 // ---- the icons double as buttons ----------------------------------------
 [[1,function(){ if(G.phase==='presnap'){ if(!TOUCH_UI && iHaveBall()) snapBall(); return; } touchAb[0]=true; }],
  [2,function(){ touchAb[1]=true; }],
- [3,function(){ touchAb[2]=true; }]
+ [3,function(){ touchAb[2]=true; }],
+ [6,function(){ touchAb[3]=true; }]
 ].forEach(function(pair){
   var e=document.getElementById('ab'+pair[0]);
   if(!e) return;
@@ -7970,6 +8284,7 @@ function hostOnline(tries){
       if(d.k1) r.k1=1;
       if(d.k2) r.k2=1;
       if(d.k3) r.k3=1;
+      if(d.k4) r.k4=1;
       if(d.cp) r.cp=1;
       if(d.sd) r.sd=d.sd;
     });
@@ -8048,7 +8363,7 @@ function publishInput(){
     x:+a.x.toFixed(2), y:+a.y.toFixed(2),
     sp:wantSprint()?1:0,
     b1:tapJuke()?1:0, b2:tapMove()?1:0, b3:tapQ()?1:0, sw:tapSwitch()?1:0,
-    k1:tapAb1()?1:0, k2:tapAb2()?1:0, k3:tapAb3()?1:0,
+    k1:tapAb1()?1:0, k2:tapAb2()?1:0, k3:tapAb3()?1:0, k4:tapAb4()?1:0,
     cp:cp?1:0, sd:sd?[+sd.x.toFixed(2),+sd.y.toFixed(2)]:0
   });
 }
@@ -8157,8 +8472,8 @@ function publishWorld(){
   if(now<(NET.pubAt||0)) return;
   NET.pubAt=Math.max((NET.pubAt||0)+NET_MS, now-NET_MS);   // an even thirty a second, however the frames fall
   G.netAb=(function(){                                 // what the guest's move buttons show
-    var k=kitFor(G.controlled2), o=[0,0,0];
-    for(var i=0;i<3;i++) o[i]=k[i]?abLeft(G.controlled2,k[i]):0;
+    var k=kitFor(G.controlled2), o=[0,0,0,0];
+    for(var i=0;i<4;i++) o[i]=k[i]?abLeft(G.controlled2,k[i]):0;
     return o;
   })();
   var cur=netState(), last=NET.lastSt;
