@@ -87,6 +87,25 @@
   .howgo .card{flex:1;}
   .howgo #howPlay{flex:2; border-color:var(--gold);}
   .howgo #howPlay .t{font-size:18px;}
+  .team input{width:100%; margin-top:6px; padding:8px 10px; font:700 18px 'Anton',sans-serif; letter-spacing:.04em;
+    color:#f1f1ec; background:#0c1114; border:1px solid var(--line); border-radius:4px; text-transform:uppercase;}
+  .tmRow{display:flex; align-items:center; gap:10px; margin-top:6px; flex-wrap:wrap;}
+  #tmPrev{width:64px; height:64px; border-radius:50%; background:#1f2d54; border:2px solid #c8a63c; overflow:hidden;
+    display:flex; align-items:center; justify-content:center; font-size:10px; color:var(--muted);}
+  #tmPrev img{width:100%; height:100%; object-fit:contain;}
+  .tmUp{display:inline-block; padding:8px 12px; border:1px solid #c8a63c; border-radius:4px; color:#ffd23f; cursor:pointer;
+    font:700 12px 'Barlow Condensed',sans-serif; letter-spacing:.08em; background:none;}
+  .tmUp input{display:none;}
+  .roster{max-height:calc(100vh - 330px); min-height:96px; overflow-y:auto; border:1px solid var(--line); border-radius:4px; padding:4px 8px;}
+  .rRow{display:flex; align-items:center; gap:8px; padding:3px 0; border-bottom:1px solid rgba(255,255,255,.06);}
+  .rWho{flex:0 0 38%; font-size:12px; color:var(--muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+  .rWho b{color:#f1f1ec; font-weight:700;}
+  .rRow input{flex:1; min-width:0; padding:4px 8px; font:700 13px 'Barlow Condensed',sans-serif; letter-spacing:.04em;
+    color:#f1f1ec; background:#0c1114; border:1px solid var(--line); border-radius:3px; text-transform:uppercase;}
+  .rRoll{padding:4px 8px; font-size:11px;}
+  html.touchin .roster{max-height:calc(100vh - 352px); min-height:80px;}   /* a phone: SAVE stays on screen */
+  html.touchin .team .card{padding:6px 8px;}
+  .tmOff{border-color:var(--line); color:var(--muted);}
   #bPause{position:absolute; right:calc(12px + env(safe-area-inset-right,0px)); top:8px; z-index:7; width:38px; height:38px;
     border-radius:50%; border:2px solid rgba(255,210,63,.85); background:rgba(12,17,20,.5); display:none;
     align-items:center; justify-content:center; padding:0; cursor:pointer; -webkit-tap-highlight-color:transparent;}
@@ -671,6 +690,69 @@ var elMvName=document.getElementById('mvName'), elTouch=document.getElementById(
 
 // ================================================================ state
 var G=null, HERO=HEROES[0];
+// Every card keeps its character, picture, nickname and stars; the man
+// wearing it has an ordinary name (the made-up ones read oddly), picked at
+// random once and kept on this device, and renamed or re-rolled on the Your
+// team page. Online the guest sees the host's, since they ride on the players.
+var NAME_FIRST=['Marcus','Dre','Jalen','Tyrell','Caleb','Isaiah','Malik','Darius','Andre','Terrence','Devon',
+  'Xavier','Elijah','Cam','Trey','Jamal','Hector','Luis','Mateo','Diego','Rafael','Kenji','Jae','Tevita','Sione',
+  'Kai','Noah','Mason','Logan','Wyatt','Cole','Brady','Tucker','Hunter','Grant','Blake','Reed','Shane','Kyle',
+  'Ryan','Sean','Patrick','Connor','Liam','Omar','Amir','Kwame','Tariq','Zion','Bryce','Quincy','Dante','Reggie',
+  'Lamar','Ty','Jace','Rico','Victor','Owen','Desmond'];
+var NAME_LAST=['Hill','Coleman','Brooks','Carter','Jenkins','Washington','Harris','Mitchell','Walker','Hayes',
+  'Bryant','Ford','Price','Bennett','Dawson','Fletcher','Graves','Holloway','Pierce','Sutton','Vaughn','Whitaker',
+  'Barnes','Cooper','Dixon','Ellis','Foster','Gibson','Hampton','Keller','Lawson','Marsh','Nash','Ortiz','Ramirez',
+  'Santos','Torres','Delgado','Morales','Tanaka','Kim','Fonoti','Tuilagi','Okafor','Mensah','Adeyemi','OBrien',
+  'Kowalski','Novak','Lindgren','Harper','Wallace','Banks','Rhodes','Sterling','Caldwell','Monroe','Stokes',
+  'Crawford','Maddox'];
+function castList(){ var a=[]; for(var ck in SUPPORT) a.push(SUPPORT[ck]); DEFENDERS.forEach(function(d){ a.push(d); }); return a; }
+function lastOf(nm){ var b=String(nm||'').trim().split(' '); return b[b.length-1].toUpperCase(); }
+function randomName(avoidLast){
+  for(var t=0;t<60;t++){
+    var nm=NAME_FIRST[(Math.random()*NAME_FIRST.length)|0]+' '+NAME_LAST[(Math.random()*NAME_LAST.length)|0];
+    if(!avoidLast || !avoidLast[lastOf(nm)]) return nm;   // no two men with one name on the field
+  }
+  return nm;
+}
+var CAST_NAMES={};
+try{ CAST_NAMES=JSON.parse(localStorage.getItem('hm_names')||'{}')||{}; }catch(e){ CAST_NAMES={}; }
+function saveCastNames(){ try{ localStorage.setItem('hm_names', JSON.stringify(CAST_NAMES)); }catch(e){} }
+(function(){
+  var lasts={}, changed=false;
+  castList().forEach(function(c){ if(CAST_NAMES[c.card]) lasts[lastOf(CAST_NAMES[c.card])]=1; });
+  castList().forEach(function(c){
+    var nm=CAST_NAMES[c.card];
+    if(!nm){ nm=randomName(lasts); lasts[lastOf(nm)]=1; CAST_NAMES[c.card]=nm; changed=true; }
+    c.player=nm;
+  });
+  if(changed) saveCastNames();
+})();
+function setCastName(card, nm){
+  nm=String(nm||'').replace(/\s+/g,' ').trim().slice(0,20);
+  if(!nm) return;
+  CAST_NAMES[card]=nm;
+  castList().forEach(function(c){ if(c.card===card) c.player=nm; });
+  if(G && G.players) G.players.forEach(function(p){ if(p.card===card && !p.hero) p.player=nm; });   // the men already on the field
+}
+// Your team: a name and a logo, kept on this device. They go on the
+// scoreboards, at midfield and on your helmets. Online the guest is shown the
+// host's (NET.hostTeam), since the Heroes are the host's side.
+var TEAM={name:'', logo:''}, TEAM_IMG=null;
+try{ var tm0=JSON.parse(localStorage.getItem('hm_team')||'null'); if(tm0){ TEAM.name=String(tm0.name||'').slice(0,14); TEAM.logo=tm0.logo||''; } }catch(e){}
+function homeTeam(){ return (NET && NET.on && !NET.host && NET.hostTeam) ? NET.hostTeam : TEAM; }
+function homeName(){ var t=homeTeam(); return t.name ? t.name : 'Heroes'; }
+function homeLogo(){ var t=homeTeam(); return (t===TEAM) ? TEAM_IMG : (NET.hostTeamImg||null); }
+function loadTeamImg(src, done){
+  if(!src){ done(null); return; }
+  var im=new Image(); im.onload=function(){ done(im); }; im.onerror=function(){ done(null); }; im.src=src;
+}
+function teamChanged(){                            // repaint the 50 and the stadium, retitle the scoreboard
+  fieldCanvas=buildFieldCanvas();
+  if(typeof W3!=='undefined') W3=null;
+  var nm=homeTeam().name;
+  if(nm && elNmH) elNmH.textContent=nm.toUpperCase();
+}
+loadTeamImg(TEAM.logo, function(im){ TEAM_IMG=im; if(im) teamChanged(); });
 
 function freshGame(){
   return { scoreH:0, scoreA:0, clock:GAME_SECONDS, offense:'H',
@@ -1081,7 +1163,7 @@ function blit3D(P){
     ctx.fillStyle='#05070b'; ctx.fillRect(sbx, sby, sbw, sbh);
     ctx.textAlign='center'; ctx.textBaseline='middle';
     ctx.font='700 '+Math.max(6,22*sbs)+'px "Anton", sans-serif';
-    ctx.fillStyle='#ffd23f'; ctx.fillText('HEROES', sbx+sbw*0.25, sby+sbh*0.28);
+    ctx.fillStyle='#ffd23f'; ctx.fillText(homeName().toUpperCase().slice(0,10), sbx+sbw*0.25, sby+sbh*0.28);
     ctx.fillStyle=FOE.lite; ctx.fillText(FOE.short, sbx+sbw*0.75, sby+sbh*0.28);
     ctx.font='700 '+Math.max(8,40*sbs)+'px "Anton", sans-serif'; ctx.fillStyle='#f1f1ec';
     ctx.fillText(String(G.scoreH||0), sbx+sbw*0.25, sby+sbh*0.66);
@@ -3628,7 +3710,7 @@ function drawKick(){
   ctx.translate(G.ball.x, G.ball.y - (k.h||0));
   ctx.rotate(k.t*13);
   if(BALL_IMG.ready){
-    ctx.drawImage(BALL_IMG,-10.5,-6.45,21.0,12.9);   // (bigger: easy to lose in the air)
+    ctx.drawImage(BALL_IMG,-14.7,-9.0,29.4,18.0);    // (bigger: easy to lose in the air)
   } else {
     ctx.fillStyle='#7a4a28';
     ctx.beginPath(); ctx.ellipse(0,0,6.2,3.7,0,0,Math.PI*2); ctx.fill();
@@ -4891,7 +4973,7 @@ window.addEventListener('resize',resize);
 
 
 // ---- the static field, baked once -----------------------------------------
-var fieldCanvas = (function(){
+function buildFieldCanvas(){
   var c=document.createElement('canvas');
   c.width=FW; c.height=FH;
   var g=c.getContext('2d');
@@ -4979,8 +5061,26 @@ var fieldCanvas = (function(){
     }
   }
 
-  // the midfield logo: a shield on the 50, painted over the grass
-  (function(){
+  // the midfield logo: your team's, or the HM shield, on the 50
+  var myLogo=homeLogo();
+  if(myLogo){
+    var lx0=EZ+50*YD, ly0=FH/2, R0=4.6*YD, nm0=homeName().toUpperCase();
+    g.save();
+    g.globalAlpha=0.85;
+    g.fillStyle='#1f2d54'; g.beginPath(); g.arc(lx0,ly0,R0,0,Math.PI*2); g.fill();
+    g.lineWidth=5; g.strokeStyle='#c8a63c'; g.stroke();
+    g.save(); g.beginPath(); g.arc(lx0,ly0,R0-6,0,Math.PI*2); g.clip();
+    var ls=Math.min((R0*1.5)/myLogo.width, (R0*1.25)/myLogo.height);
+    g.globalAlpha=0.95;
+    g.drawImage(myLogo, lx0-myLogo.width*ls/2, ly0-myLogo.height*ls/2-R0*0.12, myLogo.width*ls, myLogo.height*ls);
+    g.restore();
+    if(homeTeam().name){
+      g.fillStyle='#f1f1ec'; g.textAlign='center'; g.textBaseline='middle'; g.globalAlpha=0.9;
+      g.font='700 12px "Barlow Condensed", sans-serif'; g.fillText(nm0, lx0, ly0+R0*0.66);
+    }
+    g.restore();
+  }
+  else (function(){
     var lx=EZ+50*YD, ly=FH/2, R=4.6*YD;
     g.save();
     g.globalAlpha=0.82;
@@ -5005,7 +5105,8 @@ var fieldCanvas = (function(){
   g.save(); g.translate(EZ/2,FH/2); g.rotate(-Math.PI/2); g.fillText('END ZONE',0,0); g.restore();
   g.save(); g.translate(FW-EZ/2,FH/2); g.rotate(Math.PI/2); g.fillText('END ZONE',0,0); g.restore();
   return c;
-})();
+}
+var fieldCanvas = buildFieldCanvas();
 
 function draw(){
   // Frame everyone who matters: zoom out when the play spreads, in when it
@@ -5385,6 +5486,13 @@ function sleeve(ex,ey,a,len,w,c){
   ctx.strokeStyle=c; ctx.lineWidth=w; ctx.lineCap='round';
   ctx.beginPath(); ctx.moveTo(ex+sx*0.8, ey+sy*0.8); ctx.lineTo(ex+sx*len, ey+sy*len); ctx.stroke();
 }
+// your logo on the side of your team's helmets
+function helmetLogo(p, hx, hy){
+  if(!p || p.team!=='H') return;
+  var lg=homeLogo(); if(!lg) return;
+  var sz=3.6, k=Math.min(sz/lg.width, sz/lg.height), w=lg.width*k, h=lg.height*k;
+  ctx.drawImage(lg, hx+9.2*0.40-w/2, hy+8.2*0.44-h/2, w, h);
+}
 function drawPart(img,x,y,w,h){
   if(img.padX){ var ex=w*img.padX, ey=h*img.padY; ctx.drawImage(img,x-ex,y-ey,w+2*ex,h+2*ey); }
   else ctx.drawImage(img,x,y,w,h);
@@ -5605,8 +5713,8 @@ function drawSprite(p){
   }
 
   // ---- helmet: must sit narrower than the shoulders, or it reads bobblehead
-  if(LOOK){ ctx.save(); ctx.scale(-1,1); drawPart(HELMET,-4.8,SHO-10.7+HB,9.2,8.2); ctx.restore(); }
-  else drawPart(HELMET,-4.4,SHO-10.7+HB,9.2,8.2);
+  if(LOOK){ ctx.save(); ctx.scale(-1,1); drawPart(HELMET,-4.8,SHO-10.7+HB,9.2,8.2); helmetLogo(p,-4.8,SHO-10.7+HB); ctx.restore(); }
+  else { drawPart(HELMET,-4.4,SHO-10.7+HB,9.2,8.2); helmetLogo(p,-4.4,SHO-10.7+HB); }
 
   // ---- front arm: throw, stiff arm, or normal swing
   if(!KD && p.throwArm>0){
@@ -5689,7 +5797,7 @@ function drawSnap(P){
   ctx.beginPath(); ctx.ellipse(sp.x,sp.y,5.5,2.3,0,0,Math.PI*2); ctx.fill();
   ctx.translate(sp.x, sp.y-sp.h);
   ctx.rotate(sp.upright ? -Math.PI/2 : (sp.flat ? 0 : (sp.k||0)*Math.PI*3));   // upright under the holder's finger, or a spiral back
-  ctx.scale(1.35,1.35);
+  ctx.scale(1.9,1.9);
   if(BALL_IMG.ready) ctx.drawImage(BALL_IMG,-7.9,-4.9,15.8,9.8);
   else { ctx.fillStyle='#7a4a28'; ctx.beginPath(); ctx.ellipse(0,0,7.1,4.2,0,0,Math.PI*2); ctx.fill(); }
   ctx.restore();
@@ -5710,7 +5818,8 @@ function heldBall(p, x, y, fa, pocket){
   ctx.translate(x + (Math.random()-0.5)*shake*2.4, y + sway*0.5 + (Math.random()-0.5)*shake*2.4);
   var rot = pocket ? -1.25 : (fa===null ? -0.45 : Math.atan2(Math.cos(fa),Math.sin(fa)));
   ctx.rotate(rot + sway*0.10 + (Math.random()-0.5)*shake*0.7);
-  ctx.scale(2.2,2.2);                            // (it was a speck once the camera pulled back)
+  ctx.scale(3,3);                                // (it was a speck once the camera pulled back)
+  if(BALL_IMG.ready){ ctx.drawImage(BALL_IMG,-4.4,-2.75,8.8,5.5); ctx.restore(); return; }   // the real ball, not a flat oval
   ctx.fillStyle='#7a4a28'; ctx.beginPath(); ctx.ellipse(0,0,4,2.5,0,0,Math.PI*2); ctx.fill();
   ctx.strokeStyle='#0a0c10'; ctx.lineWidth=0.5; ctx.stroke();
   ctx.fillStyle='rgba(0,0,0,.22)';
@@ -6130,8 +6239,8 @@ function drawBall(){
   var wob = spiral ? Math.sin(phase*0.5)*wv + Math.sin(phase*1.9)*wv*0.4 : 0;
   ctx.rotate(wob);
 
-  // body (half again as big as it was: you could lose it on a phone)
-  ctx.scale(1.5,1.5);
+  // body (twice the old size: you could lose it on a phone)
+  ctx.scale(2.1,2.1);
   if(BALL_IMG.ready){
     ctx.drawImage(BALL_IMG,-7.9,-4.9,15.8,9.8);
   } else {
@@ -6806,7 +6915,7 @@ function pickHero(h){
   // the guest's hero plays for the Rivals, so it belongs on that side of the
   // scoreboard, not in the Heroes slot
   var nmEl=(PICK_THEN==='guest')?document.querySelector('.team.away .nm'):elNmH;
-  if(nmEl) nmEl.textContent=HERO.name.split(' ')[1].toUpperCase();
+  if(nmEl) nmEl.textContent=(PICK_THEN!=='guest' && TEAM.name) ? TEAM.name.toUpperCase() : HERO.name.split(' ')[1].toUpperCase();
   elMvName.textContent=HERO.moveName;
   if(PICK_THEN==='host'){ hostOnline(); }
   else if(PICK_THEN==='guest'){
@@ -6878,6 +6987,72 @@ function showMoves(mode){
   b.addEventListener('click',function(){ showHowTo(mode); });
   if(!TOUCH_IN) b.focus();
 }
+// Your team: type a name, upload a logo. Both stay on this device.
+function showTeam(){
+  var draft={name:TEAM.name, logo:TEAM.logo};
+  var html='<h2>Your team</h2><p class="sub">Your name and logo go on the scoreboard, at midfield and on your helmets</p>'+
+    '<div class="grid2 team">'+
+      '<div class="card"><div class="k">TEAM NAME</div>'+
+        '<input id="tmName" type="text" maxlength="14" autocomplete="off" spellcheck="false" placeholder="HEROES"></div>'+
+      '<div class="card"><div class="k">LOGO</div><div class="tmRow">'+
+        '<div id="tmPrev"></div>'+
+        '<label class="tmUp">UPLOAD LOGO<input id="tmFile" type="file" accept="image/*"></label>'+
+        '<button type="button" id="tmClear" class="tmUp tmOff">REMOVE</button></div></div>'+
+    '</div><div class="k" style="margin:10px 0 4px">YOUR PLAYERS \u00b7 type a name, or roll a new one</div>'+
+    '<div class="roster" id="tmRoster"></div><div class="howgo">'+
+      '<button class="card" id="tmSave" type="button"><div class="k">SAVE</div><div class="t">Use this team</div></button>'+
+      '<button class="card" id="tmBack" type="button"><div class="k">BACK</div><div class="t">How to play</div></button></div>';
+  elSheet.innerHTML=html; elOv.classList.add('show');
+  var inp=document.getElementById('tmName'), prev=document.getElementById('tmPrev'), file=document.getElementById('tmFile');
+  inp.value=draft.name;
+  ['keydown','keyup'].forEach(function(ev){ inp.addEventListener(ev,function(e){ e.stopPropagation(); }); });   // typing is not playing
+  // the roster: every card, the man's name editable, a roll for a new one
+  var POSN={QB:'QB',WR1:'WR',WR2:'WR',TE:'TE',RB:'RB',C:'C',OL1:'OL',OL2:'OL'}, rows='', cast=[];
+  for(var sk in SUPPORT) cast.push({c:SUPPORT[sk], pos:POSN[sk]||sk});
+  DEFENDERS.forEach(function(d,i){ cast.push({c:d, pos:['DE','DE','DE','LB','LB','CB','CB','S'][i]||'DEF'}); });
+  cast.forEach(function(x){
+    rows+='<div class="rRow"><span class="rWho"><b>'+x.c.name+'</b> '+x.pos+'</span>'+
+      '<input type="text" maxlength="20" autocomplete="off" spellcheck="false" data-card="'+x.c.card+'" value="'+String(x.c.player).replace(/"/g,'&quot;')+'">'+
+      '<button type="button" class="tmUp rRoll" data-card="'+x.c.card+'">NEW NAME</button></div>';
+  });
+  var roster=document.getElementById('tmRoster'); roster.innerHTML=rows;
+  Array.prototype.forEach.call(roster.querySelectorAll('input'),function(ri){
+    ['keydown','keyup'].forEach(function(ev){ ri.addEventListener(ev,function(e){ e.stopPropagation(); }); });
+  });
+  Array.prototype.forEach.call(roster.querySelectorAll('.rRoll'),function(b){
+    b.addEventListener('click',function(){
+      var lasts={};
+      Array.prototype.forEach.call(roster.querySelectorAll('input'),function(ri){ if(ri.dataset.card!==b.dataset.card) lasts[lastOf(ri.value)]=1; });
+      roster.querySelector('input[data-card="'+b.dataset.card+'"]').value=randomName(lasts);
+    });
+  });
+  function showPrev(){ prev.innerHTML = draft.logo ? '<img alt="" src="'+draft.logo+'">' : '<span>No logo</span>'; }
+  showPrev();
+  file.addEventListener('change',function(){
+    var f=file.files && file.files[0]; if(!f) return;
+    var rd=new FileReader();
+    rd.onload=function(){
+      loadTeamImg(rd.result, function(im){
+        if(!im){ hint('THAT PICTURE WOULD NOT OPEN',1400); return; }
+        var S=160, c=document.createElement('canvas'); c.width=S; c.height=S;   // small: it lives on this device
+        var k=Math.min(S/im.width, S/im.height), w=im.width*k, h=im.height*k;
+        c.getContext('2d').drawImage(im,(S-w)/2,(S-h)/2,w,h);
+        draft.logo=c.toDataURL('image/png'); showPrev();
+      });
+    };
+    rd.readAsDataURL(f);
+  });
+  document.getElementById('tmClear').addEventListener('click',function(){ draft.logo=''; file.value=''; showPrev(); });
+  document.getElementById('tmSave').addEventListener('click',function(){
+    TEAM.name=String(inp.value||'').trim().slice(0,14); TEAM.logo=draft.logo;
+    Array.prototype.forEach.call(roster.querySelectorAll('input'),function(ri){ setCastName(ri.dataset.card, ri.value); });
+    saveCastNames();
+    try{ localStorage.setItem('hm_team', JSON.stringify(TEAM)); }catch(e){ hint('SAVED FOR THIS GAME ONLY',1400); }
+    loadTeamImg(TEAM.logo, function(im){ TEAM_IMG=im; teamChanged(); if(!TEAM.name && elNmH) elNmH.textContent=HERO.name.split(' ')[1].toUpperCase(); showHowTo(); });
+  });
+  document.getElementById('tmBack').addEventListener('click',function(){ showHowTo(); });
+  if(!TOUCH_IN) inp.focus();
+}
 function showHowTo(mode){
   var pause=(mode==='pause');
   var who = PICK_THEN==='host' ? 'You are the Heroes' : PICK_THEN==='guest' ? 'You are the Rivals'
@@ -6890,6 +7065,7 @@ function showHowTo(mode){
   });
   html+='</div><div class="howgo">';
   var moves='<button class="card" id="howMoves" type="button"><div class="k">ALL MOVES</div><div class="t">What each one does</div></button>';
+  if(!pause && PICK_THEN!=='guest') moves+='<button class="card" id="howTeam" type="button"><div class="k">YOUR TEAM</div><div class="t">'+(TEAM.name?TEAM.name:'Name and logo')+'</div></button>';
   if(pause) html+=moves+'<button class="card" id="howBack" type="button"><div class="k">BACK</div><div class="t">To the pause menu</div></button>';
   else html+='<button class="card" id="howPlay" type="button"><div class="k">LET\u2019S PLAY</div><div class="t">'+HERO.name+'</div></button>'+moves+
     '<button class="card" id="howHero" type="button"><div class="k">CHANGE HERO</div><div class="t">Pick another</div></button>'+
@@ -6898,6 +7074,7 @@ function showHowTo(mode){
   html+='</div>';
   elSheet.innerHTML=html; elOv.classList.add('show');
   document.getElementById('howMoves').addEventListener('click',function(){ showMoves(mode); });
+  var ht=document.getElementById('howTeam'); if(ht) ht.addEventListener('click',function(){ showTeam(); });
   var back=document.getElementById('howBack');
   if(pause){
     back.addEventListener('click',function(){
@@ -7714,11 +7891,11 @@ function showOver(){
   if(online){
     var mine=guest?G.scoreA:G.scoreH, theirs=guest?G.scoreH:G.scoreA;
     w = mine>theirs ? 'YOU WIN' : mine<theirs ? 'THEY WIN' : 'TIE GAME';
-    sub = 'Final \u00b7 Heroes '+G.scoreH+', Rivals '+G.scoreA;
+    sub = 'Final \u00b7 '+homeName()+' '+G.scoreH+', Rivals '+G.scoreA;
   } else {
     w = G.scoreH>G.scoreA?(HERO.name.split(' ')[1].toUpperCase()+' WINS'):
         G.scoreH<G.scoreA?(FOE.short+' WIN'):'TIE GAME';
-    sub = 'Final \u00b7 Heroes '+G.scoreH+', '+FOE.name+' '+G.scoreA;
+    sub = 'Final \u00b7 '+homeName()+' '+G.scoreH+', '+FOE.name+' '+G.scoreA;
   }
   var again='<button class="card" id="again" type="button"><div class="k">ENTER</div>'+
       '<div class="t">RUN IT BACK</div><div class="d">'+(online?'A rematch for both of you, fresh clock.':'Same hero, fresh clock.')+'</div></button>';
@@ -8116,6 +8293,7 @@ function netTeardown(){
   try{ if(p) p.destroy(); }catch(e){}
   NET.st=null; NET.lastSt=null; NET.clk=null; NET.ev=[]; NET.evIn=[]; NET.fxIn=[]; NET.first=false; NET.chunk=null;
   NET.inAt=0; NET.stAt=0; NET.quietSaid=0; NET.pauseUp=false; keepAlive();
+  if(NET.hostTeam){ NET.hostTeam=null; NET.hostTeamImg=null; teamChanged(); }   // back to our own team
 }
 
 function netDropped(){
@@ -8240,6 +8418,7 @@ function hostOnline(tries){
     });
     c.on('open',function(){
       NET.on=true; NET.lastSt=null; NET.ev=[]; keepAlive();   // (already in the background: keep playing)
+      netSendBig({t:'team', name:TEAM.name, logo:TEAM.logo});   // the guest shows our name and logo
       elOv.classList.remove('show');
       G=freshGame(); G.phase='playcall';
       say('THEY ARE IN - YOU ARE THE HEROES',2000,'H');
@@ -8278,7 +8457,7 @@ function joinOnline(code){
       PICK_THEN='guest';
       showHowTo();
     });
-    c.on('data',function(d){ if(!d) return; if(d.t==='w2') netTake(d); else if(d.t==='wc') netChunk(d); });
+    c.on('data',function(d){ if(!d) return; if(d.t==='w2') netTake(d); else if(d.t==='wc') netChunk(d); else if(d.t==='team') netTeam(d); });
     c.on('close',netDropped);
     c.on('error',netDropped);
     setTimeout(function(){
@@ -8437,6 +8616,11 @@ function publishWorld(){
   if(NET.ev && NET.ev.length){ msg.ev=NET.ev; NET.ev=[]; }
   // PeerJS refuses a message of 16 KB or more (and drops the room over it),
   // and a whole copy can run past that: send a big one in pieces
+  netSendBig(msg);
+}
+// any message, in pieces when it is too big for PeerJS
+function netSendBig(msg){
+  if(!NET.conn || !NET.conn.open) return;
   var str=JSON.stringify(msg);
   try{
     if(str.length<6000) NET.conn.send(msg);
@@ -8446,12 +8630,17 @@ function publishWorld(){
     }
   }catch(e){}
 }
+// guest: the host's team name and logo
+function netTeam(d){
+  NET.hostTeam={name:String(d.name||'').slice(0,14), logo:d.logo||''};
+  loadTeamImg(NET.hostTeam.logo, function(im){ NET.hostTeamImg=im; teamChanged(); });
+}
 // guest: put a packet that came in pieces back together
 function netChunk(d){
   var c=NET.chunk;
   if(!c || c.id!==d.id) c=NET.chunk={id:d.id, parts:[], got:0};
   if(c.parts[d.i]===undefined){ c.parts[d.i]=d.s; c.got++; }
-  if(c.got===d.n){ NET.chunk=null; try{ netTake(JSON.parse(c.parts.join(''))); }catch(e){} }
+  if(c.got===d.n){ NET.chunk=null; try{ var m=JSON.parse(c.parts.join('')); if(m.t==='team') netTeam(m); else netTake(m); }catch(e){} }
 }
 
 // guest: its clock runs on the host's, so every "until" the host sends means
@@ -8999,7 +9188,7 @@ function resumeGame(){
 }
 // the guest's screen while the game is paused
 function guestPaused(){
-  elSheet.innerHTML='<h2>Paused</h2><p class="sub">Heroes '+G.scoreH+' \u00b7 Rivals '+G.scoreA+'</p>'+
+  elSheet.innerHTML='<h2>Paused</h2><p class="sub">'+homeName()+' '+G.scoreH+' \u00b7 Rivals '+G.scoreA+'</p>'+
     '<div class="grid2">'+
     '<button class="card" id="gpStay" type="button"><div class="k">RESUME</div><div class="t">Keep playing</div>'+
       '<div class="d">Starts it again for both of you.</div></button>'+
@@ -9017,8 +9206,8 @@ function askQuit(byGuest){
   if(G.audibleOpen) closeAudible();
   G.paused=true;
   elSheet.innerHTML='<h2>'+(byGuest?'They paused':G.training?'Training':'Paused')+'</h2>'+
-    '<p class="sub">'+(NET.on ? 'Heroes '+G.scoreH+' \u00b7 Rivals '+G.scoreA
-                     : G.training ? 'vs the '+FOE.name : 'Heroes '+G.scoreH+' \u00b7 '+FOE.name+' '+G.scoreA)+'</p>'+
+    '<p class="sub">'+(NET.on ? homeName()+' '+G.scoreH+' \u00b7 Rivals '+G.scoreA
+                     : G.training ? 'vs the '+FOE.name : homeName()+' '+G.scoreH+' \u00b7 '+FOE.name+' '+G.scoreA)+'</p>'+
     '<div class="grid2">'+
     '<button class="card" id="qStay" type="button"><div class="k">RESUME</div><div class="t">Keep playing</div>'+
       '<div class="d">'+(NET.on?'Starts it again for both of you.':'Back to the line.')+'</div></button>'+

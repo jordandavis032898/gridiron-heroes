@@ -323,7 +323,7 @@ function blit3D(P){
     ctx.fillStyle='#05070b'; ctx.fillRect(sbx, sby, sbw, sbh);
     ctx.textAlign='center'; ctx.textBaseline='middle';
     ctx.font='700 '+Math.max(6,22*sbs)+'px "Anton", sans-serif';
-    ctx.fillStyle='#ffd23f'; ctx.fillText('HEROES', sbx+sbw*0.25, sby+sbh*0.28);
+    ctx.fillStyle='#ffd23f'; ctx.fillText(homeName().toUpperCase().slice(0,10), sbx+sbw*0.25, sby+sbh*0.28);
     ctx.fillStyle=FOE.lite; ctx.fillText(FOE.short, sbx+sbw*0.75, sby+sbh*0.28);
     ctx.font='700 '+Math.max(8,40*sbs)+'px "Anton", sans-serif'; ctx.fillStyle='#f1f1ec';
     ctx.fillText(String(G.scoreH||0), sbx+sbw*0.25, sby+sbh*0.66);
